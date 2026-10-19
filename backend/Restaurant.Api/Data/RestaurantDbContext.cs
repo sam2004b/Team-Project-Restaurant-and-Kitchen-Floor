@@ -1,8 +1,12 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Models;
+
+
 namespace Restaurant.Api.Data
 {
-    public class RestaurantDbContext : DbContext
+    public class RestaurantDbContext : IdentityDbContext<IdentityUser>
     {
         public RestaurantDbContext(
             DbContextOptions<RestaurantDbContext> options
