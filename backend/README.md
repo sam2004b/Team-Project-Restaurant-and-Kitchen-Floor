@@ -333,3 +333,325 @@ intentionally want to delete the database volume.
 - API: localhost:5020
 - PostgreSQL from Windows: localhost:5435
 - PostgreSQL inside Docker network: db:5432
+
+
+# SK-06 — Development Database Seeding
+
+## 1. Overview
+
+This section describes the development database seeding implementation for the Restaurant Floor and Kitchen Management System.
+
+The purpose of SK-06 is to provide initial data for local development and testing, allowing team members to work with predefined users, roles, and menu items without manually inserting records into PostgreSQL.
+
+The seeding mechanism is implemented using ASP.NET Core 8, Entity Framework Core, ASP.NET Core Identity, and PostgreSQL.
+
+**Key features:**
+- Automatic creation of predefined user roles.
+- Creation of development user accounts.
+- Assignment of users to their respective roles.
+- Insertion of initial restaurant menu items.
+- Idempotent seeding to prevent duplicate records during repeated sequential executions.
+- Support for both local PostgreSQL and Docker Compose environments.
+
+## 2. Seeded User Roles
+
+The application supports the following development roles:
+
+| Role | Description |
+|---|---|
+| Administrator | Manages restaurant administration and configuration |
+| Waiter | Handles restaurant floor and customer-order operations |
+| Chef | Manages kitchen operations and dish availability |
+| Reception Manager | Handles reception and reservation-related operations |
+
+These roles are intended to support the application's planned role-based functionality.
+
+## 3. Development Test Accounts
+
+The seed script creates the following test accounts:
+
+| Username | Email | Role |
+|---|---|---|
+| admin | admin@restaurant.test | Administrator |
+| waiter | waiter@restaurant.test | Waiter |
+| chef | chef@restaurant.test | Chef |
+| reception | reception@restaurant.test | Reception Manager |
+
+All development accounts use a password supplied through the `Seed:DefaultPassword` configuration setting.
+
+ASP.NET Core Identity securely hashes account passwords before storing them.
+
+**Security note:** Development credentials must never be committed to GitHub or used in production environments.
+
+## 4. Initial Restaurant Menu Data
+
+The seeder inserts the following example dishes if they do not already exist:
+
+| Dish | Category | Price | Available |
+|---|---|---:|---|
+| Margherita Pizza | Pizza | 9.90 | Yes |
+| Chicken Burger | Burgers | 12.50 | Yes |
+| Caesar Salad | Salads | 8.00 | Yes |
+| Fish Soup | Soups | 7.25 | No |
+
+These items are demonstration data intended for testing menu-related functionality.
+
+They support future tasks such as displaying the menu, managing dishes, and controlling dish availability.
+
+The prices are sample numeric values; no real restaurant currency is assumed.
+
+## 5. Implementation Structure
+
+The seeding implementation uses the following components:
+
+**`RestaurantDbContext.cs`**
+
+Configures Entity Framework Core database access and the ASP.NET Core Identity tables.
+
+**`DatabaseSeeder.cs`**
+
+Contains the logic responsible for creating roles, test users, role assignments, and sample dishes.
+
+**`Program.cs`**
+
+Recognizes the `--seed` command, applies pending migrations, and executes the seeder.
+
+**`Migrations/`**
+
+Contains EF Core migrations required to create and update the PostgreSQL database schema.
+
+## 6. Running the Seeder Locally
+
+### Prerequisites
+
+- .NET 8 SDK
+- PostgreSQL
+- Configured `ConnectionStrings:DefaultConnection`
+- Applied EF Core migrations or permission to apply them
+
+### Step 1 — Navigate to the API project
+
+From the repository root:
+
+```powershell
+cd backend/Restaurant.Api
+```
+
+### Step 2 — Configure the development password
+
+Use .NET User Secrets:
+
+```powershell
+dotnet user-secrets set "Seed:DefaultPassword" "YOUR_PRIVATE_DEVELOPMENT_PASSWORD"
+```
+
+Replace the placeholder with a strong password.
+
+The database connection string must also be configured through User Secrets or environment variables.
+
+### Step 3 — Set the Development environment
+
+In PowerShell:
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:DOTNET_ENVIRONMENT = "Development"
+```
+
+### Step 4 — Run the seed command
+
+```powershell
+dotnet run -- --seed
+```
+
+The application applies pending database migrations and creates missing development data.
+
+Expected output:
+
+```text
+Database seeding completed.
+```
+
+The process exits after seeding without starting the API server.
+
+## 7. Running the Seeder with Docker Compose
+
+Docker Compose can execute the same seeding logic using the containerized PostgreSQL database.
+
+### Step 1 — Configure environment variables
+
+From the repository root, create a local `.env` file if it does not already exist:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Configure the PostgreSQL environment variables and add:
+
+```dotenv
+SEED_PASSWORD=YOUR_PRIVATE_DEVELOPMENT_PASSWORD
+```
+
+The `compose.yaml` API service must map this variable to the .NET configuration key:
+
+```yaml
+Seed__DefaultPassword: ${SEED_PASSWORD}
+```
+
+Do not commit the `.env` file.
+
+### Step 2 — Start Docker Compose
+
+From the repository root:
+
+```powershell
+docker compose up --build -d
+```
+
+### Step 3 — Execute the seed command
+
+```powershell
+docker compose run --rm api --seed
+```
+
+Expected output:
+
+```text
+Database seeding completed.
+```
+
+The Docker seeder connects to PostgreSQL using the connection string provided by Docker Compose.
+
+**Note:** The local PostgreSQL database and Docker PostgreSQL database are independent. Each must be seeded separately if both are used for development.
+
+## 8. Verification
+
+To verify the seeded data inside Docker, open the PostgreSQL terminal:
+
+```powershell
+docker compose exec db psql -U restaurant_app -d restaurant_db
+```
+
+### Verify users
+
+```sql
+SELECT "UserName", "Email"
+FROM "AspNetUsers";
+```
+
+### Verify roles
+
+```sql
+SELECT "Name"
+FROM "AspNetRoles";
+```
+
+### Verify user-role assignments
+
+```sql
+SELECT
+    u."UserName",
+    r."Name" AS "Role"
+FROM "AspNetUsers" u
+JOIN "AspNetUserRoles" ur
+    ON u."Id" = ur."UserId"
+JOIN "AspNetRoles" r
+    ON ur."RoleId" = r."Id";
+```
+
+### Verify sample menu data
+
+```sql
+SELECT "Id", "Name", "Price", "IsAvailable"
+FROM dishes;
+```
+
+Exit PostgreSQL using:
+
+```text
+\q
+```
+
+## 9. Idempotency Testing
+
+The seed operation is designed to be idempotent.
+
+This means executing it multiple times should not create duplicate users, roles, user-role assignments, or sample dishes.
+
+### Test procedure
+
+1. Run the seeder on an empty development database.
+2. Verify the initial records.
+3. Execute the seeder a second time.
+4. Compare the database record counts.
+5. Confirm that no duplicate records were created.
+
+Run the seeder again:
+
+```powershell
+docker compose run --rm api --seed
+```
+
+Check database counts:
+
+```sql
+SELECT 'Users' AS item, COUNT(*) FROM "AspNetUsers"
+UNION ALL
+SELECT 'Roles', COUNT(*) FROM "AspNetRoles"
+UNION ALL
+SELECT 'User Role Links', COUNT(*) FROM "AspNetUserRoles"
+UNION ALL
+SELECT 'Dishes', COUNT(*) FROM dishes;
+```
+
+For a database initially containing no development records, the expected counts are:
+
+| Data | Expected records |
+|---|---:|
+| Users | 4 |
+| Roles | 4 |
+| User-role assignments | 4 |
+| Sample dishes | 4 |
+
+The counts should remain unchanged after running the seed operation a second time.
+
+Existing unrelated database records should not be deleted or overwritten.
+
+## 10. Security Considerations
+
+- Seeding is restricted to the Development environment.
+- Passwords are configured using User Secrets or local environment variables.
+- Passwords are stored as Identity password hashes, not plain text.
+- Development accounts must not be deployed to production.
+- Local `.env` files and credentials must not be committed to GitHub.
+- Database migrations and seed source code should be maintained under version control.
+
+## 11. Troubleshooting
+
+**Error: Seed:DefaultPassword is not configured**
+
+Ensure that the seed password is configured in User Secrets or through the Docker Compose environment.
+
+**Error: Database connection failed**
+
+Verify that PostgreSQL is running and the connection string points to the correct host, port, and database.
+
+**Error: Identity tables do not exist**
+
+Apply the required EF Core migrations:
+
+```powershell
+dotnet ef database update
+```
+
+**Error: Password does not meet requirements**
+
+Use a strong password satisfying the ASP.NET Core Identity password policy.
+
+**Duplicate records after seeding**
+
+Review the existence checks in `DatabaseSeeder.cs` and verify that no duplicate seed records already exist.
+
+
+
+The seeding mechanism provides reusable development data for upcoming restaurant management features.

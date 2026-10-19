@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Identity;
+using Restaurant.Api.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 
@@ -24,6 +26,23 @@ builder.Services.AddDbContext<RestaurantDbContext>(
 );
 
 
+
+builder.Services
+    .AddIdentityCore<IdentityUser>(options =>
+    {
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequiredLength = 10;
+
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<RestaurantDbContext>();
+
+
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -43,6 +62,35 @@ if (app.Environment.IsDevelopment() &&
 
     await db.Database.MigrateAsync();
 }
+
+
+
+if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "Database seeding is allowed only in Development."
+        );
+    }
+
+    await using var scope =
+        app.Services.CreateAsyncScope();
+
+    var db = scope.ServiceProvider
+        .GetRequiredService<RestaurantDbContext>();
+
+    // Ensure database schema is updated first
+    await db.Database.MigrateAsync();
+
+    // Create sample users, roles and dishes
+    await DatabaseSeeder.SeedAsync(
+        scope.ServiceProvider,
+        app.Configuration);
+
+    return;
+}
+
 
 /*// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
