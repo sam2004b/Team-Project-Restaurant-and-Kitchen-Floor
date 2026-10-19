@@ -44,6 +44,8 @@ services:
 
       Database__ApplyMigrationsOnStartup: "true"
 
+      Seed__DefaultPassword: ${SEED_PASSWORD}
+
     depends_on:
       db:
         condition: service_healthy
