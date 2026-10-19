@@ -31,12 +31,25 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment() &&
+    app.Configuration.GetValue<bool>(
+        "Database:ApplyMigrationsOnStartup"))
+{
+    await using var scope =
+        app.Services.CreateAsyncScope();
+
+    var db = scope.ServiceProvider
+        .GetRequiredService<RestaurantDbContext>();
+
+    await db.Database.MigrateAsync();
+}
+
+/*// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+}*/
 
 app.UseHttpsRedirection();
 

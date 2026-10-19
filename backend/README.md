@@ -254,8 +254,82 @@ Make sure:
 - Keep EF Core migrations under version control.
 - Coordinate model and schema changes with other backend developers.
 
-## Docker Support
 
-Docker Compose setup will be implemented separately under task SK-04.
+## Docker Compose Setup (SK-04)
 
-The Docker environment will use environment variables for database configuration and will reuse the existing EF Core models and migrations.
+### Requirements
+
+- Docker Desktop
+- Docker Compose
+
+PostgreSQL and the .NET SDK do not need to be
+installed locally when using Docker Compose.
+
+### Configuration
+
+From the repository root, copy the environment template:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Set DB_NAME, DB_USER, and DB_PASSWORD in .env.
+
+Do not commit .env to GitHub.
+
+### Start the application
+
+```powershell
+docker compose up --build -d
+```
+
+### Check container status
+
+```powershell
+docker compose ps
+```
+
+### Test the API
+
+Open:
+
+http://localhost:5020/health/db
+
+Expected response:
+
+{
+  "database": "connected"
+}
+
+### View logs
+
+```powershell
+docker compose logs api
+docker compose logs db
+```
+
+### Stop the application
+
+```powershell
+docker compose down
+```
+
+### Restart
+
+```powershell
+docker compose up -d
+```
+
+### Database persistence
+
+PostgreSQL data is stored in a named Docker volume.
+Normal container restarts preserve database data.
+
+Do not use docker compose down -v unless you
+intentionally want to delete the database volume.
+
+### Service ports
+
+- API: localhost:5020
+- PostgreSQL from Windows: localhost:5435
+- PostgreSQL inside Docker network: db:5432
