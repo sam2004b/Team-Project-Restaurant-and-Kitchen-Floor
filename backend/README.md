@@ -714,3 +714,67 @@ The `IMenuReadService` interface is registered through dependency injection.
 It can be consumed by the menu API endpoint implemented by Sambhav under US-1-T02.
 
 This separation avoids duplicating EF Core query logic inside the API controller.
+
+
+## US-3-T01 — Dish Availability Data and Query
+
+### Overview
+
+Implemented the data/query functionality supporting US-3: Show and Order Only Available Dishes.
+
+The goal is to ensure that the application can distinguish available, unavailable, and nonexistent dishes while providing an available-dishes query for the customer menu.
+
+### Database Model
+
+The existing `Dish` entity contains the `IsAvailable` property.
+
+- `true`: The dish is available.
+- `false`: The dish is unavailable.
+
+The availability flag is stored in the existing PostgreSQL `dishes` table and configured using Entity Framework Core.
+
+No additional database migration was required because the availability field already existed.
+
+### Implemented Query Methods
+
+**GetAvailableDishesAsync()**
+
+Retrieves currently available dishes using Entity Framework Core.
+
+The query excludes dishes marked unavailable and uses `AsNoTracking()` for read-only access.
+
+**GetDishAvailabilityAsync(int dishId)**
+
+Retrieves the availability status of a specific dish.
+
+Possible results:
+
+- `true`: Dish exists and is available.
+- `false`: Dish exists and is unavailable.
+- `null`: Dish does not exist.
+
+### Automated Tests
+
+The `DishAvailabilityTests.cs` file contains tests for:
+
+1. Available dishes.
+2. Unavailable dishes.
+3. Nonexistent dishes.
+4. Dishes becoming unavailable.
+5. Dishes becoming available again.
+
+Run tests from the repository root:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+### PostgreSQL Verification
+
+The availability column and filtering behavior can be verified through PostgreSQL using Docker Compose.
+
+The development database includes sample available and unavailable dishes.
+
+### Integration
+
+The query functionality can be reused by US-3-T02, where the backend API must reject new orders containing unavailable dishes.
+
+Server-side order validation and HTTP error responses are outside the scope of US-3-T01.
