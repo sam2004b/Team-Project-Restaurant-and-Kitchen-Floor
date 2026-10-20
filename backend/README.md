@@ -778,3 +778,83 @@ The development database includes sample available and unavailable dishes.
 The query functionality can be reused by US-3-T02, where the backend API must reject new orders containing unavailable dishes.
 
 Server-side order validation and HTTP error responses are outside the scope of US-3-T01.
+
+## US-11-T01 — Dish Information Data Model
+
+### Overview
+
+Implemented the database model required for creating and editing dish information in the Restaurant Floor and Kitchen Management System.
+
+### Database Changes
+
+The existing `dishes` table stores:
+
+- Id
+- Name
+- Price
+- Description
+- Category
+- IsAvailable
+
+A new `dish_ingredients` table stores ingredients associated with each dish.
+
+### Relationships
+
+A dish can have multiple ingredient records.
+
+Each ingredient belongs to one dish through the `DishId` foreign key.
+
+The relationship is configured in Entity Framework Core using a one-to-many association.
+
+### Data Integrity
+
+Database constraints enforce:
+
+- Dish price greater than zero.
+- Nonempty, non-whitespace dish name.
+- Required ingredient name.
+- Valid ingredient-to-dish foreign key.
+
+The API layer is responsible for returning controlled validation responses to clients.
+
+### EF Core Migration
+
+Migration name:
+
+`AddDishIngredientsAndConstraints`
+
+Apply migrations from the API project directory:
+
+`dotnet ef database update`
+
+### Sample Data
+
+The development seeder initializes Carbonara with four ingredients:
+
+- Spaghetti
+- Eggs
+- Pecorino Romano
+- Guanciale
+
+Repeated seeding does not duplicate the ingredient records when the dish already contains ingredients.
+
+### Testing
+
+Automated tests cover:
+
+- Creating a dish with four ingredients.
+- Updating a dish price from 450 to 500.
+- Editing an ingredient.
+- Reloading and verifying the saved data.
+
+Run:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+The model tests use EF Core InMemory. Database schema and check constraints are verified separately using PostgreSQL.
+
+### Integration
+
+US-11-T01 provides the database foundation for US-11-T02.
+
+The API layer will implement dish creation, updates, request validation and HTTP responses. Ingredient information must also be exposed through the relevant dish response model.
