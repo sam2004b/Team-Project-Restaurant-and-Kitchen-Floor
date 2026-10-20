@@ -188,6 +188,34 @@ public static class DatabaseSeeder
 
         await db.SaveChangesAsync();
 
+
+        // Seed Carbonara ingredients for US-11
+        var carbonara = await db.Dishes
+            .Include(d => d.Ingredients)
+            .FirstOrDefaultAsync(d => d.Name == "Carbonara");
+
+        if (carbonara != null && !carbonara.Ingredients.Any())
+        {
+            var ingredientNames = new[]
+            {
+                "Spaghetti",
+                "Eggs",
+                "Pecorino Romano",
+                "Guanciale"
+            };
+
+            foreach (var name in ingredientNames)
+            {
+                carbonara.Ingredients.Add(new DishIngredient
+                {
+                    Name = name
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+
         Console.WriteLine("Database seeding completed.");
     }
 
