@@ -1,4 +1,6 @@
-﻿namespace Restaurant.Api.Models
+﻿using System.Collections.Generic;
+
+namespace Restaurant.Api.Models
 {
     public class Dish
     {
@@ -13,5 +15,9 @@
         public string Category { get; set; } = string.Empty;
 
         public bool IsAvailable { get; set; } = true;
+
+        public ICollection<DishIngredient> Ingredients { get; set; }
+            = new List<DishIngredient>();
+
     }
 }

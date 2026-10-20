@@ -250,7 +250,35 @@ namespace Restaurant.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("dishes", (string)null);
+                    b.ToTable("dishes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_dishes_name_not_blank", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_dishes_price_positive", "\"Price\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.DishIngredient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DishId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DishId");
+
+                    b.ToTable("dish_ingredients", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -302,6 +330,22 @@ namespace Restaurant.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.DishIngredient", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.Dish", "Dish")
+                        .WithMany("Ingredients")
+                        .HasForeignKey("DishId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Dish");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.Dish", b =>
+                {
+                    b.Navigation("Ingredients");
                 });
 #pragma warning restore 612, 618
         }
