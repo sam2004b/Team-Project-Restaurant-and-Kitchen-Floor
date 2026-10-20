@@ -35,4 +35,17 @@ public sealed class MenuReadService : IMenuReadService
             ))
             .ToListAsync(cancellationToken);
     }
+
+
+    public async Task<bool?> GetDishAvailabilityAsync(
+        int dishId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Dishes
+            .AsNoTracking()
+            .Where(d => d.Id == dishId)
+            .Select(d => (bool?)d.IsAvailable)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
 }
