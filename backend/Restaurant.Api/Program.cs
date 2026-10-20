@@ -41,6 +41,17 @@ builder.Services
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<RestaurantDbContext>();
 
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? ["http://localhost:5173"];
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
 
 
 builder.Services.AddControllers();
@@ -101,9 +112,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors();
+
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok"
+}));
 
 app.MapGet("/health/db", async (RestaurantDbContext db) =>
 {

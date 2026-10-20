@@ -5,6 +5,8 @@
 **/bin/
 **/obj/
 **/TestResults/
+FrontEnd/React/node_modules/
+FrontEnd/React/dist/
 
 # Local settings
 *.user
