@@ -154,6 +154,38 @@ public static class DatabaseSeeder
             }
         }
 
+
+        var additionalMenuDishes = new[]
+        {
+            (Name: "Carbonara", Category: "Pasta", Price: 14.50m),
+            (Name: "Grilled Salmon", Category: "Seafood", Price: 19.90m),
+            (Name: "Beef Steak", Category: "Main Course", Price: 24.00m),
+            (Name: "Pasta Alfredo", Category: "Pasta", Price: 13.50m),
+            (Name: "Vegetable Soup", Category: "Soups", Price: 6.50m),
+            (Name: "Veggie Pizza", Category: "Pizza", Price: 11.00m),
+            (Name: "Cheesecake", Category: "Desserts", Price: 6.90m),
+            (Name: "Chocolate Brownie", Category: "Desserts", Price: 5.50m),
+            (Name: "French Fries", Category: "Sides", Price: 4.50m)
+        };
+
+        foreach (var sample in additionalMenuDishes)
+        {
+            bool exists = await db.Dishes.AnyAsync(
+                d => d.Name == sample.Name);
+
+            if (!exists)
+            {
+                db.Dishes.Add(new Dish
+                {
+                    Name = sample.Name,
+                    Category = sample.Category,
+                    Price = sample.Price,
+                    Description = $"Sample {sample.Name} dish",
+                    IsAvailable = true
+                });
+            }
+        }
+
         await db.SaveChangesAsync();
 
         Console.WriteLine("Database seeding completed.");
