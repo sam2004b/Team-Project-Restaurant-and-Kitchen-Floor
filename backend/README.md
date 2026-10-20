@@ -652,6 +652,65 @@ Use a strong password satisfying the ASP.NET Core Identity password policy.
 
 Review the existence checks in `DatabaseSeeder.cs` and verify that no duplicate seed records already exist.
 
-
-
 The seeding mechanism provides reusable development data for upcoming restaurant management features.
+
+
+
+## US-1-T01 — Electronic Menu Data Model and Query
+
+### Overview
+
+Implemented the data retrieval layer for US-1 (View Electronic Menu).
+
+The purpose of this task is to provide a reusable service that retrieves available restaurant dishes using Entity Framework Core.
+
+### Implementation
+
+The following components were implemented:
+
+- **MenuDishDto.cs:** Defines the data returned for each menu dish.
+- **IMenuReadService.cs:** Defines the menu retrieval contract.
+- **MenuReadService.cs:** Implements the EF Core query for available dishes.
+- **MenuReadServiceTests.cs:** Contains automated tests for menu retrieval.
+
+### Query Functionality
+
+The menu query:
+
+- Retrieves only dishes marked as available.
+- Returns dish ID, name, price, description, category and availability.
+- Uses `AsNoTracking()` for read-only queries.
+- Orders dishes by name and ID.
+- Returns an empty collection when no dishes are available.
+- Reflects dish availability changes in subsequent queries.
+
+### Testing
+
+Run the automated tests from the repository root:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+The tests cover:
+
+1. Empty menu.
+2. Menu containing 12 available dishes.
+3. Menu containing 50 available dishes.
+4. Exclusion of unavailable dishes.
+5. Dish availability changes.
+
+**Verified results:**
+
+- Build succeeded.
+- 6 tests passed.
+- 0 tests failed.
+- 0 tests skipped.
+
+Automated query tests use EF Core InMemory. PostgreSQL seed data can be verified separately using Docker Compose.
+
+### Integration with US-1-T02
+
+The `IMenuReadService` interface is registered through dependency injection.
+
+It can be consumed by the menu API endpoint implemented by Sambhav under US-1-T02.
+
+This separation avoids duplicating EF Core query logic inside the API controller.
