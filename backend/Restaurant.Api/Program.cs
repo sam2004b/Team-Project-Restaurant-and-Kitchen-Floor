@@ -1,4 +1,5 @@
 using Restaurant.Api.Services.Menu;
+using Restaurant.Api.Services.Orders;
 using Microsoft.AspNetCore.Identity;
 using Restaurant.Api.Seeding;
 using Microsoft.EntityFrameworkCore;
@@ -58,7 +59,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<
     IMenuReadService,
     MenuReadService>();
-
+ 
+ builder.Services.AddScoped<
+    IOrderAvailabilityService,
+    OrderAvailabilityService>();
 
 
 builder.Services.AddControllers();
