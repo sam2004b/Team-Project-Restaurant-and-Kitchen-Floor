@@ -716,6 +716,86 @@ It can be consumed by the menu API endpoint implemented by Sambhav under US-1-T0
 This separation avoids duplicating EF Core query logic inside the API controller.
 
 
+
+## US-1-T02 — Electronic Menu API
+
+### Overview
+
+Implemented the customer-facing electronic menu API endpoint using ASP.NET Core Web API.
+
+The endpoint uses the existing `IMenuReadService` from US-1-T01 to retrieve currently available dishes from PostgreSQL.
+
+### Endpoint
+
+**GET `/dishes`**
+
+Returns all currently available dishes.
+
+**Optional:** `GET /dishes?limit=10`
+
+Limits the number of returned dishes. Valid limits range from 1 to 100.
+
+### Response
+
+**HTTP 200 OK**
+
+Returns a JSON array containing:
+
+- id
+- name
+- price
+- description
+- category
+- isAvailable
+
+When no dishes are available, the endpoint returns `[]` with HTTP 200.
+
+Invalid `limit` values return HTTP 400.
+
+### Implementation
+
+- `Controllers/DishesController.cs` — Menu HTTP endpoint
+- `Services/Menu/IMenuReadService.cs` — Existing query contract
+- `Services/Menu/MenuReadService.cs` — Existing available-dishes query
+- `Dtos/MenuDishDto.cs` — Shared response DTO
+- `Restaurant.Api.Tests/DishesControllerTests.cs` — Controller unit tests
+
+### Testing
+
+Build:
+
+`dotnet build backend/RestaurantManagement.sln`
+
+Run tests:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+Start Docker Compose:
+
+`docker compose up --build -d`
+
+Test the endpoint:
+
+`curl.exe -i http://localhost:5020/dishes`
+
+Test invalid input:
+
+`curl.exe -i "http://localhost:5020/dishes?limit=-1"`
+
+### Frontend Integration
+
+Rishabh can use `GET /dishes` through the frontend API client to retrieve the electronic menu.
+
+The frontend is responsible for displaying loading, empty, error and refresh states.
+
+### Related Tasks
+
+- US-1-T01 — Menu Data and Query: Oberd
+- US-1-T02 — Menu API Endpoint: Sambhav
+- US-1-T03 — Customer Menu UI: Rishabh
+- US-1-T04 — Frontend Behavior: Mahran
+
+
 ## US-3-T01 — Dish Availability Data and Query
 
 ### Overview

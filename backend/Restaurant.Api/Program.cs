@@ -110,12 +110,12 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
 }
 
 
-/*// Configure the HTTP request pipeline.
+//Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}*/
+}
 
 app.UseHttpsRedirection();
 
