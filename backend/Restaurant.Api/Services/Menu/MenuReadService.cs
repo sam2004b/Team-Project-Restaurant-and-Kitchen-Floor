@@ -17,24 +17,33 @@ public sealed class MenuReadService : IMenuReadService
     }
 
     public async Task<IReadOnlyList<MenuDishDto>>
-        GetAvailableDishesAsync(
-            CancellationToken cancellationToken = default)
-    {
-        return await _context.Dishes
-            .AsNoTracking()
-            .Where(d => d.IsAvailable)
-            .OrderBy(d => d.Name)
-            .ThenBy(d => d.Id)
-            .Select(d => new MenuDishDto(
-                d.Id,
-                d.Name,
-                d.Price,
-                d.Description,
-                d.Category,
-                d.IsAvailable
-            ))
-            .ToListAsync(cancellationToken);
-    }
+    GetAvailableDishesAsync(
+        CancellationToken cancellationToken = default)
+{
+    var dishes = await _context.Dishes
+        .AsNoTracking()
+        .Where(d => d.IsAvailable)
+        .Include(d => d.Ingredients)
+        .OrderBy(d => d.Name)
+        .ThenBy(d => d.Id)
+        .ToListAsync(cancellationToken);
+
+    return dishes
+        .Select(d => new MenuDishDto(
+            d.Id,
+            d.Name,
+            d.Price,
+            d.Description,
+            d.Category,
+            d.IsAvailable)
+        {
+            Ingredients = d.Ingredients
+                .OrderBy(i => i.Id)
+                .Select(i => i.Name)
+                .ToArray()
+        })
+        .ToArray();
+}
 
 
     public async Task<bool?> GetDishAvailabilityAsync(

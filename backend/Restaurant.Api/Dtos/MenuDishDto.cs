@@ -8,4 +8,8 @@ public sealed record MenuDishDto(
     string? Description,
     string Category,
     bool IsAvailable
-);
+)
+{
+    public IReadOnlyList<string> Ingredients {get; init; }
+       = Array.Empty<string>();
+};
