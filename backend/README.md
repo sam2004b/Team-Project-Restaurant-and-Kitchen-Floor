@@ -859,6 +859,60 @@ The query functionality can be reused by US-3-T02, where the backend API must re
 
 Server-side order validation and HTTP error responses are outside the scope of US-3-T01.
 
+
+## US-3-T02 — Server-Side Dish Availability Validation
+
+### Overview
+
+Implemented reusable server-side validation to prevent unavailable dishes from being submitted as part of new restaurant orders.
+
+### Existing Functionality
+
+The `GET /dishes` endpoint uses the existing menu read service to retrieve only available dishes.
+
+### New Components
+
+- `OrderValidationModels.cs` — Proposed order items and validation results.
+- `IOrderAvailabilityService.cs` — Availability validation contract.
+- `OrderAvailabilityService.cs` — Server-side dish and quantity validation.
+- `OrderAvailabilityServiceTests.cs` — Automated validation tests.
+
+### Validation Rules
+
+- A dish must exist.
+- A dish must currently be available.
+- The requested quantity must be greater than zero.
+- An empty order is invalid.
+- Invalid order requests must not be persisted.
+
+### Recommended API Error Responses
+
+- HTTP 400 — Invalid order or quantity.
+- HTTP 404 — Dish does not exist.
+- HTTP 409 — Dish exists but is unavailable.
+
+### Testing
+
+Run:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+Automated tests verify:
+
+- Available dishes are accepted.
+- Unavailable dishes are rejected.
+- Nonexistent dishes are rejected.
+- Invalid quantities are rejected.
+- Availability changes are reflected in subsequent validation.
+
+### Integration
+
+The validation service must be invoked by the order-saving operation before persistence.
+
+The order-saving operation should use appropriate transactional concurrency handling to ensure availability cannot change between the final check and saving the order.
+
+Until an order-saving API exists, validation tests alone do not demonstrate the complete US-3-T02 acceptance criteria.
+
 ## US-11-T01 — Dish Information Data Model
 
 ### Overview
@@ -938,3 +992,79 @@ The model tests use EF Core InMemory. Database schema and check constraints are 
 US-11-T01 provides the database foundation for US-11-T02.
 
 The API layer will implement dish creation, updates, request validation and HTTP responses. Ingredient information must also be exposed through the relevant dish response model.
+
+
+
+## US-11-T02 — Dish Creation and Editing API
+
+### Overview
+
+Implemented HTTP endpoints for creating and editing dish information using ASP.NET Core Web API and Entity Framework Core.
+
+### Endpoints
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/dishes` | Retrieve available menu dishes |
+| GET | `/dishes/{id}` | Retrieve dish details in Development |
+| POST | `/dishes` | Create a dish with ingredients in Development |
+| PUT | `/dishes/{id}` | Update dish information and ingredients in Development |
+
+### Validation
+
+The API validates:
+
+- Nonblank dish names.
+- Positive prices within the supported database range.
+- Prices with no more than two decimal places.
+- Nonblank categories.
+- Valid ingredient names.
+- Duplicate ingredients.
+- Valid dish identifiers.
+
+### Responses
+
+- `201 Created` — Dish created.
+- `200 OK` — Dish retrieved or updated.
+- `400 Bad Request` — Invalid input.
+- `404 Not Found` — Requested dish does not exist.
+- `403 Forbidden` — Management endpoint disabled outside Development.
+
+### Persistence
+
+Dish information is stored in the existing `dishes` table. Ingredients are stored in `dish_ingredients`.
+
+The update operation synchronizes ingredient records and persists changes through EF Core.
+
+No additional migration is required beyond US-11-T01.
+
+### Testing
+
+Build:
+
+`dotnet build backend/RestaurantManagement.sln`
+
+Automated tests:
+
+`dotnet test backend/RestaurantManagement.sln`
+
+Local Docker testing:
+
+`docker compose up --build -d`
+
+Swagger:
+
+`http://localhost:5020/swagger`
+
+### Security Limitation
+
+The management endpoints are restricted to Development as an interim safeguard.
+
+Authenticated Administrator-only authorization must be implemented before these endpoints are enabled outside a controlled development environment.
+
+### Related Tasks
+
+- US-11-T01 — Dish data model and migration: Oberd
+- US-11-T02 — Dish creation and editing API: Sambhav
+- US-1-T02 — Electronic menu GET endpoint: Sambhav
+- US-3-T01 — Dish availability data/query: Oberd
