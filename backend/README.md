@@ -1,1070 +1,341 @@
-
-# Restaurant & Kitchen Management — Backend
-
-## Overview
-
-This backend is part of the Restaurant and Kitchen Floor Management System developed for the Software Development Processes course.
-
-The backend is built using ASP.NET Core Web API and provides the foundation for managing restaurant operations, including menus, orders, reservations, and kitchen workflows.
-
-## Technology Stack
-
-- C# / .NET 8
-- ASP.NET Core Web API
-- Entity Framework Core 8
-- PostgreSQL
-- Npgsql (EF Core PostgreSQL provider)
-- Git and GitHub
-
-## Prerequisites
-
-Before running the backend, install:
-
-1. .NET 8 SDK
-2. PostgreSQL
-3. pgAdmin 4 (optional database management tool)
-4. Git
-
-Verify that .NET is installed:
-
-```powershell
-dotnet --version
-```
-
-Install the EF Core CLI tool if not installed:
-
-```powershell
-dotnet tool install --global dotnet-ef --version "8.*"
-```
-
-## Project Structure
-
-```text
-backend/
-├── RestaurantManagement.sln
-├── Restaurant.Api/
-│   ├── Controllers/
-│   ├── Data/
-│   │   └── RestaurantDbContext.cs
-│   ├── Models/
-│   │   └── Dish.cs
-│   ├── Migrations/
-│   ├── Program.cs
-│   ├── appsettings.json
-│   └── Restaurant.Api.csproj
-└── README.md
-```
-
-## Local Setup
-
-### 1. Clone the repository
-
-```powershell
-git clone https://github.com/sam2004b/Team-Project-Restaurant-and-Kitchen-Floor.git
-cd Team-Project-Restaurant-and-Kitchen-Floor
-```
-
-### 2. Navigate to the backend
-
-```powershell
-cd backend/Restaurant.Api
-```
-
-### 3. Restore dependencies
-
-```powershell
-dotnet restore
-```
-
-### 4. Configure PostgreSQL
-
-Make sure the PostgreSQL server is running.
-
-Using pgAdmin, create:
-
-- Database: `restaurant_db`
-- Login role: `restaurant_app`
-- Database owner: `restaurant_app`
-
-Assign a private password to the login role.
-
-The PostgreSQL port depends on your local installation. The default is 5432, but another port can be configured.
-
-### 5. Configure the connection string
-
-The application reads its PostgreSQL connection string from the configuration key:
-
-`ConnectionStrings:DefaultConnection`
-
-For local development, use .NET User Secrets to avoid committing passwords.
-
-Initialize User Secrets if necessary:
-
-```powershell
-dotnet user-secrets init
-```
-
-Configure your database connection:
-
-```powershell
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=restaurant_db;Username=restaurant_app;Password=YOUR_PASSWORD"
-```
-
-Replace `YOUR_PASSWORD` with your own database password.
-
-Change `Port=5432` to your local PostgreSQL port if necessary.
-
-The local connection string must not be committed to GitHub.
-
-### 6. Apply database migrations
-
-Set the environment to Development:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Development"
-$env:DOTNET_ENVIRONMENT = "Development"
-```
-
-Apply existing migrations:
-
-```powershell
-dotnet ef database update
-```
-
-Entity Framework Core will create or update the necessary database tables.
-
-The initial migration includes the database schema defined by the current EF Core models.
-
-Do not manually create the application tables in pgAdmin.
-
-### 7. Build the project
-
-```powershell
-dotnet build
-```
-
-Expected result:
-
-`Build succeeded.`
-
-### 8. Run the backend
-
-```powershell
-dotnet run
-```
-
-The terminal will display the local address where the API is running.
-
-Example:
-
-`http://localhost:5019`
-
-The actual port may differ.
-
-## Database Connection Health Check
-
-The backend includes an endpoint to verify PostgreSQL connectivity.
-
-Endpoint:
-
-`GET /health/db`
-
-Example URL:
-
-`http://localhost:5019/health/db`
-
-Expected response:
-
-```json
-{
-  "database": "connected"
-}
-```
-
-A successful response confirms that the API can connect to PostgreSQL.
-
-The root URL (`/`) is not required to serve a webpage because this project is a Web API.
-
-## Database Migrations
-
-List available migrations:
-
-```powershell
-dotnet ef migrations list
-```
-
-Apply pending migrations:
-
-```powershell
-dotnet ef database update
-```
-
-When changing the EF Core database model, create a new migration with a descriptive name:
-
-```powershell
-dotnet ef migrations add MigrationName
-```
-
-Commit migration source files to Git so other developers can reproduce the schema.
-
-Do not create the InitialCreate migration again if it already exists.
-
-## Troubleshooting
-
-### PostgreSQL connection refused
-
-Check that PostgreSQL is running and that your connection string uses the correct host and port.
-
-On Windows:
-
-```powershell
-Get-Service *postgres*
-```
-
-Test the configured port:
-
-```powershell
-Test-NetConnection localhost -Port 5432
-```
-
-Replace 5432 if your server uses another port.
-
-### Password authentication failed
-
-Verify that the database username and password are correct.
-
-### Database does not exist
-
-Create `restaurant_db` in pgAdmin and assign the appropriate database owner.
-
-### Migration fails
-
-Make sure:
-
-- PostgreSQL is running.
-- The connection string is configured.
-- Your login has permission to modify the database schema.
-- The correct environment is selected.
-
-## Development Notes
-
-- Use feature branches for development.
-- Create pull requests before merging into the main branch.
-- Never commit database passwords or other secrets.
-- Keep EF Core migrations under version control.
-- Coordinate model and schema changes with other backend developers.
-
-
-## Docker Compose Setup (SK-04)
-
-### Requirements
-
-- Docker Desktop
-- Docker Compose
-
-PostgreSQL and the .NET SDK do not need to be
-installed locally when using Docker Compose.
-
-### Configuration
-
-From the repository root, copy the environment template:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Set DB_NAME, DB_USER, and DB_PASSWORD in .env.
-
-Do not commit .env to GitHub.
-
-### Start the application
-
-```powershell
-docker compose up --build -d
-```
-
-### Check container status
-
-```powershell
-docker compose ps
-```
-
-### Test the API
-
-Open:
-
-http://localhost:5020/health/db
-
-Expected response:
-
-{
-  "database": "connected"
-}
-
-### View logs
-
-```powershell
-docker compose logs api
-docker compose logs db
-```
-
-### Stop the application
-
-```powershell
-docker compose down
-```
-
-### Restart
-
-```powershell
-docker compose up -d
-```
-
-### Database persistence
-
-PostgreSQL data is stored in a named Docker volume.
-Normal container restarts preserve database data.
-
-Do not use docker compose down -v unless you
-intentionally want to delete the database volume.
-
-### Service ports
-
-- API: localhost:5020
-- PostgreSQL from Windows: localhost:5435
-- PostgreSQL inside Docker network: db:5432
-
-
-# SK-06 — Development Database Seeding
+# Restaurant Floor & Kitchen Management — Backend API
+
+> **Integration guide · Development environment**  
+> This document describes the backend functionality currently available to the frontend. It covers how to start the API, what each endpoint does, how to handle dish images, and which features are not ready yet.
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Implemented Features](#2-implemented-features)
+3. [Technology and Project Structure](#3-technology-and-project-structure)
+4. [Quick Start with Docker](#4-quick-start-with-docker)
+5. [API Endpoint Reference](#5-api-endpoint-reference)
+6. [Dish Data and API Examples](#6-dish-data-and-api-examples)
+7. [Dish Images and Uploads](#7-dish-images-and-uploads)
+8. [Frontend Integration Guidelines](#8-frontend-integration-guidelines)
+9. [Errors and Validation](#9-errors-and-validation)
+10. [Testing and Troubleshooting](#10-testing-and-troubleshooting)
+11. [Current Limitations](#11-current-limitations)
+
+---
 
 ## 1. Overview
 
-This section describes the development database seeding implementation for the Restaurant Floor and Kitchen Management System.
+The backend is an **ASP.NET Core 8 Web API** that provides data and business logic for the Restaurant Floor & Kitchen Management System. It stores restaurant data in **PostgreSQL** through **Entity Framework Core** and exposes HTTP endpoints consumed by the frontend.
 
-The purpose of SK-06 is to provide initial data for local development and testing, allowing team members to work with predefined users, roles, and menu items without manually inserting records into PostgreSQL.
+**Communication:** `React frontend → HTTP/JSON API → PostgreSQL`. Images are served over HTTP; the frontend does not read files or connect to the database directly.
 
-The seeding mechanism is implemented using ASP.NET Core 8, Entity Framework Core, ASP.NET Core Identity, and PostgreSQL.
+For local development with Docker Compose:
 
-**Key features:**
-- Automatic creation of predefined user roles.
-- Creation of development user accounts.
-- Assignment of users to their respective roles.
-- Insertion of initial restaurant menu items.
-- Idempotent seeding to prevent duplicate records during repeated sequential executions.
-- Support for both local PostgreSQL and Docker Compose environments.
+| Service | Address |
+| --- | --- |
+| API | `http://localhost:5020` |
+| Swagger UI (Development only) | `http://localhost:5020/swagger` |
+| Database health check | `http://localhost:5020/health/db` |
+| PostgreSQL, from the host | `localhost:5435` |
 
-## 2. Seeded User Roles
+> `localhost` means the computer running Docker. A frontend running on a different device must use the backend host's reachable address, with matching network and CORS configuration.
 
-The application supports the following development roles:
+## 2. Implemented Features
 
-| Role | Description |
-|---|---|
-| Administrator | Manages restaurant administration and configuration |
-| Waiter | Handles restaurant floor and customer-order operations |
-| Chef | Manages kitchen operations and dish availability |
-| Reception Manager | Handles reception and reservation-related operations |
+| Feature | Status | What the frontend can expect |
+| --- | --- | --- |
+| Electronic menu | **Available** | Retrieve currently available dishes, with details, ingredients, and image URLs. |
+| Dish availability | **Available** | Unavailable dishes are excluded from the public menu; availability can be changed by editing a dish in Development. |
+| Dish details | **Available (Development)** | Retrieve an individual dish, including one that is unavailable. |
+| Add and edit dishes | **Available (Development)** | Create a dish or update its information and ingredients. |
+| Dish photo upload/replacement | **Available (Development)** | Upload a JPEG/PNG photo for an existing dish; the API saves its URL. |
+| Sample data | **Available** | A development seeder adds example dishes, images, ingredients, roles, and accounts. |
+| Order availability validation | **Service implemented; no HTTP order API** | Backend validation logic exists, but frontend order submission is not connected yet. |
+| Administrator login / role-protected API | **Not implemented** | Identity roles exist in the database, but management endpoints are not secured by an Administrator login. |
+| Reservations and kitchen workflows | **Not exposed as completed APIs** | Do not assume these endpoints exist. |
 
-These roles are intended to support the application's planned role-based functionality.
+## 3. Technology and Project Structure
 
-## 3. Development Test Accounts
-
-The seed script creates the following test accounts:
-
-| Username | Email | Role |
-|---|---|---|
-| admin | admin@restaurant.test | Administrator |
-| waiter | waiter@restaurant.test | Waiter |
-| chef | chef@restaurant.test | Chef |
-| reception | reception@restaurant.test | Reception Manager |
-
-All development accounts use a password supplied through the `Seed:DefaultPassword` configuration setting.
-
-ASP.NET Core Identity securely hashes account passwords before storing them.
-
-**Security note:** Development credentials must never be committed to GitHub or used in production environments.
-
-## 4. Initial Restaurant Menu Data
-
-The seeder inserts the following example dishes if they do not already exist:
-
-| Dish | Category | Price | Available |
-|---|---|---:|---|
-| Margherita Pizza | Pizza | 9.90 | Yes |
-| Chicken Burger | Burgers | 12.50 | Yes |
-| Caesar Salad | Salads | 8.00 | Yes |
-| Fish Soup | Soups | 7.25 | No |
-
-These items are demonstration data intended for testing menu-related functionality.
-
-They support future tasks such as displaying the menu, managing dishes, and controlling dish availability.
-
-The prices are sample numeric values; no real restaurant currency is assumed.
-
-## 5. Implementation Structure
-
-The seeding implementation uses the following components:
-
-**`RestaurantDbContext.cs`**
-
-Configures Entity Framework Core database access and the ASP.NET Core Identity tables.
-
-**`DatabaseSeeder.cs`**
-
-Contains the logic responsible for creating roles, test users, role assignments, and sample dishes.
-
-**`Program.cs`**
-
-Recognizes the `--seed` command, applies pending migrations, and executes the seeder.
-
-**`Migrations/`**
-
-Contains EF Core migrations required to create and update the PostgreSQL database schema.
-
-## 6. Running the Seeder Locally
-
-### Prerequisites
-
-- .NET 8 SDK
-- PostgreSQL
-- Configured `ConnectionStrings:DefaultConnection`
-- Applied EF Core migrations or permission to apply them
-
-### Step 1 — Navigate to the API project
-
-From the repository root:
-
-```powershell
-cd backend/Restaurant.Api
-```
-
-### Step 2 — Configure the development password
-
-Use .NET User Secrets:
-
-```powershell
-dotnet user-secrets set "Seed:DefaultPassword" "YOUR_PRIVATE_DEVELOPMENT_PASSWORD"
-```
-
-Replace the placeholder with a strong password.
-
-The database connection string must also be configured through User Secrets or environment variables.
-
-### Step 3 — Set the Development environment
-
-In PowerShell:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Development"
-$env:DOTNET_ENVIRONMENT = "Development"
-```
-
-### Step 4 — Run the seed command
-
-```powershell
-dotnet run -- --seed
-```
-
-The application applies pending database migrations and creates missing development data.
-
-Expected output:
+**Backend stack:** C# · .NET 8 · ASP.NET Core Web API · Entity Framework Core 8 · PostgreSQL · ASP.NET Core Identity · Swagger (Swashbuckle) · Docker Compose · xUnit.
 
 ```text
-Database seeding completed.
+backend/
+├── README.md                    # This integration guide
+├── RestaurantManagement.sln     # Backend solution
+├── Restaurant.Api/
+│   ├── Controllers/             # HTTP endpoints
+│   ├── Dtos/                    # API request/response models
+│   ├── Models/                  # Database entities
+│   ├── Data/                    # EF Core database context
+│   ├── Services/                # Menu and order validation logic
+│   ├── Seeding/                 # Development sample data
+│   ├── Migrations/              # Database schema changes
+│   ├── wwwroot/images/          # Static and uploaded dish photos
+│   └── Program.cs               # Startup, DI, CORS, Swagger, routes
+└── Restaurant.Api.Tests/        # Automated tests
 ```
 
-The process exits after seeding without starting the API server.
+## 4. Quick Start with Docker
 
-## 7. Running the Seeder with Docker Compose
+Docker Compose runs both the API and PostgreSQL. **Run the following commands from the repository root**, where `compose.yaml` is located.
 
-Docker Compose can execute the same seeding logic using the containerized PostgreSQL database.
+**1. Create local environment settings.**
 
-### Step 1 — Configure environment variables
-
-From the repository root, create a local `.env` file if it does not already exist:
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Configure the PostgreSQL environment variables and add:
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+In `.env`, configure `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `SEED_PASSWORD`. Use strong private passwords; **do not commit `.env`**. The `SEED_PASSWORD` must meet the Identity password rules (at least 10 characters, with uppercase, lowercase, a digit, and a symbol).
+
+**2. Build and start the services.**
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+The API container runs in **Development**, and pending EF Core migrations are applied at startup.
+
+**3. Populate a new local database with sample data.**
+
+```bash
+docker compose run --rm api --seed
+```
+
+Seeding is designed to be repeatable without creating duplicate sample records. It adds **13 demonstration dishes** (12 initially available and one unavailable), along with development roles/accounts. Some sample dishes have empty ingredient lists.
+
+**4. Verify that the API is ready.**
+
+Open `http://localhost:5020/health/db`. A successful response is:
+
+```json
+{ "database": "connected" }
+```
+
+Then open `http://localhost:5020/swagger` to inspect and try the endpoints.
+
+Useful commands:
+
+```bash
+docker compose logs --tail=100 api   # Diagnose API errors
+docker compose down                  # Stop containers, keep data
+dotnet test backend/RestaurantManagement.sln
+```
+
+**Do not use `docker compose down -v`** unless you intentionally want to remove the database and image-upload volumes.
+
+## 5. API Endpoint Reference
+
+All routes below are relative to **`http://localhost:5020`**.
+
+| Method | Route | Description | Main responses |
+| --- | --- | --- | --- |
+| `GET` | `/dishes` | Return available menu dishes, ordered by name. | `200` |
+| `GET` | `/dishes?limit=10` | Return up to the requested number of dishes (`1–100`). | `200`, `400` |
+| `GET` | `/dishes/{id}` | Return one dish, including ingredients and image URL. | `200`, `400`, `403`, `404` |
+| `POST` | `/dishes` | Create a dish from a JSON request. | `201`, `400`, `403` |
+| `PUT` | `/dishes/{id}` | Update dish details and synchronize ingredients. | `200`, `400`, `403`, `404` |
+| `POST` | `/dishes/{id}/image` | Upload or replace an existing dish's photo. | `200`, `400`, `403`, `404`, `413` |
+| `GET` | `/health` | Basic API health check. | `200` |
+| `GET` | `/health/db` | Verify that PostgreSQL is reachable. | `200`, `503` |
+
+**Access and visibility:** `GET /dishes` is the customer-facing menu. The dish-detail, create, update, and image-upload endpoints are **Development-only**. They are **not authenticated Administrator endpoints** yet.
+
+**Important behavior of `GET /dishes`:**
+
+- Only records with `isAvailable: true` are included.
+- Dishes are sorted by name, then ID.
+- The response is `200 OK` with `[]` if no dishes are available.
+- An invalid `limit` value returns `400 Bad Request`.
+- It is **not** an admin list of every dish because unavailable dishes are hidden.
+
+## 6. Dish Data and API Examples
+
+### 6.1. Read the customer menu
+
+**Request:** `GET /dishes`
+
+**Example response (HTTP 200):**
+
+```json
+[
+  {
+    "id": 5,
+    "name": "Carbonara",
+    "price": 14.50,
+    "description": "Sample Carbonara dish",
+    "category": "Pasta",
+    "isAvailable": true,
+    "ingredients": ["Spaghetti", "Eggs", "Pecorino Romano", "Guanciale"],
+    "imageUrl": "/images/dishes/carbonara.jpg"
+  }
+]
+```
+
+The example illustrates the response shape; IDs and current database values can vary. `description` and `imageUrl` may be `null`. `price` is numeric; **the backend does not specify a currency**.
+
+### 6.2. Create a dish
+
+**Request:** `POST /dishes` with `Content-Type: application/json`
+
+```json
+{
+  "name": "Vegetable Pasta",
+  "price": 12.50,
+  "description": "Pasta with fresh vegetables",
+  "category": "Pasta",
+  "isAvailable": true,
+  "ingredients": ["Pasta", "Tomato", "Basil"]
+}
+```
+
+**Result:** `201 Created`, containing the newly created dish, including its generated `id`. A new dish's `imageUrl` is initially `null` until an image is uploaded.
+
+### 6.3. Edit a dish
+
+**Request:** `PUT /dishes/{id}` with the **full updated JSON object** in the same format as the create request.
+
+**Result:** `200 OK`, containing the updated dish. The submitted ingredient list is synchronized with the saved list: removed names are deleted, and newly added names are saved. If no image is uploaded, the existing image is retained.
+
+To make a dish unavailable, send `"isAvailable": false`. It will then disappear from the customer-facing `GET /dishes` response.
+
+## 7. Dish Images and Uploads
+
+The backend stores each dish's **relative image path** in `imageUrl`, not the image bytes in PostgreSQL.
+
+| Image type | URL pattern | Storage |
+| --- | --- | --- |
+| Seeded sample image | `/images/dishes/carbonara.jpg` | Static files included with the API |
+| Uploaded/replaced image | `/images/uploads/{generated-file-name}.jpg` | Persistent Docker `dish_uploads` volume |
+
+The current `compose.yaml` mounts `dish_uploads` at `/app/wwwroot/images/uploads`, so uploaded files are preserved across ordinary container recreation (unless the volume is removed).
+
+**Upload request:** `POST /dishes/{id}/image`
+
+- Body type: **`multipart/form-data`**.
+- Form field name: **`image`**.
+- File types: **JPEG or PNG**.
+- Maximum file size: **5 MB**.
+- The dish must already exist.
+
+**Example successful response (HTTP 200):**
+
+```json
+{
+  "dishId": 14,
+  "imageUrl": "/images/uploads/8c5f1c7453ef4d07a86dc6348ae3a718.jpg"
+}
+```
+
+Uploading a new photo replaces the existing `imageUrl`. A previous user-uploaded file may be deleted; original seeded image files are preserved.
+
+**Recommended form flow:** Create or update the dish using JSON first. Once the dish has an ID, upload the photo in a separate multipart request. If the photo upload fails, the dish data may already be saved: show a retry option instead of creating the dish again.
+
+## 8. Frontend Integration Guidelines
+
+In the React/Vite frontend, set the API address in `frontend/.env`:
 
 ```dotenv
-SEED_PASSWORD=YOUR_PRIVATE_DEVELOPMENT_PASSWORD
+VITE_API_BASE_URL=http://localhost:5020
 ```
 
-The `compose.yaml` API service must map this variable to the .NET configuration key:
+The backend currently allows the origin **`http://localhost:5173`** by default. If the frontend uses another origin, the backend's `Cors:AllowedOrigins` configuration must be updated.
 
-```yaml
-Seed__DefaultPassword: ${SEED_PASSWORD}
+**Fetch the menu:**
+
+```javascript
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+export async function getMenu() {
+  const response = await fetch(`${API_BASE}/dishes`);
+  if (!response.ok) throw new Error(`Menu request failed (${response.status})`);
+  return response.json();
+}
 ```
 
-Do not commit the `.env` file.
+**Display the correct image (or a fallback):**
 
-### Step 2 — Start Docker Compose
-
-From the repository root:
-
-```powershell
-docker compose up --build -d
+```javascript
+export function dishImageSrc(dish) {
+  return dish.imageUrl
+    ? new URL(dish.imageUrl, import.meta.env.VITE_API_BASE_URL).toString()
+    : "/placeholder-dish.jpg";
+}
 ```
 
-### Step 3 — Execute the seed command
+Put a real fallback image at `frontend/public/placeholder-dish.jpg`; also handle failed image loads in the component.
 
-```powershell
-docker compose run --rm api --seed
+**Upload or replace a photo:**
+
+```javascript
+export async function uploadDishImage(dishId, imageFile) {
+  const form = new FormData();
+  form.append("image", imageFile);
+
+  const response = await fetch(`${API_BASE}/dishes/${dishId}/image`, {
+    method: "POST",
+    body: form
+  });
+
+  if (!response.ok) throw new Error(`Image upload failed (${response.status})`);
+  return response.json();
+}
 ```
 
-Expected output:
+Do **not** set `Content-Type` manually for a `FormData` request; the browser supplies the multipart boundary.
 
-```text
-Database seeding completed.
+**Recommended UI behavior:** handle loading, empty-menu, validation, request-error, and retry states. Refetch the dish/menu after a successful update or image upload. Do not display an order as submitted until a real order-creation API exists.
+
+## 9. Errors and Validation
+
+| HTTP status | Meaning | Frontend action |
+| --- | --- | --- |
+| `200 OK` | Successful read, update, or upload | Use returned data. |
+| `201 Created` | Dish created | Read returned ID; optionally upload its photo. |
+| `400 Bad Request` | Invalid parameters, dish data, or file | Display relevant validation feedback. |
+| `403 Forbidden` | Management endpoint is disabled outside Development | Do not assume this represents an authenticated user's role. |
+| `404 Not Found` | Dish ID does not exist | Display not-found feedback. |
+| `413 Payload Too Large` | Uploaded image exceeds accepted size | Ask for an image under 5 MB. |
+| `503 Service Unavailable` | Database health check failed | Check PostgreSQL and the API logs. |
+
+**Dish validation currently checks:** required nonblank name (maximum 150 characters), nonblank category (maximum 80 characters), description length (maximum 1,000 characters), positive price within the database range with at most two decimal places, and valid ingredient names (nonblank, maximum 150 characters, case-insensitively unique). The `ingredients` field must be an array, not `null`.
+
+Error bodies are **not all identical**. Some responses use `{ "error": "..." }`; ASP.NET Core model validation can return an object with `title` and `errors`. Handle both, and provide a useful fallback message for non-JSON responses or network failures.
+
+## 10. Testing and Troubleshooting
+
+**Build and run automated tests** (from the repository root):
+
+```bash
+dotnet build backend/RestaurantManagement.sln
+dotnet test backend/RestaurantManagement.sln
 ```
 
-The Docker seeder connects to PostgreSQL using the connection string provided by Docker Compose.
-
-**Note:** The local PostgreSQL database and Docker PostgreSQL database are independent. Each must be seeded separately if both are used for development.
-
-## 8. Verification
-
-To verify the seeded data inside Docker, open the PostgreSQL terminal:
-
-```powershell
-docker compose exec db psql -U restaurant_app -d restaurant_db
-```
-
-### Verify users
-
-```sql
-SELECT "UserName", "Email"
-FROM "AspNetUsers";
-```
-
-### Verify roles
-
-```sql
-SELECT "Name"
-FROM "AspNetRoles";
-```
-
-### Verify user-role assignments
-
-```sql
-SELECT
-    u."UserName",
-    r."Name" AS "Role"
-FROM "AspNetUsers" u
-JOIN "AspNetUserRoles" ur
-    ON u."Id" = ur."UserId"
-JOIN "AspNetRoles" r
-    ON ur."RoleId" = r."Id";
-```
-
-### Verify sample menu data
-
-```sql
-SELECT "Id", "Name", "Price", "IsAvailable"
-FROM dishes;
-```
-
-Exit PostgreSQL using:
-
-```text
-\q
-```
-
-## 9. Idempotency Testing
-
-The seed operation is designed to be idempotent.
-
-This means executing it multiple times should not create duplicate users, roles, user-role assignments, or sample dishes.
-
-### Test procedure
-
-1. Run the seeder on an empty development database.
-2. Verify the initial records.
-3. Execute the seeder a second time.
-4. Compare the database record counts.
-5. Confirm that no duplicate records were created.
-
-Run the seeder again:
-
-```powershell
-docker compose run --rm api --seed
-```
-
-Check database counts:
-
-```sql
-SELECT 'Users' AS item, COUNT(*) FROM "AspNetUsers"
-UNION ALL
-SELECT 'Roles', COUNT(*) FROM "AspNetRoles"
-UNION ALL
-SELECT 'User Role Links', COUNT(*) FROM "AspNetUserRoles"
-UNION ALL
-SELECT 'Dishes', COUNT(*) FROM dishes;
-```
-
-For a database initially containing no development records, the expected counts are:
-
-| Data | Expected records |
-|---|---:|
-| Users | 4 |
-| Roles | 4 |
-| User-role assignments | 4 |
-| Sample dishes | 4 |
-
-The counts should remain unchanged after running the seed operation a second time.
-
-Existing unrelated database records should not be deleted or overwritten.
-
-## 10. Security Considerations
-
-- Seeding is restricted to the Development environment.
-- Passwords are configured using User Secrets or local environment variables.
-- Passwords are stored as Identity password hashes, not plain text.
-- Development accounts must not be deployed to production.
-- Local `.env` files and credentials must not be committed to GitHub.
-- Database migrations and seed source code should be maintained under version control.
-
-## 11. Troubleshooting
-
-**Error: Seed:DefaultPassword is not configured**
-
-Ensure that the seed password is configured in User Secrets or through the Docker Compose environment.
-
-**Error: Database connection failed**
-
-Verify that PostgreSQL is running and the connection string points to the correct host, port, and database.
-
-**Error: Identity tables do not exist**
-
-Apply the required EF Core migrations:
-
-```powershell
-dotnet ef database update
-```
-
-**Error: Password does not meet requirements**
-
-Use a strong password satisfying the ASP.NET Core Identity password policy.
-
-**Duplicate records after seeding**
-
-Review the existence checks in `DatabaseSeeder.cs` and verify that no duplicate seed records already exist.
-
-The seeding mechanism provides reusable development data for upcoming restaurant management features.
-
-
-
-## US-1-T01 — Electronic Menu Data Model and Query
-
-### Overview
-
-Implemented the data retrieval layer for US-1 (View Electronic Menu).
-
-The purpose of this task is to provide a reusable service that retrieves available restaurant dishes using Entity Framework Core.
-
-### Implementation
-
-The following components were implemented:
-
-- **MenuDishDto.cs:** Defines the data returned for each menu dish.
-- **IMenuReadService.cs:** Defines the menu retrieval contract.
-- **MenuReadService.cs:** Implements the EF Core query for available dishes.
-- **MenuReadServiceTests.cs:** Contains automated tests for menu retrieval.
-
-### Query Functionality
-
-The menu query:
-
-- Retrieves only dishes marked as available.
-- Returns dish ID, name, price, description, category and availability.
-- Uses `AsNoTracking()` for read-only queries.
-- Orders dishes by name and ID.
-- Returns an empty collection when no dishes are available.
-- Reflects dish availability changes in subsequent queries.
-
-### Testing
-
-Run the automated tests from the repository root:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-The tests cover:
-
-1. Empty menu.
-2. Menu containing 12 available dishes.
-3. Menu containing 50 available dishes.
-4. Exclusion of unavailable dishes.
-5. Dish availability changes.
-
-**Verified results:**
-
-- Build succeeded.
-- 6 tests passed.
-- 0 tests failed.
-- 0 tests skipped.
-
-Automated query tests use EF Core InMemory. PostgreSQL seed data can be verified separately using Docker Compose.
-
-### Integration with US-1-T02
-
-The `IMenuReadService` interface is registered through dependency injection.
-
-It can be consumed by the menu API endpoint implemented by Sambhav under US-1-T02.
-
-This separation avoids duplicating EF Core query logic inside the API controller.
-
-
-
-## US-1-T02 — Electronic Menu API
-
-### Overview
-
-Implemented the customer-facing electronic menu API endpoint using ASP.NET Core Web API.
-
-The endpoint uses the existing `IMenuReadService` from US-1-T01 to retrieve currently available dishes from PostgreSQL.
-
-### Endpoint
-
-**GET `/dishes`**
-
-Returns all currently available dishes.
-
-**Optional:** `GET /dishes?limit=10`
-
-Limits the number of returned dishes. Valid limits range from 1 to 100.
-
-### Response
-
-**HTTP 200 OK**
-
-Returns a JSON array containing:
-
-- id
-- name
-- price
-- description
-- category
-- isAvailable
-
-When no dishes are available, the endpoint returns `[]` with HTTP 200.
-
-Invalid `limit` values return HTTP 400.
-
-### Implementation
-
-- `Controllers/DishesController.cs` — Menu HTTP endpoint
-- `Services/Menu/IMenuReadService.cs` — Existing query contract
-- `Services/Menu/MenuReadService.cs` — Existing available-dishes query
-- `Dtos/MenuDishDto.cs` — Shared response DTO
-- `Restaurant.Api.Tests/DishesControllerTests.cs` — Controller unit tests
-
-### Testing
-
-Build:
-
-`dotnet build backend/RestaurantManagement.sln`
-
-Run tests:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-Start Docker Compose:
-
-`docker compose up --build -d`
-
-Test the endpoint:
-
-`curl.exe -i http://localhost:5020/dishes`
-
-Test invalid input:
-
-`curl.exe -i "http://localhost:5020/dishes?limit=-1"`
-
-### Frontend Integration
-
-Rishabh can use `GET /dishes` through the frontend API client to retrieve the electronic menu.
-
-The frontend is responsible for displaying loading, empty, error and refresh states.
-
-### Related Tasks
-
-- US-1-T01 — Menu Data and Query: Oberd
-- US-1-T02 — Menu API Endpoint: Sambhav
-- US-1-T03 — Customer Menu UI: Rishabh
-- US-1-T04 — Frontend Behavior: Mahran
-
-
-## US-3-T01 — Dish Availability Data and Query
-
-### Overview
-
-Implemented the data/query functionality supporting US-3: Show and Order Only Available Dishes.
-
-The goal is to ensure that the application can distinguish available, unavailable, and nonexistent dishes while providing an available-dishes query for the customer menu.
-
-### Database Model
-
-The existing `Dish` entity contains the `IsAvailable` property.
-
-- `true`: The dish is available.
-- `false`: The dish is unavailable.
-
-The availability flag is stored in the existing PostgreSQL `dishes` table and configured using Entity Framework Core.
-
-No additional database migration was required because the availability field already existed.
-
-### Implemented Query Methods
-
-**GetAvailableDishesAsync()**
-
-Retrieves currently available dishes using Entity Framework Core.
-
-The query excludes dishes marked unavailable and uses `AsNoTracking()` for read-only access.
-
-**GetDishAvailabilityAsync(int dishId)**
-
-Retrieves the availability status of a specific dish.
-
-Possible results:
-
-- `true`: Dish exists and is available.
-- `false`: Dish exists and is unavailable.
-- `null`: Dish does not exist.
-
-### Automated Tests
-
-The `DishAvailabilityTests.cs` file contains tests for:
-
-1. Available dishes.
-2. Unavailable dishes.
-3. Nonexistent dishes.
-4. Dishes becoming unavailable.
-5. Dishes becoming available again.
-
-Run tests from the repository root:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-### PostgreSQL Verification
-
-The availability column and filtering behavior can be verified through PostgreSQL using Docker Compose.
-
-The development database includes sample available and unavailable dishes.
-
-### Integration
-
-The query functionality can be reused by US-3-T02, where the backend API must reject new orders containing unavailable dishes.
-
-Server-side order validation and HTTP error responses are outside the scope of US-3-T01.
-
-
-## US-3-T02 — Server-Side Dish Availability Validation
-
-### Overview
-
-Implemented reusable server-side validation to prevent unavailable dishes from being submitted as part of new restaurant orders.
-
-### Existing Functionality
-
-The `GET /dishes` endpoint uses the existing menu read service to retrieve only available dishes.
-
-### New Components
-
-- `OrderValidationModels.cs` — Proposed order items and validation results.
-- `IOrderAvailabilityService.cs` — Availability validation contract.
-- `OrderAvailabilityService.cs` — Server-side dish and quantity validation.
-- `OrderAvailabilityServiceTests.cs` — Automated validation tests.
-
-### Validation Rules
-
-- A dish must exist.
-- A dish must currently be available.
-- The requested quantity must be greater than zero.
-- An empty order is invalid.
-- Invalid order requests must not be persisted.
-
-### Recommended API Error Responses
-
-- HTTP 400 — Invalid order or quantity.
-- HTTP 404 — Dish does not exist.
-- HTTP 409 — Dish exists but is unavailable.
-
-### Testing
-
-Run:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-Automated tests verify:
-
-- Available dishes are accepted.
-- Unavailable dishes are rejected.
-- Nonexistent dishes are rejected.
-- Invalid quantities are rejected.
-- Availability changes are reflected in subsequent validation.
-
-### Integration
-
-The validation service must be invoked by the order-saving operation before persistence.
-
-The order-saving operation should use appropriate transactional concurrency handling to ensure availability cannot change between the final check and saving the order.
-
-Until an order-saving API exists, validation tests alone do not demonstrate the complete US-3-T02 acceptance criteria.
-
-## US-11-T01 — Dish Information Data Model
-
-### Overview
-
-Implemented the database model required for creating and editing dish information in the Restaurant Floor and Kitchen Management System.
-
-### Database Changes
-
-The existing `dishes` table stores:
-
-- Id
-- Name
-- Price
-- Description
-- Category
-- IsAvailable
-
-A new `dish_ingredients` table stores ingredients associated with each dish.
-
-### Relationships
-
-A dish can have multiple ingredient records.
-
-Each ingredient belongs to one dish through the `DishId` foreign key.
-
-The relationship is configured in Entity Framework Core using a one-to-many association.
-
-### Data Integrity
-
-Database constraints enforce:
-
-- Dish price greater than zero.
-- Nonempty, non-whitespace dish name.
-- Required ingredient name.
-- Valid ingredient-to-dish foreign key.
-
-The API layer is responsible for returning controlled validation responses to clients.
-
-### EF Core Migration
-
-Migration name:
-
-`AddDishIngredientsAndConstraints`
-
-Apply migrations from the API project directory:
-
-`dotnet ef database update`
-
-### Sample Data
-
-The development seeder initializes Carbonara with four ingredients:
-
-- Spaghetti
-- Eggs
-- Pecorino Romano
-- Guanciale
-
-Repeated seeding does not duplicate the ingredient records when the dish already contains ingredients.
-
-### Testing
-
-Automated tests cover:
-
-- Creating a dish with four ingredients.
-- Updating a dish price from 450 to 500.
-- Editing an ingredient.
-- Reloading and verifying the saved data.
-
-Run:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-The model tests use EF Core InMemory. Database schema and check constraints are verified separately using PostgreSQL.
-
-### Integration
-
-US-11-T01 provides the database foundation for US-11-T02.
-
-The API layer will implement dish creation, updates, request validation and HTTP responses. Ingredient information must also be exposed through the relevant dish response model.
-
-
-
-## US-11-T02 — Dish Creation and Editing API
-
-### Overview
-
-Implemented HTTP endpoints for creating and editing dish information using ASP.NET Core Web API and Entity Framework Core.
-
-### Endpoints
-
-| Method | Route | Description |
-|---|---|---|
-| GET | `/dishes` | Retrieve available menu dishes |
-| GET | `/dishes/{id}` | Retrieve dish details in Development |
-| POST | `/dishes` | Create a dish with ingredients in Development |
-| PUT | `/dishes/{id}` | Update dish information and ingredients in Development |
-
-### Validation
-
-The API validates:
-
-- Nonblank dish names.
-- Positive prices within the supported database range.
-- Prices with no more than two decimal places.
-- Nonblank categories.
-- Valid ingredient names.
-- Duplicate ingredients.
-- Valid dish identifiers.
-
-### Responses
-
-- `201 Created` — Dish created.
-- `200 OK` — Dish retrieved or updated.
-- `400 Bad Request` — Invalid input.
-- `404 Not Found` — Requested dish does not exist.
-- `403 Forbidden` — Management endpoint disabled outside Development.
-
-### Persistence
-
-Dish information is stored in the existing `dishes` table. Ingredients are stored in `dish_ingredients`.
-
-The update operation synchronizes ingredient records and persists changes through EF Core.
-
-No additional migration is required beyond US-11-T01.
-
-### Testing
-
-Build:
-
-`dotnet build backend/RestaurantManagement.sln`
-
-Automated tests:
-
-`dotnet test backend/RestaurantManagement.sln`
-
-Local Docker testing:
-
-`docker compose up --build -d`
-
-Swagger:
-
-`http://localhost:5020/swagger`
-
-### Security Limitation
-
-The management endpoints are restricted to Development as an interim safeguard.
-
-Authenticated Administrator-only authorization must be implemented before these endpoints are enabled outside a controlled development environment.
-
-### Related Tasks
-
-- US-11-T01 — Dish data model and migration: Oberd
-- US-11-T02 — Dish creation and editing API: Sambhav
-- US-1-T02 — Electronic menu GET endpoint: Sambhav
-- US-3-T01 — Dish availability data/query: Oberd
+| Problem | First thing to check |
+| --- | --- |
+| Frontend cannot reach API | `docker compose ps` and `VITE_API_BASE_URL` |
+| Browser reports a CORS error | Frontend origin versus backend `Cors:AllowedOrigins` |
+| Menu returns `[]` | Seed data and dish availability; unavailable dishes are filtered |
+| Image is broken | Combine API base URL with `imageUrl`; verify the file exists; show a fallback |
+| Swagger returns HTTP 500 | `docker compose logs --tail=100 api` |
+| Database health check fails | `.env`, database container status, and API logs |
+| Seeder reports missing password | Configure `SEED_PASSWORD` in `.env` |
+
+Swagger is available at **`http://localhost:5020/swagger`** when the backend runs in Development. Use it to inspect schemas and test the implemented routes.
+
+## 11. Current Limitations
+
+This is a **development API**, not a finished production backend:
+
+- **Administrator authentication and authorization are not implemented.** The database contains Identity roles and development accounts, but sensitive dish-management routes are only blocked outside Development; they do not verify the caller's Administrator role.
+- **There is no completed `POST /orders` endpoint.** Internal order-availability validation exists, but orders are not accepted/persisted through an HTTP API yet.
+- **There is no all-dishes admin-list endpoint.** `GET /dishes` hides unavailable items; an admin management screen will need a separate, properly protected listing endpoint.
+- **There is no single-request dish + photo creation.** Save dish information first, then upload its image.
+- **Photo upload is for controlled development use.** File size and signature checks exist, but production hardening (full image decoding/re-encoding, authentication, and operational safeguards) is still needed.
+- **Reservation, kitchen and other restaurant workflows are not documented as available HTTP APIs** because the current controllers do not expose them.
+
+For the exact runtime behavior, refer to the API's Swagger UI and the source under `Restaurant.Api/Controllers/`.
