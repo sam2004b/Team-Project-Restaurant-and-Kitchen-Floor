@@ -17,21 +17,6 @@ type DishArt =
   | "dessert"
   | "starter";
 
-const demoDishes: MenuDish[] = [
-  { id: 1, name: "Carbonara", description: "Silky egg & parmesan", category: "Pasta", price: 450 },
-  { id: 2, name: "Tomato Soup", description: "Fresh basil & tomatoes", category: "Starters", price: 220 },
-  { id: 3, name: "Grilled Chicken", description: "Herb-marinated & tender", category: "Mains", price: 390 },
-  { id: 4, name: "House Salad", description: "Leafy greens & dressing", category: "Salads", price: 260 },
-  { id: 5, name: "Margherita Pizza", description: "Mozzarella & fresh basil", category: "Pizza", price: 370 },
-  { id: 6, name: "Grilled Salmon", description: "Lemon, herbs & greens", category: "Mains", price: 620 },
-  { id: 7, name: "Mushroom Risotto", description: "Creamy arborio & mushrooms", category: "Mains", price: 430 },
-  { id: 8, name: "Caesar Salad", description: "Crisp romaine & parmesan", category: "Salads", price: 310 },
-  { id: 9, name: "Cheesecake", description: "Vanilla & seasonal berry", category: "Desserts", price: 240 },
-  { id: 10, name: "Garlic Bread", description: "Golden toasted sourdough", category: "Starters", price: 160 },
-  { id: 11, name: "Beef Steak", description: "Chargrilled & rosemary", category: "Mains", price: 720 },
-  { id: 12, name: "Lemon Tart", description: "Tangy lemon cream", category: "Desserts", price: 220 },
-];
-
 const dishArtByName: Record<string, DishArt> = {
   Carbonara: "pasta",
   "Tomato Soup": "soup",
@@ -77,7 +62,7 @@ async function fetchMenu(): Promise<MenuDish[]> {
 }
 
 function App() {
-  const [dishes, setDishes] = useState<MenuDish[]>(demoDishes);
+  const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -93,8 +78,7 @@ function App() {
         setDishes([]);
       }
     } catch {
-      setDishes(demoDishes);
-      setError(false);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -132,9 +116,19 @@ function App() {
             <h1>Good food. Great moments.</h1>
             <p className="subtitle">Browse our current menu and discover something delicious.</p>
 
-            <div className="status-pill">
-              <span className="status-dot" aria-hidden="true" />
-              <span>{dishCountText}</span>
+            <div className="hero-status-row">
+              <div className="status-pill" aria-live="polite">
+                <span className="status-dot" aria-hidden="true" />
+                <span>{loading ? "Updating menu..." : dishCountText}</span>
+              </div>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void loadMenu()}
+                disabled={loading}
+              >
+                {loading ? "Updating..." : "Refresh menu"}
+              </button>
             </div>
           </div>
 
@@ -173,30 +167,47 @@ function App() {
               Try again
             </button>
           </div>
-        ) : (
-          <div className="dish-grid">
-            {dishes.map((dish) => (
-              <article key={dish.id} className="dish-card">
-                <div className={`dish-art food-${dishArtByName[dish.name] ?? "main"}`} aria-hidden="true">
-                  <span className="dish-shadow" />
-                  <span className="dish-plate" />
-                </div>
-
-                <div className="dish-meta">
-                  <div className="dish-category">{dish.category}</div>
-                  <h3>{dish.name}</h3>
-                  <p>{dish.description}</p>
-                </div>
-
-                <div className="dish-footer">
-                  <span className="price">{dish.price}</span>
-                  <button type="button" className="arrow-button" aria-label={`View ${dish.name}`}>
-                    <span aria-hidden="true">›</span>
-                  </button>
-                </div>
-              </article>
-            ))}
+        ) : dishes.length === 0 ? (
+          <div className="empty-panel" role="status">
+            <div className="empty-badge" aria-hidden="true">~</div>
+            <h3>No dishes available</h3>
+            <p>There are currently no available dishes. Please check back soon.</p>
+            <button type="button" className="primary-button" onClick={() => void loadMenu()}>
+              Refresh menu
+            </button>
           </div>
+        ) : (
+          <>
+            {error && (
+              <div className="refresh-error" role="alert">
+                <span>Could not refresh the menu. Your last loaded menu is still shown.</span>
+                <button type="button" onClick={() => void loadMenu()}>Try again</button>
+              </div>
+            )}
+            <div className="dish-grid">
+              {dishes.map((dish) => (
+                <article key={dish.id} className="dish-card">
+                  <div className={`dish-art food-${dishArtByName[dish.name] ?? "main"}`} aria-hidden="true">
+                    <span className="dish-shadow" />
+                    <span className="dish-plate" />
+                  </div>
+
+                  <div className="dish-meta">
+                    <div className="dish-category">{dish.category}</div>
+                    <h3>{dish.name}</h3>
+                    <p>{dish.description}</p>
+                  </div>
+
+                  <div className="dish-footer">
+                    <span className="price">{dish.price}</span>
+                    <button type="button" className="arrow-button" aria-label={`View ${dish.name}`}>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
 
         <footer className="footer-bar">
