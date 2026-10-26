@@ -16,8 +16,9 @@ public sealed class DishesController : ControllerBase
         _menuReadService = menuReadService;
     }
 
-    // GET /dishes
-    // GET /dishes?limit=10
+    /// <summary>
+    /// Get the list of available dishes.
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(
         typeof(IReadOnlyList<MenuDishDto>),

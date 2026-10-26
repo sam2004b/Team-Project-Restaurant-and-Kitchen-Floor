@@ -33,7 +33,9 @@ public sealed class DishImagesController : ControllerBase
         _logger = logger;
     }
 
-    // POST /dishes/{id}/image
+    /// <summary>
+    /// Upload or replace a dish image.
+    /// </summary>
     [HttpPost("{id:int}/image")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]

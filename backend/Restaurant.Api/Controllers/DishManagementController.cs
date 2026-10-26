@@ -22,7 +22,9 @@ public sealed class DishManagementController : ControllerBase
         _environment = environment;
     }
 
-    // GET /dishes/{id}
+    /// <summary>
+    /// Get detailed information about a dish.
+    /// </summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<DishDetailsDto>> GetDishById(
         int id,
@@ -47,7 +49,9 @@ public sealed class DishManagementController : ControllerBase
         return Ok(ToDto(dish));
     }
 
-    // POST /dishes
+    /// <summary>
+    /// Create a new dish.
+    /// </summary>
     [HttpPost]
     public async Task<ActionResult<DishDetailsDto>> CreateDish(
         [FromBody] SaveDishRequest request,
@@ -84,7 +88,9 @@ public sealed class DishManagementController : ControllerBase
             ToDto(dish));
     }
 
-    // PUT /dishes/{id}
+    /// <summary>
+    /// Update an existing dish.
+    /// </summary>
     [HttpPut("{id:int}")]
     public async Task<ActionResult<DishDetailsDto>> UpdateDish(
         int id,
