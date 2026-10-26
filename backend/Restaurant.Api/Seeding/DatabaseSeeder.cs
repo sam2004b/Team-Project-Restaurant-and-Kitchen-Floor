@@ -216,6 +216,44 @@ public static class DatabaseSeeder
         }
 
 
+
+
+        // Assign images to seeded dishes (including existing rows).
+        var dishImages = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            ["Margherita Pizza"] = "/images/dishes/margherita-pizza.jpg",
+            ["Chicken Burger"] = "/images/dishes/chicken-burger.jpg",
+            ["Caesar Salad"] = "/images/dishes/caesar-salad.jpg",
+            ["Fish Soup"] = "/images/dishes/fish-soup.jpg",
+            ["Carbonara"] = "/images/dishes/carbonara.jpg",
+            ["Grilled Salmon"] = "/images/dishes/grilled-salmon.jpg",
+            ["Beef Steak"] = "/images/dishes/beef-steak.jpg",
+            ["Pasta Alfredo"] = "/images/dishes/pasta-alfredo.jpg",
+            ["Vegetable Soup"] = "/images/dishes/vegetable-soup.jpg",
+            ["Veggie Pizza"] = "/images/dishes/veggie-pizza.jpg",
+            ["Cheesecake"] = "/images/dishes/cheesecake.jpg",
+            ["Chocolate Brownie"] = "/images/dishes/chocolate-brownie.jpg",
+            ["French Fries"] = "/images/dishes/french-fries.jpg"
+        };
+
+        // Only update dishes that have no image assigned yet.
+        var dishesWithoutImages = await db.Dishes
+            .Where(d => d.ImageUrl == null || d.ImageUrl == "")
+            .ToListAsync();
+
+        foreach (var dish in dishesWithoutImages)
+        {
+            if (dishImages.TryGetValue(dish.Name, out var imagePath))
+            {
+                dish.ImageUrl = imagePath;
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+
+
         Console.WriteLine("Database seeding completed.");
     }
 

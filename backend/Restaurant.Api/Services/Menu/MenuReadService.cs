@@ -40,7 +40,8 @@ public sealed class MenuReadService : IMenuReadService
             Ingredients = d.Ingredients
                 .OrderBy(i => i.Id)
                 .Select(i => i.Name)
-                .ToArray()
+                .ToArray(),
+            ImageUrl = d.ImageUrl
         })
         .ToArray();
 }

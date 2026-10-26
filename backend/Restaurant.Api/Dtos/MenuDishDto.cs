@@ -12,4 +12,6 @@ public sealed record MenuDishDto(
 {
     public IReadOnlyList<string> Ingredients {get; init; }
        = Array.Empty<string>();
+
+    public string? ImageUrl { get; init; }
 };

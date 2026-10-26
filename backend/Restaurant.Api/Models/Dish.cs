@@ -16,6 +16,8 @@ namespace Restaurant.Api.Models
 
         public bool IsAvailable { get; set; } = true;
 
+        public string? ImageUrl { get; set; }
+
         public ICollection<DishIngredient> Ingredients { get; set; }
             = new List<DishIngredient>();
 

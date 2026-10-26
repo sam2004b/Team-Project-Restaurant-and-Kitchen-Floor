@@ -8,4 +8,7 @@ public sealed record DishDetailsDto(
     string Category,
     bool IsAvailable,
     IReadOnlyList<string> Ingredients
-);
+)
+{
+    public string? ImageUrl { get; init; }
+};

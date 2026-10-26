@@ -252,6 +252,9 @@ public sealed class DishManagementController : ControllerBase
             dish.Ingredients
                 .OrderBy(i => i.Id)
                 .Select(i => i.Name)
-                .ToArray());
+                .ToArray())
+        {
+            ImageUrl = dish.ImageUrl
+        };
     }
 }
