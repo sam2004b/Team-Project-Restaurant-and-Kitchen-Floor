@@ -50,6 +50,9 @@ namespace Restaurant.Api.Data
 
                 entity.Property(d => d.IsAvailable)
                     .HasDefaultValue(true);
+
+                entity.Property(d => d.ImageUrl)
+                    .HasMaxLength(500);
             });
 
 
