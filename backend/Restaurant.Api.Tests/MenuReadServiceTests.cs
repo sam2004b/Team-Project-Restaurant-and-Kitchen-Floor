@@ -107,4 +107,33 @@ public class MenuReadServiceTests
 
 		Assert.Empty(await service.GetAvailableDishesAsync());
 	}
+
+
+    [Fact]
+    public async Task ReturnsImageUrlForAvailableDish()
+    {
+        await using var db = CreateContext();
+
+        db.Dishes.Add(new Dish
+        {
+            Name = "Carbonara",
+            Price = 14.50m,
+            Category = "Pasta",
+            IsAvailable = true,
+            ImageUrl = "/images/dishes/carbonara.jpg"
+        });
+
+        await db.SaveChangesAsync();
+
+        var service = new MenuReadService(db);
+
+        var result = await service.GetAvailableDishesAsync();
+
+        Assert.Single(result);
+
+        Assert.Equal(
+            "/images/dishes/carbonara.jpg",
+            result[0].ImageUrl);
+    }
+
 }
