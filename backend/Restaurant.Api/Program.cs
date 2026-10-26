@@ -1,3 +1,4 @@
+using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
 using Restaurant.Api.Services.Orders;
 using Microsoft.AspNetCore.Identity;
@@ -68,7 +69,24 @@ builder.Services.AddScoped<
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Restaurant & Kitchen Management API",
+        Version = "v1",
+        Description =
+            "Backend API for managing restaurant and kitchen operations, including menu management, order processing, and user authentication."
+    });
+
+    // Load XML comments from the API assembly.
+    var xmlFile = $"{builder.Environment.ApplicationName}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+    options.IncludeXmlComments(xmlPath);
+});
+
 
 var app = builder.Build();
 
