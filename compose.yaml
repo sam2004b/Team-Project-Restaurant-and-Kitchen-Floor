@@ -50,5 +50,11 @@ services:
       db:
         condition: service_healthy
 
+        
+    volumes:
+      - dish_uploads:/app/wwwroot/images/uploads
+
+
 volumes:
   postgres_data:
+  dish_uploads:
