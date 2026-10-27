@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { apiBaseUrl, getMenuDishes } from "./services/api";
 
 type MenuDish = {
   id: number;
@@ -6,6 +7,37 @@ type MenuDish = {
   description: string;
   category: string;
   price: number;
+  imageUrl: string | null;
+};
+
+const categoryOptions = ["All", "Pasta", "Pizza", "Soups", "Salads", "Mains", "Desserts", "Drinks"] as const;
+
+const normalizeCategoryName = (category: string) => {
+  const normalized = category.trim();
+
+  switch (normalized.toLowerCase()) {
+    case "pasta":
+      return "Pasta";
+    case "pizza":
+      return "Pizza";
+    case "soup":
+    case "soups":
+      return "Soups";
+    case "salad":
+    case "salads":
+      return "Salads";
+    case "main":
+    case "mains":
+      return "Mains";
+    case "dessert":
+    case "desserts":
+      return "Desserts";
+    case "drink":
+    case "drinks":
+      return "Drinks";
+    default:
+      return normalized || "Other";
+  }
 };
 
 type DishArt =
@@ -32,53 +64,36 @@ const dishArtByName: Record<string, DishArt> = {
   "Lemon Tart": "dessert",
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-
-async function fetchMenu(): Promise<MenuDish[]> {
-  const response = await fetch(`${apiBaseUrl}/dishes`);
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  const data = (await response.json()) as Array<{
-    id: number;
-    name: string;
-    description?: string | null;
-    category: string;
-    price: number;
-    isAvailable?: boolean;
-  }>;
-
-  return data
-    .filter((dish) => dish.isAvailable !== false)
-    .map((dish) => ({
-      id: dish.id,
-      name: dish.name,
-      description: dish.description ?? "Chef's special",
-      category: dish.category,
-      price: Number(dish.price) || 0,
-    }));
-}
-
 function App() {
   const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
 
   const loadMenu = async () => {
     setLoading(true);
-    setError(false);
+    setError(null);
 
     try {
-      const response = await fetchMenu();
-      if (response.length > 0) {
-        setDishes(response);
-      } else {
-        setDishes([]);
-      }
-    } catch {
-      setError(true);
+      const response = await getMenuDishes();
+      setDishes(
+        response
+          .filter((dish) => dish.isAvailable)
+          .map((dish) => ({
+            id: dish.id,
+            name: dish.name,
+            description: dish.description ?? "Chef's special",
+            category: dish.category,
+            price: dish.price,
+            imageUrl: dish.imageUrl,
+          })),
+      );
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "An unexpected error occurred while loading the menu.",
+      );
     } finally {
       setLoading(false);
     }
@@ -88,7 +103,15 @@ function App() {
     void loadMenu();
   }, []);
 
-  const dishCountText = useMemo(() => `${dishes.length} dishes available`, [dishes.length]);
+  const visibleDishes = useMemo(() => {
+    if (selectedCategory === "All") {
+      return dishes;
+    }
+
+    return dishes.filter((dish) => normalizeCategoryName(dish.category) === selectedCategory);
+  }, [dishes, selectedCategory]);
+
+  const dishCountText = useMemo(() => `${visibleDishes.length} dishes available`, [visibleDishes.length]);
 
   return (
     <div className="app-shell">
@@ -139,9 +162,23 @@ function App() {
           </div>
         </section>
 
+        <section className="category-strip" aria-label="Dish categories">
+          <span className="category-label">CATEGORIES</span>
+          {categoryOptions.map((category) => (
+            <button
+              key={category}
+              type="button"
+              className={`category-pill ${selectedCategory === category ? "active" : ""}`}
+              onClick={() => setSelectedCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </section>
+
         <section className="menu-header">
           <h2>Available dishes</h2>
-          <div className="meta-text">{dishes.length} items</div>
+          <div className="meta-text">{visibleDishes.length} items</div>
         </section>
 
         {loading ? (
@@ -162,34 +199,44 @@ function App() {
           <div className="error-panel">
             <div className="error-badge">!</div>
             <h3>Could not load menu</h3>
-            <p>We had trouble retrieving the dishes. Check your connection and try again.</p>
+            <p>{error}</p>
             <button type="button" className="primary-button" onClick={() => void loadMenu()}>
               Try again
             </button>
           </div>
-        ) : dishes.length === 0 ? (
+        ) : visibleDishes.length === 0 ? (
           <div className="empty-panel" role="status">
             <div className="empty-badge" aria-hidden="true">~</div>
             <h3>No dishes available</h3>
-            <p>There are currently no available dishes. Please check back soon.</p>
-            <button type="button" className="primary-button" onClick={() => void loadMenu()}>
-              Refresh menu
+            <p>There are currently no available dishes in this category. Please check back soon.</p>
+            <button type="button" className="primary-button" onClick={() => setSelectedCategory("All")}>
+              Show all dishes
             </button>
           </div>
         ) : (
           <>
             {error && (
               <div className="refresh-error" role="alert">
-                <span>Could not refresh the menu. Your last loaded menu is still shown.</span>
+                <span>Could not refresh the menu. Your last loaded menu is still shown. {error}</span>
                 <button type="button" onClick={() => void loadMenu()}>Try again</button>
               </div>
             )}
             <div className="dish-grid">
-              {dishes.map((dish) => (
+              {visibleDishes.map((dish) => (
                 <article key={dish.id} className="dish-card">
-                  <div className={`dish-art food-${dishArtByName[dish.name] ?? "main"}`} aria-hidden="true">
+                  <div className={`dish-art food-${dishArtByName[dish.name] ?? "main"}`}>
                     <span className="dish-shadow" />
                     <span className="dish-plate" />
+                    {dish.imageUrl && (
+                      <img
+                        className="dish-photo"
+                        src={`${apiBaseUrl}${dish.imageUrl}`}
+                        alt={dish.name}
+                        onError={(event) => {
+                          event.currentTarget.hidden = true;
+                        }}
+                      />
+                    )}
                   </div>
 
                   <div className="dish-meta">
@@ -211,8 +258,6 @@ function App() {
         )}
 
         <footer className="footer-bar">
-          <div className="brand-footer">PLATE</div>
-          <div className="footer-note">Menu data and availability are subject to change.</div>
         </footer>
       </main>
     </div>
