@@ -1,4 +1,4 @@
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -20,6 +20,20 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export interface MenuDishResponse {
+  id: number;
+  name: string;
+  price: number;
+  description: string | null;
+  category: string;
+  isAvailable: boolean;
+  imageUrl: string | null;
+}
+
+export function getMenuDishes(): Promise<MenuDishResponse[]> {
+  return apiGet<MenuDishResponse[]>("/dishes");
 }
 
 export interface ApiHealth {
