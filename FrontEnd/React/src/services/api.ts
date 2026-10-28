@@ -10,6 +10,50 @@ export class ApiError extends Error {
   }
 }
 
+async function throwApiError(response: Response): Promise<never> {
+  const responseBody = await response.text();
+  let message = `API request failed with status ${response.status}.`;
+
+  if (responseBody) {
+    try {
+      const payload: unknown = JSON.parse(responseBody);
+      if (payload && typeof payload === "object") {
+        const details = payload as {
+          message?: unknown;
+          error?: unknown;
+          detail?: unknown;
+          title?: unknown;
+          errors?: Record<string, unknown>;
+        };
+        const validationMessages = details.errors
+          ? Object.values(details.errors).flatMap((value) =>
+              Array.isArray(value)
+                ? value.filter(
+                    (item): item is string => typeof item === "string",
+                  )
+                : [],
+            )
+          : [];
+        message =
+            (typeof details.message === "string" && details.message) ||
+            (typeof details.error === "string" && details.error) ||
+            (typeof details.detail === "string" && details.detail) ||
+            (typeof details.title === "string" && details.title) ||
+            validationMessages.join(" ") ||
+            message;
+      }
+    } catch (caughtError) {
+      if (caughtError instanceof SyntaxError) {
+        message = responseBody;
+      } else {
+        throw caughtError;
+      }
+    }
+  }
+
+  throw new ApiError(message, response.status);
+}
+
 async function apiRequest<T>(
   path: string,
   init?: RequestInit,
@@ -23,33 +67,7 @@ async function apiRequest<T>(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    let message = `API request failed with status ${response.status}.`;
-
-    if (body) {
-      try {
-        const errorBody: unknown = JSON.parse(body);
-        if (
-          typeof errorBody === "object" &&
-          errorBody !== null &&
-          "message" in errorBody &&
-          typeof errorBody.message === "string"
-        ) {
-          message = errorBody.message;
-        } else if (
-          typeof errorBody === "object" &&
-          errorBody !== null &&
-          "error" in errorBody &&
-          typeof errorBody.error === "string"
-        ) {
-          message = errorBody.error;
-        }
-      } catch {
-        message = body;
-      }
-    }
-
-    throw new ApiError(message, response.status);
+    return throwApiError(response);
   }
 
   return (await response.json()) as T;
