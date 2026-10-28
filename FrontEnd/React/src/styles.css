@@ -895,6 +895,14 @@ button {
   color: #7f4335;
 }
 
+.admin-success {
+  padding: 14px 24px;
+  border-bottom: 1px solid #d5e9db;
+  background: #edf7f0;
+  color: #26734f;
+  font-weight: 600;
+}
+
 .admin-error button {
   border: 0;
   background: transparent;
@@ -978,16 +986,75 @@ button {
   resize: vertical;
 }
 
-.admin-availability-input {
-  display: flex !important;
-  align-items: center;
-  gap: 10px !important;
+.admin-dish-form input[aria-invalid="true"],
+.admin-dish-form textarea[aria-invalid="true"] {
+  border-color: #b64d3b;
 }
 
-.admin-availability-input input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--green);
+.admin-field-error {
+  color: #a44130;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.admin-availability-switch {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  gap: 12px !important;
+  cursor: pointer;
+}
+
+.admin-availability-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.admin-switch-track {
+  display: inline-flex;
+  width: 46px;
+  height: 26px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: #a6aaa5;
+  transition: background 0.2s ease;
+}
+
+.admin-switch-track span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.admin-availability-switch input:checked + .admin-switch-track {
+  background: var(--green);
+}
+
+.admin-availability-switch input:checked + .admin-switch-track span {
+  transform: translateX(20px);
+}
+
+.admin-availability-switch input:focus-visible + .admin-switch-track {
+  outline: 3px solid rgba(35, 77, 66, 0.3);
+  outline-offset: 2px;
+}
+
+.admin-switch-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-switch-copy small {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 400;
 }
 
 .admin-form-error {

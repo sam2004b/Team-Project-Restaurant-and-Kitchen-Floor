@@ -138,10 +138,12 @@ public class DishManagementControllerTests
         await db.SaveChangesAsync();
 
         var controller = CreateController(db);
+        var updateRequest = MakeRequest(500m, "Egg Yolks");
+        updateRequest.IsAvailable = false;
 
         var response = await controller.UpdateDish(
             dish.Id,
-            MakeRequest(500m, "Egg Yolks"),
+            updateRequest,
             CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(
@@ -151,6 +153,7 @@ public class DishManagementControllerTests
             ok.Value);
 
         Assert.Equal(500m, updated.Price);
+        Assert.False(updated.IsAvailable);
         Assert.Equal(4, updated.Ingredients.Count);
         Assert.Contains("Egg Yolks", updated.Ingredients);
         Assert.DoesNotContain("Eggs", updated.Ingredients);

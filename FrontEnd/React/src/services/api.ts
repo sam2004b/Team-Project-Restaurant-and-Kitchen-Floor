@@ -1,7 +1,11 @@
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 export class ApiError extends Error {
-    constructor(message: string, readonly status: number) {
+    constructor(
+        message: string,
+        readonly status: number,
+        readonly fieldErrors: Record<string, string[]> = {},
+    ) {
         super(message);
         this.name = "ApiError";
     }
@@ -10,6 +14,7 @@ export class ApiError extends Error {
 async function throwApiError(response: Response): Promise<never> {
     const responseBody = await response.text();
     let message = `API request failed with status ${response.status}.`;
+    let fieldErrors: Record<string, string[]> = {};
 
     if (responseBody) {
         try {
@@ -24,14 +29,17 @@ async function throwApiError(response: Response): Promise<never> {
                     errors?: Record<string, unknown>;
                 };
 
-                const validationMessages =
-                    details.errors && typeof details.errors === "object"
-                        ? Object.values(details.errors).flatMap((value) =>
-                            Array.isArray(value)
-                                ? value.filter((item): item is string => typeof item === "string")
-                                : [],
-                        )
-                        : [];
+                fieldErrors = Object.fromEntries(
+                    Object.entries(details.errors ?? {}).flatMap(([field, value]) => {
+                        const messages = Array.isArray(value)
+                            ? value.filter((item): item is string => typeof item === "string")
+                            : typeof value === "string"
+                                ? [value]
+                                : [];
+                        return messages.length > 0 ? [[field, messages]] : [];
+                    }),
+                );
+                const validationMessages = Object.values(fieldErrors).flat();
 
                 message =
                     (typeof details.message === "string" && details.message) ||
@@ -52,7 +60,7 @@ async function throwApiError(response: Response): Promise<never> {
         }
     }
 
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, fieldErrors);
 }
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {

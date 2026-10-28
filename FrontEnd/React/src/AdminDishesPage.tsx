@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
+  ApiError,
   createDish,
   getAdminDishes,
   getDishDetails,
@@ -27,12 +28,84 @@ const emptyForm: DishFormValues = {
   ingredients: "",
 };
 
+type DishFormField = keyof DishFormValues;
+type DishFormErrors = Partial<Record<DishFormField, string>>;
+
+const dishFormFields: DishFormField[] = [
+  "name",
+  "price",
+  "description",
+  "category",
+  "isAvailable",
+  "ingredients",
+];
+
+function validateDishForm(form: DishFormValues): DishFormErrors {
+  const errors: DishFormErrors = {};
+  const name = form.name.trim();
+  const category = form.category.trim();
+  const price = form.price.trim();
+  const ingredients = form.ingredients
+    .split(",")
+    .map((ingredient) => ingredient.trim())
+    .filter(Boolean);
+
+  if (!name) {
+    errors.name = "Dish name is required.";
+  } else if (name.length > 150) {
+    errors.name = "Name cannot exceed 150 characters.";
+  }
+
+  const numericPrice = Number(price);
+  if (!price || !Number.isFinite(numericPrice) || numericPrice <= 0) {
+    errors.price = "Enter a price greater than 0.";
+  } else if (numericPrice > 99999999.99) {
+    errors.price = "Price is above the allowed maximum.";
+  } else if (!/^(?:\d+|\d*\.\d{1,2})$/.test(price)) {
+    errors.price = "Price can have no more than two decimal places.";
+  }
+
+  if (!category) {
+    errors.category = "Category is required.";
+  } else if (category.length > 80) {
+    errors.category = "Category cannot exceed 80 characters.";
+  }
+
+  if (form.description.trim().length > 1000) {
+    errors.description = "Description cannot exceed 1000 characters.";
+  }
+
+  if (ingredients.some((ingredient) => ingredient.length > 150)) {
+    errors.ingredients = "Ingredient names cannot exceed 150 characters.";
+  } else if (new Set(ingredients.map((ingredient) => ingredient.toLowerCase())).size !== ingredients.length) {
+    errors.ingredients = "Duplicate ingredients are not allowed.";
+  }
+
+  return errors;
+}
+
+function mapApiFieldErrors(errors: Record<string, string[]>): DishFormErrors {
+  const mapped: DishFormErrors = {};
+
+  for (const [field, messages] of Object.entries(errors)) {
+    const fieldName = field.replace(/\[\d+\]/g, "").split(".").pop()?.toLowerCase();
+    const matchingField = dishFormFields.find((candidate) => candidate.toLowerCase() === fieldName);
+    if (matchingField && messages.length > 0) {
+      mapped[matchingField] = messages.join(" ");
+    }
+  }
+
+  return mapped;
+}
+
 function AdminDishesPage() {
   const [dishes, setDishes] = useState<DishDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<DishFormErrors>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<DishFormValues>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -61,12 +134,16 @@ function AdminDishesPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFormError(null);
+    setFieldErrors({});
+    setSuccessMessage(null);
     setFormOpen(true);
   };
 
   const startEdit = async (id: number) => {
     setError(null);
     setFormError(null);
+    setFieldErrors({});
+    setSuccessMessage(null);
     try {
       const dish = await getDishDetails(id);
       setEditingId(dish.id);
@@ -93,10 +170,20 @@ function AdminDishesPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFormError(null);
+    setFieldErrors({});
   };
 
   const saveDish = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError(null);
+    setFieldErrors({});
+
+    const validationErrors = validateDishForm(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      return;
+    }
+
     setSaving(true);
     setFormError(null);
 
@@ -118,14 +205,25 @@ function AdminDishesPage() {
       } else {
         await updateDish(editingId, request);
       }
+      setSuccessMessage(
+        `${request.name} was ${editingId === null ? "added to" : "updated in"} the menu.`,
+      );
       closeForm();
       await loadDishes();
     } catch (caughtError) {
-      setFormError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "An unexpected error occurred while saving the dish.",
-      );
+      if (caughtError instanceof ApiError) {
+        const apiFieldErrors = mapApiFieldErrors(caughtError.fieldErrors);
+        setFieldErrors(apiFieldErrors);
+        setFormError(
+          Object.keys(apiFieldErrors).length === 0 ? caughtError.message : null,
+        );
+      } else {
+        setFormError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "An unexpected error occurred while saving the dish.",
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -134,7 +232,19 @@ function AdminDishesPage() {
   const updateForm = <K extends keyof DishFormValues>(
     key: K,
     value: DishFormValues[K],
-  ) => setForm((current) => ({ ...current, [key]: value }));
+  ) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setFormError(null);
+  };
 
   return (
     <div className="app-shell admin-shell">
@@ -158,6 +268,12 @@ function AdminDishesPage() {
               Add dish
             </button>
           </div>
+
+          {successMessage && (
+            <div className="admin-success" role="status" aria-live="polite">
+              {successMessage}
+            </div>
+          )}
 
           {error && (
             <div className="admin-error" role="alert">
@@ -246,38 +362,48 @@ function AdminDishesPage() {
                 </button>
               </div>
 
-              <form className="admin-dish-form" onSubmit={(event) => void saveDish(event)}>
+              <form
+                className="admin-dish-form"
+                noValidate
+                onSubmit={(event) => void saveDish(event)}
+              >
                 <label>
                   Dish name
                   <input
                     autoFocus
-                    required
                     maxLength={150}
                     value={form.name}
                     onChange={(event) => updateForm("name", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.name)}
+                    aria-describedby={fieldErrors.name ? "dish-name-error" : undefined}
                   />
+                  {fieldErrors.name && <span className="admin-field-error" id="dish-name-error">{fieldErrors.name}</span>}
                 </label>
                 <div className="admin-form-row">
                   <label>
                     Price
                     <input
                       type="number"
-                      required
                       min="0.01"
                       max="99999999.99"
                       step="0.01"
                       value={form.price}
                       onChange={(event) => updateForm("price", event.target.value)}
+                      aria-invalid={Boolean(fieldErrors.price)}
+                      aria-describedby={fieldErrors.price ? "dish-price-error" : undefined}
                     />
+                    {fieldErrors.price && <span className="admin-field-error" id="dish-price-error">{fieldErrors.price}</span>}
                   </label>
                   <label>
                     Category
                     <input
-                      required
                       maxLength={80}
                       value={form.category}
                       onChange={(event) => updateForm("category", event.target.value)}
+                      aria-invalid={Boolean(fieldErrors.category)}
+                      aria-describedby={fieldErrors.category ? "dish-category-error" : undefined}
                     />
+                    {fieldErrors.category && <span className="admin-field-error" id="dish-category-error">{fieldErrors.category}</span>}
                   </label>
                 </div>
                 <label>
@@ -287,22 +413,39 @@ function AdminDishesPage() {
                     rows={3}
                     value={form.description}
                     onChange={(event) => updateForm("description", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.description)}
+                    aria-describedby={fieldErrors.description ? "dish-description-error" : undefined}
                   />
+                  {fieldErrors.description && <span className="admin-field-error" id="dish-description-error">{fieldErrors.description}</span>}
                 </label>
                 <label>
                   Ingredients <span className="admin-field-hint">(separate with commas)</span>
                   <input
                     value={form.ingredients}
                     onChange={(event) => updateForm("ingredients", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.ingredients)}
+                    aria-describedby={fieldErrors.ingredients ? "dish-ingredients-error" : undefined}
                   />
+                  {fieldErrors.ingredients && <span className="admin-field-error" id="dish-ingredients-error">{fieldErrors.ingredients}</span>}
                 </label>
-                <label className="admin-availability-input">
+                <label className="admin-availability-switch">
                   <input
                     type="checkbox"
+                    role="switch"
                     checked={form.isAvailable}
                     onChange={(event) => updateForm("isAvailable", event.target.checked)}
                   />
-                  Available to order
+                  <span className="admin-switch-track" aria-hidden="true">
+                    <span />
+                  </span>
+                  <span className="admin-switch-copy">
+                    <strong>{form.isAvailable ? "Available to order" : "Stop-listed"}</strong>
+                    <small>
+                      {form.isAvailable
+                        ? "Customers can see and order this dish."
+                        : "This dish is hidden from the customer menu."}
+                    </small>
+                  </span>
                 </label>
 
                 {formError && <p className="admin-form-error" role="alert">{formError}</p>}
