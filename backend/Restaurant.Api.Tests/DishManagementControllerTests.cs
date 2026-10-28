@@ -57,6 +57,38 @@ public class DishManagementControllerTests
     }
 
     [Fact]
+    public async Task GetDishes_ReturnsAvailableAndUnavailableDishes()
+    {
+        await using var db = CreateDb();
+        db.Dishes.AddRange(
+            new Dish { Name = "Unavailable dish", Price = 300m, Category = "Mains", IsAvailable = false },
+            new Dish { Name = "Available dish", Price = 450m, Category = "Pasta", IsAvailable = true });
+        await db.SaveChangesAsync();
+
+        var response = await CreateController(db)
+            .GetDishes(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(response.Result);
+        var dishes = Assert.IsAssignableFrom<IReadOnlyList<DishDetailsDto>>(ok.Value);
+
+        Assert.Equal(2, dishes.Count);
+        Assert.True(dishes.Single(dish => dish.Name == "Available dish").IsAvailable);
+        Assert.False(dishes.Single(dish => dish.Name == "Unavailable dish").IsAvailable);
+    }
+
+    [Fact]
+    public async Task GetDishes_ProductionIsForbidden()
+    {
+        await using var db = CreateDb();
+
+        var response = await CreateController(
+            db, Environments.Production).GetDishes(CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(response.Result);
+        Assert.Equal(403, forbidden.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateDish_SavesFourIngredients()
     {
         await using var db = CreateDb();

@@ -17,4 +17,6 @@ The app is available at `http://localhost:5173`. Its API client uses `VITE_API_B
 
 The starter includes Home, Orders, Kitchen, Menu, and Reservations routes with placeholder pages. The Home page sends `GET /health` through the shared API client as a basic connectivity check.
 
+Dish management is available at `http://localhost:5173/admin/dishes`. It reads and writes menu data through the dish management API. The management endpoints are enabled only in the ASP.NET Development environment until administrator authentication is configured.
+
 Run `npm run build` to type-check and build the production frontend.
