@@ -205,23 +205,6 @@ The example illustrates the response shape; IDs and current database values can 
 
 To make a dish unavailable, send `"isAvailable": false`. It will then disappear from the customer-facing `GET /dishes` response.
 
-### 6.4. Place an order
-
-**Request:** `POST /orders` with `Content-Type: application/json`
-
-```json
-{
-  "dishId": 5,
-  "quantity": 1
-}
-```
-
-The API rechecks the dish's current availability before saving the order. A successful response is `201 Created` with an order ID and a snapshot of the ordered dish name and price. Orders and their item snapshots are persisted in PostgreSQL.
-
-If the dish became unavailable after the menu was loaded, the API returns `409 Conflict` with `code: "dish_unavailable"`. Refresh `GET /dishes` and choose another available dish. A missing dish returns `404`; an invalid dish ID or quantity returns `400`.
-
-Use `GET /orders/{id}` to retrieve the saved order and confirm it remains available after a frontend refresh.
-
 ## 7. Dish Images and Uploads
 
 The backend stores each dish's **relative image path** in `imageUrl`, not the image bytes in PostgreSQL.

@@ -85,9 +85,6 @@ export function apiGet<T>(path: string): Promise<T> {
     return apiRequest<T>(path);
 }
 
-export function apiPost<T>(path: string, body: unknown): Promise<T> {
-    return apiSend<T>(path, "POST", body);
-}
 
 export interface DishImageUploadResponse {
   dishId: number;
@@ -154,30 +151,6 @@ export interface SaveDishRequest {
 
 export function getMenuDishes(): Promise<MenuDishResponse[]> {
     return apiGet<MenuDishResponse[]>("/dishes");
-}
-
-export interface OrderItemResponse {
-    dishId: number;
-    dishName: string;
-    unitPrice: number;
-    quantity: number;
-}
-
-export interface OrderResponse {
-    id: number;
-    createdAtUtc: string;
-    items: OrderItemResponse[];
-}
-
-export function createOrder(
-    dishId: number,
-    quantity = 1,
-): Promise<OrderResponse> {
-    return apiPost<OrderResponse>("/orders", { dishId, quantity });
-}
-
-export function getOrder(id: number): Promise<OrderResponse> {
-    return apiGet<OrderResponse>(`/orders/${id}`);
 }
 
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {

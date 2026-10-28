@@ -1,6 +1,5 @@
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
-using Restaurant.Api.Services.Orders;
 using Microsoft.AspNetCore.Identity;
 using Restaurant.Api.Seeding;
 using Microsoft.EntityFrameworkCore;
@@ -61,10 +60,6 @@ builder.Services.AddScoped<
     IMenuReadService,
     MenuReadService>();
  
- builder.Services.AddScoped<
-    IOrderAvailabilityService,
-    OrderAvailabilityService>();
-
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -77,7 +72,9 @@ builder.Services.AddSwaggerGen(options =>
         Title = "Restaurant & Kitchen Management API",
         Version = "v1",
         Description =
-            "Backend API for managing restaurant and kitchen operations, including menu management, order processing, and user authentication."
+            "REST API for managing restaurant dishes, " +
+            "customer menu availability, ingredients, " +
+            "dish images, and administrative dish management."
     });
 
     // Load XML comments from the API assembly.
