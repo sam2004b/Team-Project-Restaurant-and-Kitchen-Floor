@@ -425,23 +425,6 @@ button {
   color: var(--green);
 }
 
-.order-button {
-  min-width: 82px;
-  min-height: 38px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--green);
-  color: #fff;
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.order-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
-
 .loading-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -652,17 +635,6 @@ button {
 .refresh-button:disabled {
   cursor: wait;
   opacity: 1;
-}
-
-.admin-menu-link {
-  color: var(--text-soft);
-  font-size: 0.9rem;
-  text-decoration: none;
-}
-
-.admin-menu-link:hover {
-  color: var(--green);
-  text-decoration: underline;
 }
 
 .admin-page {

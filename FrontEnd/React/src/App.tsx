@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ApiError,
   apiBaseUrl,
-  createOrder,
   getMenuDishes,
   getOrder,
   type OrderResponse,
 } from "./services/api";
-import { Link, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
 import { formatPrice } from "./services/currency";
 
@@ -86,7 +84,6 @@ function MenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
   const [recentlyUnavailable, setRecentlyUnavailable] = useState<MenuDish | null>(null);
-  const [orderingDishId, setOrderingDishId] = useState<number | null>(null);
   const [lastOrder, setLastOrder] = useState<OrderResponse | null>(null);
   const [orderFeedback, setOrderFeedback] = useState<OrderFeedback | null>(null);
 
@@ -179,51 +176,6 @@ function MenuPage() {
         });
       });
   }, []);
-
-  const placeOrder = async (dish: MenuDish) => {
-    setOrderingDishId(dish.id);
-    setOrderFeedback(null);
-
-    try {
-      const order = await createOrder(dish.id);
-      setLastOrder(order);
-      setOrderFeedback({
-        type: "success",
-        message: `Order #${order.id} for ${dish.name} was placed successfully.`,
-      });
-
-      try {
-        window.localStorage.setItem("restaurant.lastOrderId", String(order.id));
-      } catch (caughtError) {
-        setOrderFeedback({
-          type: "success",
-          message: `Order #${order.id} for ${dish.name} was placed and saved on the server, but this browser could not save its reference${
-            caughtError instanceof Error ? `: ${caughtError.message}` : "."
-          }`,
-        });
-      }
-    } catch (caughtError) {
-      if (caughtError instanceof ApiError && caughtError.status === 409) {
-        const refreshed = await loadMenu(false);
-        setRecentlyUnavailable({ ...dish, isAvailable: false });
-        setOrderFeedback({
-          type: "error",
-          message: refreshed
-            ? `${dish.name} became unavailable before your order was placed. The menu has been refreshed.`
-            : `${dish.name} became unavailable before your order was placed. The menu could not be refreshed; please try again.`,
-        });
-      } else {
-        setOrderFeedback({
-          type: "error",
-          message: `Could not place your order: ${
-            caughtError instanceof Error ? caughtError.message : "an unexpected error occurred."
-          }`,
-        });
-      }
-    } finally {
-      setOrderingDishId(null);
-    }
-  };
 
   const visibleDishes = useMemo(() => {
     if (selectedCategory === "All") {
@@ -376,14 +328,6 @@ function MenuPage() {
                         <span className="availability-dot" aria-hidden="true" />
                         {dish.isAvailable ? "Available" : "Unavailable"}
                       </span>
-                      <button
-                        type="button"
-                        className="order-button"
-                        onClick={() => void placeOrder(dish)}
-                        disabled={!dish.isAvailable || orderingDishId !== null}
-                      >
-                        {orderingDishId === dish.id ? "Adding..." : "Add to order"}
-                      </button>
                     </div>
                   </div>
                 </article>
@@ -395,9 +339,6 @@ function MenuPage() {
           </>
         )}
 
-        <footer className="footer-bar">
-          <Link className="admin-menu-link" to="/admin/dishes">Manage dishes</Link>
-        </footer>
       </main>
     </div>
   );
