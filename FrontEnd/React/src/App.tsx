@@ -9,8 +9,12 @@ import {
 } from "./services/api";
 import { Link, Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
-import { apiBaseUrl, getMenuDishes } from "./services/api";
 import { formatPrice } from "./services/currency";
+
+type OrderFeedback = {
+  type: "success" | "error";
+  message: string;
+};
 
 type MenuDish = {
   id: number;
@@ -82,6 +86,9 @@ function MenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
   const [recentlyUnavailable, setRecentlyUnavailable] = useState<MenuDish | null>(null);
+  const [orderingDishId, setOrderingDishId] = useState<number | null>(null);
+  const [lastOrder, setLastOrder] = useState<OrderResponse | null>(null);
+  const [orderFeedback, setOrderFeedback] = useState<OrderFeedback | null>(null);
 
   const loadMenu = async (showLoading = true): Promise<boolean> => {
     if (showLoading) {
@@ -111,7 +118,6 @@ function MenuPage() {
           ? { ...dishThatBecameUnavailable, isAvailable: false }
           : null,
       );
-      setBlockedDishIds(new Set());
       return true;
     } catch (caughtError) {
       setError(
@@ -198,8 +204,8 @@ function MenuPage() {
       }
     } catch (caughtError) {
       if (caughtError instanceof ApiError && caughtError.status === 409) {
-        setBlockedDishIds((current) => new Set(current).add(dish.id));
         const refreshed = await loadMenu(false);
+        setRecentlyUnavailable({ ...dish, isAvailable: false });
         setOrderFeedback({
           type: "error",
           message: refreshed
@@ -370,6 +376,14 @@ function MenuPage() {
                         <span className="availability-dot" aria-hidden="true" />
                         {dish.isAvailable ? "Available" : "Unavailable"}
                       </span>
+                      <button
+                        type="button"
+                        className="order-button"
+                        onClick={() => void placeOrder(dish)}
+                        disabled={!dish.isAvailable || orderingDishId !== null}
+                      >
+                        {orderingDishId === dish.id ? "Adding..." : "Add to order"}
+                      </button>
                     </div>
                   </div>
                 </article>
@@ -382,6 +396,7 @@ function MenuPage() {
         )}
 
         <footer className="footer-bar">
+          <Link className="admin-menu-link" to="/admin/dishes">Manage dishes</Link>
         </footer>
       </main>
     </div>

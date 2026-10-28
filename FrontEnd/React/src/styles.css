@@ -987,6 +987,7 @@ button {
 }
 
 .admin-dish-form input[aria-invalid="true"],
+.admin-dish-form select[aria-invalid="true"],
 .admin-dish-form textarea[aria-invalid="true"] {
   border-color: #b64d3b;
 }

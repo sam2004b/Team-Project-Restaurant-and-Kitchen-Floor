@@ -22,6 +22,67 @@ type DishFormValues = {
   ingredients: string[];
 };
 
+type DishFormField = keyof DishFormValues;
+type DishFormErrors = Partial<Record<DishFormField, string>>;
+
+function validateDishForm(form: DishFormValues): DishFormErrors {
+  const errors: DishFormErrors = {};
+  const name = form.name.trim();
+  const category = form.category.trim();
+  const price = Number(form.price);
+
+  if (!name) {
+    errors.name = "Dish name is required.";
+  } else if (name.length > 150) {
+    errors.name = "Name cannot exceed 150 characters.";
+  }
+
+  if (!form.price.trim() || !Number.isFinite(price) || price <= 0 || price > 99999999.99) {
+    errors.price = "Enter a price greater than 0 and within the supported range.";
+  } else if (Number(price.toFixed(2)) !== price) {
+    errors.price = "Price can have at most two decimal places.";
+  }
+
+  if (!category) {
+    errors.category = "Category is required.";
+  } else if (category.length > 80) {
+    errors.category = "Category cannot exceed 80 characters.";
+  }
+
+  if (form.description.length > 1000) {
+    errors.description = "Description cannot exceed 1000 characters.";
+  }
+
+  if (form.ingredients.some((ingredient) => !ingredient.trim() || ingredient.trim().length > 150)) {
+    errors.ingredients = "Ingredients must be nonblank and no longer than 150 characters.";
+  } else if (new Set(form.ingredients.map((ingredient) => ingredient.trim().toLocaleLowerCase())).size !== form.ingredients.length) {
+    errors.ingredients = "Ingredients must not contain duplicates.";
+  }
+
+  return errors;
+}
+
+function mapApiFieldErrors(
+  apiErrors: Record<string, string[]>,
+): DishFormErrors {
+  const mapped: DishFormErrors = {};
+  const fields: DishFormField[] = ["name", "price", "category", "description", "ingredients"];
+
+  for (const [apiField, messages] of Object.entries(apiErrors)) {
+    const pathSegments = apiField
+      .replace(/^\$\.?/, "")
+      .split(/[.[\]]/)
+      .filter(Boolean);
+    const normalizedField = pathSegments[pathSegments.length - 1]?.toLocaleLowerCase();
+    const field = fields.find((candidate) => candidate.toLocaleLowerCase() === normalizedField);
+    if (field && messages.length > 0) {
+      mapped[field] = messages.join(" ");
+    }
+  }
+
+  return mapped;
+}
+
 const emptyForm: DishFormValues = {
   name: "",
   price: "",
@@ -40,7 +101,6 @@ function AdminDishesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<DishFormErrors>({});
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<DishFormValues>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -75,6 +135,7 @@ function AdminDishesPage() {
     setIngredientDraft("");
     setSelectedImage(null);
     setFormError(null);
+    setFieldErrors({});
     setSaveNotice(null);
     setFormOpen(true);
   };
@@ -83,7 +144,6 @@ function AdminDishesPage() {
     setError(null);
     setFormError(null);
     setFieldErrors({});
-    setSuccessMessage(null);
     try {
       const dish = await getDishDetails(id);
       setEditingId(dish.id);
@@ -285,9 +345,12 @@ function AdminDishesPage() {
                         required
                         maxLength={150}
                         value={form.name}
+                        aria-invalid={Boolean(fieldErrors.name)}
+                        aria-describedby={fieldErrors.name ? "dish-name-error" : undefined}
                         onChange={(event) => updateForm("name", event.target.value)}
                         placeholder="e.g. Carbonara"
                       />
+                      {fieldErrors.name && <span id="dish-name-error" className="admin-field-error">{fieldErrors.name}</span>}
                     </label>
                     <label>
                       Price (₽) <span aria-hidden="true">*</span>
@@ -298,9 +361,12 @@ function AdminDishesPage() {
                         max="99999999.99"
                         step="0.01"
                         value={form.price}
+                        aria-invalid={Boolean(fieldErrors.price)}
+                        aria-describedby={fieldErrors.price ? "dish-price-error" : undefined}
                         onChange={(event) => updateForm("price", event.target.value)}
                         placeholder="0.00"
                       />
+                      {fieldErrors.price && <span id="dish-price-error" className="admin-field-error">{fieldErrors.price}</span>}
                     </label>
                   </div>
                   <div className="admin-form-row">
@@ -309,6 +375,8 @@ function AdminDishesPage() {
                       <select
                         required
                         value={form.category}
+                        aria-invalid={Boolean(fieldErrors.category)}
+                        aria-describedby={fieldErrors.category ? "dish-category-error" : undefined}
                         onChange={(event) => updateForm("category", event.target.value)}
                       >
                         <option value="" disabled>Select a category</option>
@@ -317,6 +385,7 @@ function AdminDishesPage() {
                         )}
                         {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                       </select>
+                      {fieldErrors.category && <span id="dish-category-error" className="admin-field-error">{fieldErrors.category}</span>}
                     </label>
                     <div className="admin-availability-field">
                       <span>Availability</span>
@@ -337,9 +406,12 @@ function AdminDishesPage() {
                       maxLength={1000}
                       rows={3}
                       value={form.description}
+                      aria-invalid={Boolean(fieldErrors.description)}
+                      aria-describedby={fieldErrors.description ? "dish-description-error" : undefined}
                       onChange={(event) => updateForm("description", event.target.value)}
                       placeholder="Describe the dish for your customers"
                     />
+                    {fieldErrors.description && <span id="dish-description-error" className="admin-field-error">{fieldErrors.description}</span>}
                   </label>
 
                   <div className="admin-image-field">
@@ -413,6 +485,7 @@ function AdminDishesPage() {
                     <button type="button" className="admin-add-ingredient" onClick={() => addIngredient(ingredientDraft)}>
                       + Add ingredient
                     </button>
+                    {fieldErrors.ingredients && <span className="admin-field-error">{fieldErrors.ingredients}</span>}
                   </div>
 
                   {formError && <p className="admin-form-error" role="alert">{formError}</p>}
