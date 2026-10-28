@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  ApiError,
+  apiBaseUrl,
+  createOrder,
+  getMenuDishes,
+  getOrder,
+  type OrderResponse,
+} from "./services/api";
 import { Link, Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
 import { apiBaseUrl, getMenuDishes } from "./services/api";
@@ -71,9 +79,18 @@ function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
+  const [blockedDishIds, setBlockedDishIds] = useState<Set<number>>(() => new Set());
+  const [orderingDishId, setOrderingDishId] = useState<number | null>(null);
+  const [orderFeedback, setOrderFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [lastOrder, setLastOrder] = useState<OrderResponse | null>(null);
 
-  const loadMenu = async () => {
-    setLoading(true);
+  const loadMenu = async (showLoading = true): Promise<boolean> => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -90,20 +107,113 @@ function MenuPage() {
             imageUrl: dish.imageUrl,
           })),
       );
+      setBlockedDishIds(new Set());
+      return true;
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : "An unexpected error occurred while loading the menu.",
       );
+      return false;
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     void loadMenu();
+
+    let savedOrderId: string | null;
+    try {
+      savedOrderId = window.localStorage.getItem("restaurant.lastOrderId");
+    } catch (caughtError) {
+      setOrderFeedback({
+        type: "error",
+        message: `Could not restore your previous order confirmation: ${
+          caughtError instanceof Error ? caughtError.message : "browser storage is unavailable."
+        }`,
+      });
+      return;
+    }
+
+    if (!savedOrderId) {
+      return;
+    }
+
+    const orderId = Number(savedOrderId);
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) {
+      setOrderFeedback({
+        type: "error",
+        message: "The saved order reference in this browser is invalid.",
+      });
+      return;
+    }
+
+    void getOrder(orderId)
+      .then((order) => {
+        setLastOrder(order);
+        setOrderFeedback({
+          type: "success",
+          message: `Order #${order.id} is saved on the server.`,
+        });
+      })
+      .catch((caughtError: unknown) => {
+        setOrderFeedback({
+          type: "error",
+          message: `Could not restore order #${orderId}: ${
+            caughtError instanceof Error ? caughtError.message : "an unexpected error occurred."
+          }`,
+        });
+      });
   }, []);
+
+  const placeOrder = async (dish: MenuDish) => {
+    setOrderingDishId(dish.id);
+    setOrderFeedback(null);
+
+    try {
+      const order = await createOrder(dish.id);
+      setLastOrder(order);
+      setOrderFeedback({
+        type: "success",
+        message: `Order #${order.id} for ${dish.name} was placed successfully.`,
+      });
+
+      try {
+        window.localStorage.setItem("restaurant.lastOrderId", String(order.id));
+      } catch (caughtError) {
+        setOrderFeedback({
+          type: "success",
+          message: `Order #${order.id} for ${dish.name} was placed and saved on the server, but this browser could not save its reference${
+            caughtError instanceof Error ? `: ${caughtError.message}` : "."
+          }`,
+        });
+      }
+    } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 409) {
+        setBlockedDishIds((current) => new Set(current).add(dish.id));
+        const refreshed = await loadMenu(false);
+        setOrderFeedback({
+          type: "error",
+          message: refreshed
+            ? `${dish.name} became unavailable before your order was placed. The menu has been refreshed.`
+            : `${dish.name} became unavailable before your order was placed. The menu could not be refreshed; please try again.`,
+        });
+      } else {
+        setOrderFeedback({
+          type: "error",
+          message: `Could not place your order: ${
+            caughtError instanceof Error ? caughtError.message : "an unexpected error occurred."
+          }`,
+        });
+      }
+    } finally {
+      setOrderingDishId(null);
+    }
+  };
 
   const visibleDishes = useMemo(() => {
     if (selectedCategory === "All") {
@@ -159,6 +269,21 @@ function MenuPage() {
           <h2>Available dishes</h2>
           <div className="meta-text">{visibleDishes.length} items</div>
         </section>
+
+        {orderFeedback && (
+          <div
+            className={`order-feedback ${orderFeedback.type}`}
+            role={orderFeedback.type === "error" ? "alert" : "status"}
+            aria-live="polite"
+          >
+            <span>{orderFeedback.message}</span>
+            {lastOrder && orderFeedback.type === "success" && (
+              <span className="order-summary">
+                {lastOrder.items.map((item) => `${item.quantity} × ${item.dishName}`).join(", ")}
+              </span>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="loading-grid" aria-live="polite" aria-busy="true">
@@ -226,8 +351,18 @@ function MenuPage() {
 
                   <div className="dish-footer">
                     <span className="price">{dish.price}</span>
-                    <button type="button" className="arrow-button" aria-label={`View ${dish.name}`}>
-                      <span aria-hidden="true">›</span>
+                    <button
+                      type="button"
+                      className="order-button"
+                      aria-label={`Order ${dish.name}`}
+                      onClick={() => void placeOrder(dish)}
+                      disabled={orderingDishId !== null || blockedDishIds.has(dish.id)}
+                    >
+                      {orderingDishId === dish.id
+                        ? "Ordering..."
+                        : blockedDishIds.has(dish.id)
+                          ? "Unavailable"
+                          : "Order"}
                     </button>
                   </div>
                 </article>

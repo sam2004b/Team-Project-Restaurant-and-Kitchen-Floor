@@ -19,6 +19,7 @@ async function throwApiError(response: Response): Promise<never> {
       const payload: unknown = JSON.parse(responseBody);
       if (payload && typeof payload === "object") {
         const details = payload as {
+          message?: unknown;
           error?: unknown;
           detail?: unknown;
           title?: unknown;
@@ -26,6 +27,25 @@ async function throwApiError(response: Response): Promise<never> {
         };
         const validationMessages = details.errors
           ? Object.values(details.errors).flatMap((value) =>
+              Array.isArray(value)
+                ? value.filter(
+                    (item): item is string => typeof item === "string",
+                  )
+                : [],
+            )
+          : [];
+        message =
+            (typeof details.message === "string" && details.message) ||
+            (typeof details.error === "string" && details.error) ||
+            (typeof details.detail === "string" && details.detail) ||
+            (typeof details.title === "string" && details.title) ||
+            validationMessages.join(" ") ||
+            message;
+      }
+    } catch (caughtError) {
+      if (caughtError instanceof SyntaxError) {
+        message = responseBody;
+      } else {
               Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [],
             )
           : [];
@@ -46,9 +66,17 @@ async function throwApiError(response: Response): Promise<never> {
   throw new ApiError(message, response.status);
 }
 
+async function apiRequest<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: { Accept: "application/json" },
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init?.headers,
+    },
   });
 
   if (!response.ok) {
@@ -56,6 +84,23 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path, {
+    headers: { Accept: "application/json" },
+  });
+}
+
+export function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 export interface MenuDishResponse {
@@ -85,6 +130,28 @@ export function getMenuDishes(): Promise<MenuDishResponse[]> {
   return apiGet<MenuDishResponse[]>("/dishes");
 }
 
+export interface OrderItemResponse {
+  dishId: number;
+  dishName: string;
+  unitPrice: number;
+  quantity: number;
+}
+
+export interface OrderResponse {
+  id: number;
+  createdAtUtc: string;
+  items: OrderItemResponse[];
+}
+
+export function createOrder(
+  dishId: number,
+  quantity = 1,
+): Promise<OrderResponse> {
+  return apiPost<OrderResponse>("/orders", { dishId, quantity });
+}
+
+export function getOrder(id: number): Promise<OrderResponse> {
+  return apiGet<OrderResponse>(`/orders/${id}`);
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {
   return apiGet<DishDetailsResponse[]>("/dishes/manage");
 }
