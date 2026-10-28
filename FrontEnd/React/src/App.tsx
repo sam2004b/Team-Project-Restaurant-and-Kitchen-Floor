@@ -2,17 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
   getMenuDishes,
-  getOrder,
-  type OrderResponse,
 } from "./services/api";
 import { Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
 import { formatPrice } from "./services/currency";
 
-type OrderFeedback = {
-  type: "success" | "error";
-  message: string;
-};
 
 type MenuDish = {
   id: number;
@@ -85,8 +79,6 @@ function MenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
   const [recentlyUnavailable, setRecentlyUnavailable] = useState<MenuDish | null>(null);
-  const [lastOrder, setLastOrder] = useState<OrderResponse | null>(null);
-  const [orderFeedback, setOrderFeedback] = useState<OrderFeedback | null>(null);
 
   const loadMenu = async (showLoading = true): Promise<boolean> => {
     if (showLoading) {
@@ -134,49 +126,6 @@ function MenuPage() {
 
   useEffect(() => {
     void loadMenu();
-
-    let savedOrderId: string | null;
-    try {
-      savedOrderId = window.localStorage.getItem("restaurant.lastOrderId");
-    } catch (caughtError) {
-      setOrderFeedback({
-        type: "error",
-        message: `Could not restore your previous order confirmation: ${
-          caughtError instanceof Error ? caughtError.message : "browser storage is unavailable."
-        }`,
-      });
-      return;
-    }
-
-    if (!savedOrderId) {
-      return;
-    }
-
-    const orderId = Number(savedOrderId);
-    if (!Number.isSafeInteger(orderId) || orderId <= 0) {
-      setOrderFeedback({
-        type: "error",
-        message: "The saved order reference in this browser is invalid.",
-      });
-      return;
-    }
-
-    void getOrder(orderId)
-      .then((order) => {
-        setLastOrder(order);
-        setOrderFeedback({
-          type: "success",
-          message: `Order #${order.id} is saved on the server.`,
-        });
-      })
-      .catch((caughtError: unknown) => {
-        setOrderFeedback({
-          type: "error",
-          message: `Could not restore order #${orderId}: ${
-            caughtError instanceof Error ? caughtError.message : "an unexpected error occurred."
-          }`,
-        });
-      });
   }, []);
 
   const visibleDishes = useMemo(() => {
@@ -238,21 +187,6 @@ function MenuPage() {
           <h2>Available dishes</h2>
           <div className="meta-text">{dishes.length} items · showing featured dishes</div>
         </section>
-
-        {orderFeedback && (
-          <div
-            className={`order-feedback ${orderFeedback.type}`}
-            role={orderFeedback.type === "error" ? "alert" : "status"}
-            aria-live="polite"
-          >
-            <span>{orderFeedback.message}</span>
-            {lastOrder && orderFeedback.type === "success" && (
-              <span className="order-summary">
-                {lastOrder.items.map((item) => `${item.quantity} × ${item.dishName}`).join(", ")}
-              </span>
-            )}
-          </div>
-        )}
 
         {loading ? (
           <div className="loading-grid" aria-live="polite" aria-busy="true">
