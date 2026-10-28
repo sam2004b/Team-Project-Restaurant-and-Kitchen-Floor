@@ -1,5 +1,19 @@
 # Frontend starter
 
+## Quick Start with Docker
+
+To run the complete application (frontend, backend, and PostgreSQL)
+using Docker, follow the instructions in the
+[main project README](../../README.md).
+
+No local Node.js or .NET installation is required for Docker-based usage.
+
+The instructions below are intended for developers who want
+to run React separately with Vite.
+
+
+
+
 ## Requirements
 
 - Node.js 20.19+ or 22.12+
