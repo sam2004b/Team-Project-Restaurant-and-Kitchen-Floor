@@ -46,6 +46,18 @@ async function throwApiError(response: Response): Promise<never> {
       if (caughtError instanceof SyntaxError) {
         message = responseBody;
       } else {
+              Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [],
+            )
+          : [];
+        message =
+          (typeof details.error === "string" && details.error) ||
+          (typeof details.detail === "string" && details.detail) ||
+          (typeof details.title === "string" && details.title) ||
+          validationMessages.join(" ") ||
+          message;
+      }
+    } catch (caughtError) {
+      if (!(caughtError instanceof SyntaxError)) {
         throw caughtError;
       }
     }
@@ -58,6 +70,7 @@ async function apiRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
@@ -100,6 +113,19 @@ export interface MenuDishResponse {
   imageUrl: string | null;
 }
 
+export interface DishDetailsResponse extends MenuDishResponse {
+  ingredients: string[];
+}
+
+export interface SaveDishRequest {
+  name: string;
+  price: number;
+  description: string;
+  category: string;
+  isAvailable: boolean;
+  ingredients: string[];
+}
+
 export function getMenuDishes(): Promise<MenuDishResponse[]> {
   return apiGet<MenuDishResponse[]>("/dishes");
 }
@@ -126,6 +152,44 @@ export function createOrder(
 
 export function getOrder(id: number): Promise<OrderResponse> {
   return apiGet<OrderResponse>(`/orders/${id}`);
+export function getAdminDishes(): Promise<DishDetailsResponse[]> {
+  return apiGet<DishDetailsResponse[]>("/dishes/manage");
+}
+
+export function getDishDetails(id: number): Promise<DishDetailsResponse> {
+  return apiGet<DishDetailsResponse>(`/dishes/${id}`);
+}
+
+export function createDish(request: SaveDishRequest): Promise<DishDetailsResponse> {
+  return apiSend<DishDetailsResponse>("/dishes", "POST", request);
+}
+
+export function updateDish(
+  id: number,
+  request: SaveDishRequest,
+): Promise<DishDetailsResponse> {
+  return apiSend<DishDetailsResponse>(`/dishes/${id}`, "PUT", request);
+}
+
+async function apiSend<T>(
+  path: string,
+  method: "POST" | "PUT",
+  body: unknown,
+): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    return throwApiError(response);
+  }
+
+  return (await response.json()) as T;
 }
 
 export interface ApiHealth {

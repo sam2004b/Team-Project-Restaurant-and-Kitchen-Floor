@@ -17,4 +17,6 @@ The app is available at `http://localhost:5173`. Its API client uses `VITE_API_B
 
 The menu shows only available dishes and submits orders to the API. If a dish becomes unavailable before an order is submitted, the menu refreshes and shows a clear message. The latest order confirmation is restored from the server after a browser refresh.
 
+Dish management is available at `http://localhost:5173/admin/dishes`. It reads and writes menu data through the dish management API. The management endpoints are enabled only in the ASP.NET Development environment until administrator authentication is configured.
+
 Run `npm run build` to type-check and build the production frontend.

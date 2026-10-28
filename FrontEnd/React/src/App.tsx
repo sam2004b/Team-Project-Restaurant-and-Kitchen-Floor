@@ -7,6 +7,9 @@ import {
   getOrder,
   type OrderResponse,
 } from "./services/api";
+import { Link, Route, Routes } from "react-router-dom";
+import AdminDishesPage from "./AdminDishesPage";
+import { apiBaseUrl, getMenuDishes } from "./services/api";
 
 type MenuDish = {
   id: number;
@@ -71,7 +74,7 @@ const dishArtByName: Record<string, DishArt> = {
   "Lemon Tart": "dessert",
 };
 
-function App() {
+function MenuPage() {
   const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,29 +227,12 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-block">
-          <span className="brand">PLATE</span>
-          <span className="brand-slash">/</span>
-          <span className="brand-sub">MENU</span>
-        </div>
-
-        <nav className="main-nav" aria-label="Main menu navigation">
-          <span>MENU</span>
-          <span>CUSTOMER VIEW</span>
-        </nav>
-
-        <button className="help-button" type="button" aria-label="Help">
-          ?
-        </button>
-      </header>
-
       <main className="page">
         <section className="hero-panel">
           <div className="hero-copy">
-            <p className="eyebrow">A LITTLE SOMETHING FOR EVERY TASTE</p>
-            <h1>Good food. Great moments.</h1>
-            <p className="subtitle">Browse our current menu and discover something delicious.</p>
+            <p className="eyebrow">WELCOME TO</p>
+            <h1>PLATE Restaurant</h1>
+            <p className="subtitle">Explore our menu by category</p>
 
             <div className="hero-status-row">
               <div className="status-pill" aria-live="polite">
@@ -259,14 +245,8 @@ function App() {
                 onClick={() => void loadMenu()}
                 disabled={loading}
               >
-                {loading ? "Updating..." : "Refresh menu"}
+                {loading ? "Updating menu..." : "Updated menu"}
               </button>
-            </div>
-          </div>
-
-          <div className="hero-art" aria-hidden="true">
-            <div className="plate-hero food-pasta">
-              <span className="plate-core" />
             </div>
           </div>
         </section>
@@ -392,9 +372,20 @@ function App() {
         )}
 
         <footer className="footer-bar">
+          <Link className="admin-menu-link" to="/admin/dishes">Manage dishes</Link>
         </footer>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<MenuPage />} />
+      <Route path="/admin/dishes" element={<AdminDishesPage />} />
+      <Route path="*" element={<MenuPage />} />
+    </Routes>
   );
 }
 

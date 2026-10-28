@@ -23,6 +23,26 @@ public sealed class DishManagementController : ControllerBase
     }
 
     /// <summary>
+    /// Get all dishes for menu management.
+    /// </summary>
+    [HttpGet("manage")]
+    public async Task<ActionResult<IReadOnlyList<DishDetailsDto>>> GetDishes(
+        CancellationToken cancellationToken)
+    {
+        if (!_environment.IsDevelopment())
+            return ManagementDisabled();
+
+        var dishes = await _db.Dishes
+            .AsNoTracking()
+            .Include(d => d.Ingredients)
+            .OrderBy(d => d.Name)
+            .ThenBy(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        return Ok(dishes.Select(ToDto).ToArray());
+    }
+
+    /// <summary>
     /// Get detailed information about a dish.
     /// </summary>
     [HttpGet("{id:int}")]
