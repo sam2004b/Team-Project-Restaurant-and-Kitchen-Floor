@@ -54,6 +54,21 @@ services:
     volumes:
       - dish_uploads:/app/wwwroot/images/uploads
 
+      
+  # React frontend served with Nginx
+  frontend:
+    build:
+      context: ./FrontEnd/React
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:5173:80"
+
+    depends_on:
+      - api
+
 
 volumes:
   postgres_data:
