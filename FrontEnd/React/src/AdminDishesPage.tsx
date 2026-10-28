@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { apiBaseUrl } from "./services/api";
 import {
+  ApiError,
   createDish,
   getAdminDishes,
   getDishDetails,
@@ -38,6 +39,8 @@ function AdminDishesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<DishFormErrors>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<DishFormValues>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -79,6 +82,8 @@ function AdminDishesPage() {
   const startEdit = async (id: number) => {
     setError(null);
     setFormError(null);
+    setFieldErrors({});
+    setSuccessMessage(null);
     try {
       const dish = await getDishDetails(id);
       setEditingId(dish.id);
@@ -136,6 +141,15 @@ function AdminDishesPage() {
 
   const saveDish = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError(null);
+    setFieldErrors({});
+
+    const validationErrors = validateDishForm(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      return;
+    }
+
     setSaving(true);
     setFormError(null);
 
@@ -176,11 +190,19 @@ function AdminDishesPage() {
       closeForm();
       await loadDishes();
     } catch (caughtError) {
-      setFormError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "An unexpected error occurred while saving the dish.",
-      );
+      if (caughtError instanceof ApiError) {
+        const apiFieldErrors = mapApiFieldErrors(caughtError.fieldErrors);
+        setFieldErrors(apiFieldErrors);
+        setFormError(
+          Object.keys(apiFieldErrors).length === 0 ? caughtError.message : null,
+        );
+      } else {
+        setFormError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "An unexpected error occurred while saving the dish.",
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -189,7 +211,19 @@ function AdminDishesPage() {
   const updateForm = <K extends keyof DishFormValues>(
     key: K,
     value: DishFormValues[K],
-  ) => setForm((current) => ({ ...current, [key]: value }));
+  ) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setFormError(null);
+  };
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   useEffect(() => {

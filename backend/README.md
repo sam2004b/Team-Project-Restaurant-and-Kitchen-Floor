@@ -140,10 +140,12 @@ All routes below are relative to **`http://localhost:5020`**.
 | `POST` | `/dishes` | Create a dish from a JSON request. | `201`, `400`, `403` |
 | `PUT` | `/dishes/{id}` | Update dish details and synchronize ingredients. | `200`, `400`, `403`, `404` |
 | `POST` | `/dishes/{id}/image` | Upload or replace an existing dish's photo. | `200`, `400`, `403`, `404`, `413` |
+| `POST` | `/orders` | Place and persist an order for an available dish. | `201`, `400`, `404`, `409` |
+| `GET` | `/orders/{id}` | Retrieve a previously placed order. | `200`, `404` |
 | `GET` | `/health` | Basic API health check. | `200` |
 | `GET` | `/health/db` | Verify that PostgreSQL is reachable. | `200`, `503` |
 
-**Access and visibility:** `GET /dishes` is the customer-facing menu. The dish-detail, create, update, and image-upload endpoints are **Development-only**. They are **not authenticated Administrator endpoints** yet.
+**Access and visibility:** `GET /dishes` and the customer order endpoints are available to the customer-facing app. The dish-detail, create, update, and image-upload endpoints are **Development-only**. They are **not authenticated Administrator endpoints** yet.
 
 **Important behavior of `GET /dishes`:**
 
@@ -202,6 +204,23 @@ The example illustrates the response shape; IDs and current database values can 
 **Result:** `200 OK`, containing the updated dish. The submitted ingredient list is synchronized with the saved list: removed names are deleted, and newly added names are saved. If no image is uploaded, the existing image is retained.
 
 To make a dish unavailable, send `"isAvailable": false`. It will then disappear from the customer-facing `GET /dishes` response.
+
+### 6.4. Place an order
+
+**Request:** `POST /orders` with `Content-Type: application/json`
+
+```json
+{
+  "dishId": 5,
+  "quantity": 1
+}
+```
+
+The API rechecks the dish's current availability before saving the order. A successful response is `201 Created` with an order ID and a snapshot of the ordered dish name and price. Orders and their item snapshots are persisted in PostgreSQL.
+
+If the dish became unavailable after the menu was loaded, the API returns `409 Conflict` with `code: "dish_unavailable"`. Refresh `GET /dishes` and choose another available dish. A missing dish returns `404`; an invalid dish ID or quantity returns `400`.
+
+Use `GET /orders/{id}` to retrieve the saved order and confirm it remains available after a frontend refresh.
 
 ## 7. Dish Images and Uploads
 
@@ -332,7 +351,6 @@ Swagger is available at **`http://localhost:5020/swagger`** when the backend run
 This is a **development API**, not a finished production backend:
 
 - **Administrator authentication and authorization are not implemented.** The database contains Identity roles and development accounts, but sensitive dish-management routes are only blocked outside Development; they do not verify the caller's Administrator role.
-- **There is no completed `POST /orders` endpoint.** Internal order-availability validation exists, but orders are not accepted/persisted through an HTTP API yet.
 - **There is no all-dishes admin-list endpoint.** `GET /dishes` hides unavailable items; an admin management screen will need a separate, properly protected listing endpoint.
 - **There is no single-request dish + photo creation.** Save dish information first, then upload its image.
 - **Photo upload is for controlled development use.** File size and signature checks exist, but production hardening (full image decoding/re-encoding, authentication, and operational safeguards) is still needed.
