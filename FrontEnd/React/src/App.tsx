@@ -21,7 +21,8 @@ type MenuDish = {
   category: string;
   price: number;
   imageUrl: string | null;
-  isAvailable: boolean;
+    isAvailable: boolean;
+    ingredients: string[];
 };
 
 const categoryOptions = ["All", "Pasta", "Pizza", "Soups", "Salads", "Mains", "Desserts", "Drinks"] as const;
@@ -104,7 +105,8 @@ function MenuPage() {
           category: dish.category,
           price: dish.price,
           imageUrl: dish.imageUrl,
-          isAvailable: true,
+            isAvailable: true,
+            ingredients: dish.ingredients ?? [],
         }));
       const availableIds = new Set(availableDishes.map((dish) => dish.id));
       const dishThatBecameUnavailable = dishes.find((dish) => !availableIds.has(dish.id));
@@ -320,7 +322,13 @@ function MenuPage() {
                     <div className="dish-meta">
                       <div className="dish-category">{normalizeCategoryName(dish.category)}</div>
                       <h3>{dish.name}</h3>
-                      <p>{dish.description}</p>
+                              <p>{dish.description}</p>
+                              {dish.ingredients.length > 0 && (
+                                  <p className="dish-ingredients">
+                                      <strong>Ingredients:</strong>{" "}
+                                      {dish.ingredients.join(", ")}
+                                  </p>
+                              )}
                     </div>
                     <div className="dish-footer">
                       <span className="price">{formatPrice(dish.price)}</span>

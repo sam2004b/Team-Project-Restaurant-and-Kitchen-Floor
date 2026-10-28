@@ -136,6 +136,7 @@ export interface MenuDishResponse {
     category: string;
     isAvailable: boolean;
     imageUrl: string | null;
+    ingredients: string[];
 }
 
 export interface DishDetailsResponse extends MenuDishResponse {
