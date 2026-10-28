@@ -9,7 +9,7 @@ import {
 } from "./services/api";
 import { Link, Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
-import { apiBaseUrl, getMenuDishes } from "./services/api";
+
 
 type MenuDish = {
   id: number;
