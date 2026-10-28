@@ -89,6 +89,31 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
     return apiSend<T>(path, "POST", body);
 }
 
+export interface DishImageUploadResponse {
+  dishId: number;
+  imageUrl: string;
+}
+
+export async function uploadDishImage(
+  id: number,
+  image: File,
+): Promise<DishImageUploadResponse> {
+  const formData = new FormData();
+  formData.append("image", image);
+
+  const response = await fetch(`${apiBaseUrl}/dishes/${id}/image`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    return throwApiError(response);
+  }
+
+  return (await response.json()) as DishImageUploadResponse;
+}
+
 async function apiSend<T>(
     path: string,
     method: "POST" | "PUT",

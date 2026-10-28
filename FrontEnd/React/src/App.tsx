@@ -9,7 +9,8 @@ import {
 } from "./services/api";
 import { Link, Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
-
+import { apiBaseUrl, getMenuDishes } from "./services/api";
+import { formatPrice } from "./services/currency";
 
 type MenuDish = {
   id: number;
@@ -18,6 +19,7 @@ type MenuDish = {
   category: string;
   price: number;
   imageUrl: string | null;
+  isAvailable: boolean;
 };
 
 const categoryOptions = ["All", "Pasta", "Pizza", "Soups", "Salads", "Mains", "Desserts", "Drinks"] as const;
@@ -79,13 +81,7 @@ function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof categoryOptions)[number]>("All");
-  const [blockedDishIds, setBlockedDishIds] = useState<Set<number>>(() => new Set());
-  const [orderingDishId, setOrderingDishId] = useState<number | null>(null);
-  const [orderFeedback, setOrderFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-  const [lastOrder, setLastOrder] = useState<OrderResponse | null>(null);
+  const [recentlyUnavailable, setRecentlyUnavailable] = useState<MenuDish | null>(null);
 
   const loadMenu = async (showLoading = true): Promise<boolean> => {
     if (showLoading) {
@@ -95,17 +91,25 @@ function MenuPage() {
 
     try {
       const response = await getMenuDishes();
-      setDishes(
-        response
-          .filter((dish) => dish.isAvailable)
-          .map((dish) => ({
-            id: dish.id,
-            name: dish.name,
-            description: dish.description ?? "Chef's special",
-            category: dish.category,
-            price: dish.price,
-            imageUrl: dish.imageUrl,
-          })),
+      const availableDishes = response
+        .filter((dish) => dish.isAvailable)
+        .map((dish) => ({
+          id: dish.id,
+          name: dish.name,
+          description: dish.description ?? "Chef's special",
+          category: dish.category,
+          price: dish.price,
+          imageUrl: dish.imageUrl,
+          isAvailable: true,
+        }));
+      const availableIds = new Set(availableDishes.map((dish) => dish.id));
+      const dishThatBecameUnavailable = dishes.find((dish) => !availableIds.has(dish.id));
+
+      setDishes(availableDishes);
+      setRecentlyUnavailable(
+        dishThatBecameUnavailable
+          ? { ...dishThatBecameUnavailable, isAvailable: false }
+          : null,
       );
       setBlockedDishIds(new Set());
       return true;
@@ -223,7 +227,19 @@ function MenuPage() {
     return dishes.filter((dish) => normalizeCategoryName(dish.category) === selectedCategory);
   }, [dishes, selectedCategory]);
 
-  const dishCountText = useMemo(() => `${visibleDishes.length} dishes available`, [visibleDishes.length]);
+  const displayDishes = useMemo(() => {
+    const unavailableMatchesCategory =
+      recentlyUnavailable &&
+      (selectedCategory === "All" ||
+        normalizeCategoryName(recentlyUnavailable.category) === selectedCategory);
+
+    return [
+      ...(unavailableMatchesCategory ? [recentlyUnavailable] : []),
+      ...visibleDishes,
+    ];
+  }, [recentlyUnavailable, selectedCategory, visibleDishes]);
+
+  const dishCountText = useMemo(() => `${dishes.length} dishes available`, [dishes.length]);
 
   return (
     <div className="app-shell">
@@ -234,19 +250,12 @@ function MenuPage() {
             <h1>PLATE Restaurant</h1>
             <p className="subtitle">Explore our menu by category</p>
 
-            <div className="hero-status-row">
+            <div className={`hero-status-row ${recentlyUnavailable ? "availability-changed" : ""}`}>
               <div className="status-pill" aria-live="polite">
                 <span className="status-dot" aria-hidden="true" />
                 <span>{loading ? "Updating menu..." : dishCountText}</span>
               </div>
-              <button
-                type="button"
-                className="refresh-button"
-                onClick={() => void loadMenu()}
-                disabled={loading}
-              >
-                {loading ? "Updating menu..." : "Updated menu"}
-              </button>
+              <span className="refresh-button">{recentlyUnavailable ? "Availability changed" : "Updated menu"}</span>
             </div>
           </div>
         </section>
@@ -267,7 +276,7 @@ function MenuPage() {
 
         <section className="menu-header">
           <h2>Available dishes</h2>
-          <div className="meta-text">{visibleDishes.length} items</div>
+          <div className="meta-text">{dishes.length} items · showing featured dishes</div>
         </section>
 
         {orderFeedback && (
@@ -308,7 +317,7 @@ function MenuPage() {
               Try again
             </button>
           </div>
-        ) : visibleDishes.length === 0 ? (
+        ) : displayDishes.length === 0 ? (
           <div className="empty-panel" role="status">
             <div className="empty-badge" aria-hidden="true">~</div>
             <h3>No dishes available</h3>
@@ -319,6 +328,13 @@ function MenuPage() {
           </div>
         ) : (
           <>
+            {recentlyUnavailable && (
+              <div className="availability-notice" role="status">
+                <strong>Availability changed</strong>
+                <b>{recentlyUnavailable.name} is no longer available.</b>
+                <p>Refresh the menu to remove this unavailable dish and see the latest selection.</p>
+              </div>
+            )}
             {error && (
               <div className="refresh-error" role="alert">
                 <span>Could not refresh the menu. Your last loaded menu is still shown. {error}</span>
@@ -326,8 +342,8 @@ function MenuPage() {
               </div>
             )}
             <div className="dish-grid">
-              {visibleDishes.map((dish) => (
-                <article key={dish.id} className="dish-card">
+              {displayDishes.map((dish) => (
+                <article key={dish.id} className={`dish-card ${dish.isAvailable ? "" : "unavailable-card"}`}>
                   <div className={`dish-art food-${dishArtByName[dish.name] ?? "main"}`}>
                     <span className="dish-shadow" />
                     <span className="dish-plate" />
@@ -342,37 +358,30 @@ function MenuPage() {
                       />
                     )}
                   </div>
-
-                  <div className="dish-meta">
-                    <div className="dish-category">{dish.category}</div>
-                    <h3>{dish.name}</h3>
-                    <p>{dish.description}</p>
-                  </div>
-
-                  <div className="dish-footer">
-                    <span className="price">{dish.price}</span>
-                    <button
-                      type="button"
-                      className="order-button"
-                      aria-label={`Order ${dish.name}`}
-                      onClick={() => void placeOrder(dish)}
-                      disabled={orderingDishId !== null || blockedDishIds.has(dish.id)}
-                    >
-                      {orderingDishId === dish.id
-                        ? "Ordering..."
-                        : blockedDishIds.has(dish.id)
-                          ? "Unavailable"
-                          : "Order"}
-                    </button>
+                  <div className="dish-content">
+                    <div className="dish-meta">
+                      <div className="dish-category">{normalizeCategoryName(dish.category)}</div>
+                      <h3>{dish.name}</h3>
+                      <p>{dish.description}</p>
+                    </div>
+                    <div className="dish-footer">
+                      <span className="price">{formatPrice(dish.price)}</span>
+                      <span className={`availability-badge ${dish.isAvailable ? "available" : "unavailable"}`}>
+                        <span className="availability-dot" aria-hidden="true" />
+                        {dish.isAvailable ? "Available" : "Unavailable"}
+                      </span>
+                    </div>
                   </div>
                 </article>
               ))}
             </div>
+            <button type="button" className="menu-refresh-button" onClick={() => void loadMenu()} disabled={loading}>
+              {loading ? "Refreshing menu..." : "Refresh current menu"}
+            </button>
           </>
         )}
 
         <footer className="footer-bar">
-          <Link className="admin-menu-link" to="/admin/dishes">Manage dishes</Link>
         </footer>
       </main>
     </div>
