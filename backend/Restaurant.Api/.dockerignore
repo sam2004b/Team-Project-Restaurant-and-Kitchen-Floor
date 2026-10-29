@@ -1,0 +1,17 @@
+
+# .NET build output
+**/bin/
+**/obj/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+
+# Git files
+.git/
+.gitignore
+
+# Local environment files
+.env
+.env.*

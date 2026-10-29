@@ -1,0 +1,60 @@
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build and test .NET backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore API
+        run: dotnet restore backend/Restaurant.Api/Restaurant.Api.csproj
+
+      - name: Build API
+        run: dotnet build backend/Restaurant.Api/Restaurant.Api.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test backend/Restaurant.Api.Tests/Restaurant.Api.Tests.csproj --configuration Release
+        
+# Frontend CI
+  frontend:
+    name: Build React frontend
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: FrontEnd/React
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: FrontEnd/React/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Type-check and build frontend
+        env:
+          VITE_API_BASE_URL: /api
+        run: npm run build

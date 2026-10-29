@@ -1,1 +1,20 @@
 .vs/
+.vscode/
+
+# .NET build outputs
+**/bin/
+**/obj/
+**/TestResults/
+FrontEnd/React/node_modules/
+FrontEnd/React/dist/
+
+# Local settings
+*.user
+.env
+.env.*
+!.env.example
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal

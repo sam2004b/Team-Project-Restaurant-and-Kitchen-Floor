@@ -1,0 +1,273 @@
+
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Restaurant.Api.Data;
+using Restaurant.Api.Models;
+using System;
+using System.Threading.Tasks;
+
+namespace Restaurant.Api.Seeding;
+
+public static class DatabaseSeeder
+{
+    public static async Task SeedAsync(
+        IServiceProvider services,
+        IConfiguration configuration)
+    {
+        var db = services.GetRequiredService<RestaurantDbContext>();
+
+        var userManager =
+            services.GetRequiredService<UserManager<IdentityUser>>();
+
+        var roleManager =
+            services.GetRequiredService<RoleManager<IdentityRole>>();
+
+        // Password supplied through User Secrets
+        // or a development environment variable.
+        var password = configuration["Seed:DefaultPassword"];
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                "Seed:DefaultPassword is not configured."
+            );
+        }
+
+        // 1. Create roles
+        string[] roles =
+        {
+            "Administrator",
+            "Waiter",
+            "Chef",
+            "Reception Manager"
+        };
+
+        foreach (var roleName in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(roleName))
+            {
+                var result = await roleManager.CreateAsync(
+                    new IdentityRole(roleName));
+
+                EnsureSuccess(result);
+            }
+        }
+
+        // 2. Create test accounts
+        var accounts = new[]
+        {
+            (Username: "admin",
+             Email: "admin@restaurant.test",
+             Role: "Administrator"),
+
+            (Username: "waiter",
+             Email: "waiter@restaurant.test",
+             Role: "Waiter"),
+
+            (Username: "chef",
+             Email: "chef@restaurant.test",
+             Role: "Chef"),
+
+            (Username: "reception",
+             Email: "reception@restaurant.test",
+             Role: "Reception Manager")
+        };
+
+        foreach (var account in accounts)
+        {
+            var user = await userManager.FindByNameAsync(
+                account.Username);
+
+            if (user == null)
+            {
+                user = new IdentityUser
+                {
+                    UserName = account.Username,
+                    Email = account.Email,
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(
+                    user, password);
+
+                EnsureSuccess(result);
+            }
+
+            if (!await userManager.IsInRoleAsync(
+                user, account.Role))
+            {
+                var result = await userManager.AddToRoleAsync(
+                    user, account.Role);
+
+                EnsureSuccess(result);
+            }
+        }
+
+        // 3. Create example menu dishes
+        var dishes = new[]
+        {
+            new Dish
+            {
+                Name = "Margherita Pizza",
+                Description = "Pizza with tomato and mozzarella",
+                Category = "Pizza",
+                Price = 9.90m,
+                IsAvailable = true
+            },
+
+            new Dish
+            {
+                Name = "Chicken Burger",
+                Description = "Grilled chicken burger",
+                Category = "Burgers",
+                Price = 12.50m,
+                IsAvailable = true
+            },
+
+            new Dish
+            {
+                Name = "Caesar Salad",
+                Description = "Salad with Caesar dressing",
+                Category = "Salads",
+                Price = 8.00m,
+                IsAvailable = true
+            },
+
+            new Dish
+            {
+                Name = "Fish Soup",
+                Description = "Traditional fish soup",
+                Category = "Soups",
+                Price = 7.25m,
+                IsAvailable = false
+            }
+        };
+
+        foreach (var dish in dishes)
+        {
+            bool exists = await db.Dishes.AnyAsync(
+                d => d.Name == dish.Name);
+
+            if (!exists)
+            {
+                db.Dishes.Add(dish);
+            }
+        }
+
+
+        var additionalMenuDishes = new[]
+        {
+            (Name: "Carbonara", Category: "Pasta", Price: 14.50m),
+            (Name: "Grilled Salmon", Category: "Seafood", Price: 19.90m),
+            (Name: "Beef Steak", Category: "Main Course", Price: 24.00m),
+            (Name: "Pasta Alfredo", Category: "Pasta", Price: 13.50m),
+            (Name: "Vegetable Soup", Category: "Soups", Price: 6.50m),
+            (Name: "Veggie Pizza", Category: "Pizza", Price: 11.00m),
+            (Name: "Cheesecake", Category: "Desserts", Price: 6.90m),
+            (Name: "Chocolate Brownie", Category: "Desserts", Price: 5.50m),
+            (Name: "French Fries", Category: "Sides", Price: 4.50m)
+        };
+
+        foreach (var sample in additionalMenuDishes)
+        {
+            bool exists = await db.Dishes.AnyAsync(
+                d => d.Name == sample.Name);
+
+            if (!exists)
+            {
+                db.Dishes.Add(new Dish
+                {
+                    Name = sample.Name,
+                    Category = sample.Category,
+                    Price = sample.Price,
+                    Description = $"Sample {sample.Name} dish",
+                    IsAvailable = true
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+
+        // Seed Carbonara ingredients for US-11
+        var carbonara = await db.Dishes
+            .Include(d => d.Ingredients)
+            .FirstOrDefaultAsync(d => d.Name == "Carbonara");
+
+        if (carbonara != null && !carbonara.Ingredients.Any())
+        {
+            var ingredientNames = new[]
+            {
+                "Spaghetti",
+                "Eggs",
+                "Pecorino Romano",
+                "Guanciale"
+            };
+
+            foreach (var name in ingredientNames)
+            {
+                carbonara.Ingredients.Add(new DishIngredient
+                {
+                    Name = name
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+
+
+
+        // Assign images to seeded dishes (including existing rows).
+        var dishImages = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            ["Margherita Pizza"] = "/images/dishes/margherita-pizza.jpg",
+            ["Chicken Burger"] = "/images/dishes/chicken-burger.jpg",
+            ["Caesar Salad"] = "/images/dishes/caesar-salad.jpg",
+            ["Fish Soup"] = "/images/dishes/fish-soup.jpg",
+            ["Carbonara"] = "/images/dishes/carbonara.jpg",
+            ["Grilled Salmon"] = "/images/dishes/grilled-salmon.jpg",
+            ["Beef Steak"] = "/images/dishes/beef-steak.jpg",
+            ["Pasta Alfredo"] = "/images/dishes/pasta-alfredo.jpg",
+            ["Vegetable Soup"] = "/images/dishes/vegetable-soup.jpg",
+            ["Veggie Pizza"] = "/images/dishes/veggie-pizza.jpg",
+            ["Cheesecake"] = "/images/dishes/cheesecake.jpg",
+            ["Chocolate Brownie"] = "/images/dishes/chocolate-brownie.jpg",
+            ["French Fries"] = "/images/dishes/french-fries.jpg"
+        };
+
+        // Only update dishes that have no image assigned yet.
+        var dishesWithoutImages = await db.Dishes
+            .Where(d => d.ImageUrl == null || d.ImageUrl == "")
+            .ToListAsync();
+
+        foreach (var dish in dishesWithoutImages)
+        {
+            if (dishImages.TryGetValue(dish.Name, out var imagePath))
+            {
+                dish.ImageUrl = imagePath;
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+
+
+        Console.WriteLine("Database seeding completed.");
+    }
+
+    private static void EnsureSuccess(
+        IdentityResult result)
+    {
+        if (result.Succeeded)
+            return;
+
+        var errors = string.Join(
+            "; ",
+            result.Errors.Select(e => e.Description));
+
+        throw new InvalidOperationException(
+            $"Identity seeding failed: {errors}");
+    }
+}
