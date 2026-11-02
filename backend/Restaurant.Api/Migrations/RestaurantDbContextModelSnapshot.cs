@@ -285,6 +285,142 @@ namespace Restaurant.Api.Migrations
                     b.ToTable("dish_ingredients", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasComputedColumnSql("upper(btrim(\"Name\"))", true);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("restaurants", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_restaurants_address_not_blank", "length(btrim(\"Address\")) > 0");
+
+                            t.HasCheckConstraint("CK_restaurants_name_not_blank", "length(btrim(\"Name\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.StaffInvitation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComputedColumnSql("upper(btrim(\"Email\"))", true);
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.ToTable("staff_invitations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_staff_invitations_email_not_blank", "length(btrim(\"Email\")) > 0");
+
+                            t.HasCheckConstraint("CK_staff_invitations_role", "\"Role\" IN ('Administrator', 'Waiter', 'Chef', 'Reception Manager')");
+
+                            t.HasCheckConstraint("CK_staff_invitations_status", "\"Status\" IN ('Pending', 'Accepted', 'Revoked')");
+                        });
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.StaffMembership", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("RestaurantId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("staff_memberships", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_staff_memberships_role", "\"Role\" IN ('Administrator', 'Waiter', 'Chef', 'Reception Manager')");
+
+                            t.HasCheckConstraint("CK_staff_memberships_status", "\"Status\" IN ('Active', 'Revoked')");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -347,9 +483,46 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("Dish");
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.StaffInvitation", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantAccount", "Restaurant")
+                        .WithMany("Invitations")
+                        .HasForeignKey("RestaurantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Restaurant");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.StaffMembership", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantAccount", "Restaurant")
+                        .WithMany("StaffMembers")
+                        .HasForeignKey("RestaurantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Restaurant");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.Dish", b =>
                 {
                     b.Navigation("Ingredients");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantAccount", b =>
+                {
+                    b.Navigation("Invitations");
+
+                    b.Navigation("StaffMembers");
                 });
 #pragma warning restore 612, 618
         }

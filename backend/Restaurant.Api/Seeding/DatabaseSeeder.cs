@@ -103,6 +103,11 @@ public static class DatabaseSeeder
             }
         }
 
+
+        await SeedRestaurantsAndStaffAsync(db, userManager);
+
+
+
         // 3. Create example menu dishes
         var dishes = new[]
         {
@@ -270,4 +275,126 @@ public static class DatabaseSeeder
         throw new InvalidOperationException(
             $"Identity seeding failed: {errors}");
     }
+
+
+    private static async Task SeedRestaurantsAndStaffAsync(
+        RestaurantDbContext db,
+        UserManager<IdentityUser> userManager)
+    {
+        // 1. Create two development restaurants.
+        var bistro = await db.Restaurants
+            .SingleOrDefaultAsync(
+                r => r.NormalizedName == "BISTRO 21");
+
+        if (bistro == null)
+        {
+            bistro = new RestaurantAccount
+            {
+                Name = "Bistro 21",
+                Address = "21 Test Street"
+            };
+
+            db.Restaurants.Add(bistro);
+            await db.SaveChangesAsync();
+        }
+
+        var cafe = await db.Restaurants
+            .SingleOrDefaultAsync(
+                r => r.NormalizedName == "CAFE 8");
+
+        if (cafe == null)
+        {
+            cafe = new RestaurantAccount
+            {
+                Name = "Cafe 8",
+                Address = "8 Test Street"
+            };
+
+            db.Restaurants.Add(cafe);
+            await db.SaveChangesAsync();
+        }
+
+        // 2. Assign existing Identity users to restaurants.
+        var memberships = new[]
+        {
+        (
+            RestaurantId: bistro.Id,
+            Username: "admin",
+            Role: StaffRoleNames.Administrator,
+            Status: MembershipStatus.Active
+        ),
+        (
+            RestaurantId: bistro.Id,
+            Username: "waiter",
+            Role: StaffRoleNames.Waiter,
+            Status: MembershipStatus.Active
+        ),
+        (
+            RestaurantId: cafe.Id,
+            Username: "chef",
+            Role: StaffRoleNames.Chef,
+            Status: MembershipStatus.Active
+        ),
+        (
+            RestaurantId: cafe.Id,
+            Username: "reception",
+            Role: StaffRoleNames.ReceptionManager,
+            Status: MembershipStatus.Active
+        ),
+        (
+            RestaurantId: bistro.Id,
+            Username: "reception",
+            Role: StaffRoleNames.ReceptionManager,
+            Status: MembershipStatus.Revoked
+        )
+    };
+
+        foreach (var membership in memberships)
+        {
+            var user = await userManager.FindByNameAsync(
+                membership.Username);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException(
+                    $"Missing seed user: {membership.Username}");
+            }
+
+            bool exists = await db.StaffMemberships.AnyAsync(
+                m => m.RestaurantId == membership.RestaurantId
+                  && m.UserId == user.Id);
+
+            if (!exists)
+            {
+                db.StaffMemberships.Add(new StaffMembership
+                {
+                    RestaurantId = membership.RestaurantId,
+                    UserId = user.Id,
+                    Role = membership.Role,
+                    Status = membership.Status
+                });
+            }
+        }
+
+        // 3. Create a pending invitation for Bistro 21.
+        bool invitationExists = await db.StaffInvitations
+            .AnyAsync(i =>
+                i.RestaurantId == bistro.Id &&
+                i.NormalizedEmail == "NEWSTAFF@RESTAURANT.TEST");
+
+        if (!invitationExists)
+        {
+            db.StaffInvitations.Add(new StaffInvitation
+            {
+                RestaurantId = bistro.Id,
+                Email = "newstaff@restaurant.test",
+                Role = StaffRoleNames.Waiter,
+                Status = InvitationStatus.Pending
+            });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+
 }
