@@ -25,4 +25,10 @@ public class StaffInvitation
 
     public DateTime CreatedAtUtc { get; set; }
         = DateTime.UtcNow;
+    
+   public string? TokenHash { get; set; }
+
+   public DateTime? ExpiresAtUtc { get; set; }
+
+   public DateTime? AcceptedAtUtc { get; set; }
 }

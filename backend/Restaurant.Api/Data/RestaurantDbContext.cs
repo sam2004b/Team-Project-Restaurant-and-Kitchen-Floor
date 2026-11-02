@@ -184,7 +184,7 @@ namespace Restaurant.Api.Data
                 });
 
                 entity.HasKey(i => i.Id);
-
+                
                 entity.Property(i => i.Email)
                     .IsRequired()
                     .HasMaxLength(256);
@@ -216,6 +216,13 @@ namespace Restaurant.Api.Data
                 })
                 .IsUnique()
                 .HasFilter("\"Status\" = 'Pending'");
+
+                entity.Property(i => i.TokenHash)
+                .HasMaxLength(64);
+
+                 entity.HasIndex(i => i.TokenHash)
+                 .IsUnique()
+                 .HasFilter("\"TokenHash\" IS NOT NULL");
             });
         }
     }
