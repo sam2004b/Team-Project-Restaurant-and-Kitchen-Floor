@@ -1,4 +1,4 @@
-
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
@@ -106,7 +106,30 @@ public static class DatabaseSeeder
 
         await SeedRestaurantsAndStaffAsync(db, userManager);
 
+      var bootstrapAdmin =
+    await userManager.FindByNameAsync("admin");
 
+if (bootstrapAdmin is null)
+{
+    throw new InvalidOperationException(
+        "Seed administrator was not found.");
+}
+
+var claims =
+    await userManager.GetClaimsAsync(bootstrapAdmin);
+
+if (!claims.Any(c =>
+    c.Type == "permission" &&
+    c.Value == "restaurants:create"))
+{
+    var result = await userManager.AddClaimAsync(
+        bootstrapAdmin,
+        new Claim(
+            "permission",
+            "restaurants:create"));
+
+    EnsureSuccess(result);
+}
 
         // 3. Create example menu dishes
         var dishes = new[]
