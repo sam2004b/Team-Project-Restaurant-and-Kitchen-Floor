@@ -1,3 +1,4 @@
+using Restaurant.Api.Services.Dishes;
 using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
@@ -112,6 +113,12 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<
     IMenuUpdateNotifier,
     SignalRMenuUpdateNotifier>();
+
+
+builder.Services.AddScoped<
+    IDishAvailabilityService,
+    DishAvailabilityService>();
+
 
 
 builder.Services.AddEndpointsApiExplorer();
