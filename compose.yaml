@@ -44,6 +44,8 @@ services:
       Database__ApplyMigrationsOnStartup: "true"
 
       Seed__DefaultPassword: ${SEED_PASSWORD}
+      
+      Menu__RestaurantId: "${MENU_RESTAURANT_ID:?Set MENU_RESTAURANT_ID in .env}"
 
       # Sprint 2 - Staff invitation testing
       Invitations__ExposeDevelopmentToken: "${INVITATION_DEV_TOKEN_RESPONSE:-false}"

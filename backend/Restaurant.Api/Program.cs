@@ -1,3 +1,4 @@
+using Restaurant.Api.Security;
 using Restaurant.Api.Services.Dishes;
 using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
@@ -8,10 +9,6 @@ using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// ==========================================
-// 1. DATABASE CONFIGURATION
-// ==========================================
 
 builder.Services.AddDbContext<RestaurantDbContext>(
     options =>
@@ -123,10 +120,6 @@ builder.Services.AddScoped<
 
 builder.Services.AddEndpointsApiExplorer();
 
-// ==========================================
-// 8. SWAGGER CONFIGURATION
-// ==========================================
-
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -179,10 +172,13 @@ builder.Services.AddSwaggerGen(options =>
     options.IncludeXmlComments(xmlPath);
 });
 
+builder.Services.AddScoped<MenuAdminGuard>();
+
+builder.Services.AddScoped<OrderDishAvailabilityValidator>();
 // ==========================================
 // 9. BUILD APPLICATION
 // ==========================================
-
+ 
 var app = builder.Build();
 
 // ==========================================
