@@ -149,9 +149,13 @@ export interface SaveDishRequest {
     ingredients: string[];
 }
 
+
 export function getMenuDishes(): Promise<MenuDishResponse[]> {
-    return apiGet<MenuDishResponse[]>("/dishes");
+    return apiRequest<MenuDishResponse[]>("/dishes", {
+        cache: "no-store",
+    });
 }
+
 
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {
     return apiGet<DishDetailsResponse[]>("/dishes/manage");

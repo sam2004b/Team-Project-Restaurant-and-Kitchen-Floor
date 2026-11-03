@@ -1,3 +1,4 @@
+using Restaurant.Api.Services.Menu;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,17 +24,31 @@ public class DishManagementControllerTests
         return new RestaurantDbContext(options);
     }
 
+
     private static DishManagementController CreateController(
-    RestaurantDbContext db,
-    string environment = "Development")
-{
-    return new DishManagementController(
-        db,
-        new TestEnvironment
+        RestaurantDbContext db,
+        string environment = "Development")
+    {
+        return new DishManagementController(
+            db,
+            new TestEnvironment
+            {
+                EnvironmentName = environment
+            },
+            new NoOpMenuNotifier()
+        );
+    }
+
+    // Fake notification service for unit tests.
+    private sealed class NoOpMenuNotifier : IMenuUpdateNotifier
+    {
+        public Task NotifyMenuChangedAsync(
+            CancellationToken cancellationToken = default)
         {
-            EnvironmentName = environment
-        });
-}
+            return Task.CompletedTask;
+        }
+    }
+
 
     private static SaveDishRequest MakeRequest(
         decimal price = 450m,

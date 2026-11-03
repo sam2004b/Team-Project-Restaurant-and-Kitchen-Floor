@@ -1,3 +1,4 @@
+using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
 using Microsoft.AspNetCore.Identity;
@@ -104,6 +105,14 @@ builder.Services.AddScoped<
     MenuReadService>();
 
 builder.Services.AddControllers();
+
+
+builder.Services.AddSignalR();
+
+builder.Services.AddScoped<
+    IMenuUpdateNotifier,
+    SignalRMenuUpdateNotifier>();
+
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -244,6 +253,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<MenuHub>("/hubs/menu");
 
 
 app.MapGet("/health", () => Results.Ok(new

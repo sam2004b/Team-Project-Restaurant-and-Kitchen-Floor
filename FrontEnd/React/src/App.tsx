@@ -1,3 +1,4 @@
+import { useMenuUpdates } from "./services/useMenuUpdates";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
@@ -128,6 +129,10 @@ function MenuPage() {
     void loadMenu();
   }, []);
 
+  useMenuUpdates(() => {
+    void loadMenu(false);
+  });
+
   const visibleDishes = useMemo(() => {
     if (selectedCategory === "All") {
       return dishes;
@@ -136,17 +141,7 @@ function MenuPage() {
     return dishes.filter((dish) => normalizeCategoryName(dish.category) === selectedCategory);
   }, [dishes, selectedCategory]);
 
-  const displayDishes = useMemo(() => {
-    const unavailableMatchesCategory =
-      recentlyUnavailable &&
-      (selectedCategory === "All" ||
-        normalizeCategoryName(recentlyUnavailable.category) === selectedCategory);
-
-    return [
-      ...(unavailableMatchesCategory ? [recentlyUnavailable] : []),
-      ...visibleDishes,
-    ];
-  }, [recentlyUnavailable, selectedCategory, visibleDishes]);
+  const displayDishes = visibleDishes;
 
   const dishCountText = useMemo(() => `${dishes.length} dishes available`, [dishes.length]);
 
@@ -226,7 +221,7 @@ function MenuPage() {
               <div className="availability-notice" role="status">
                 <strong>Availability changed</strong>
                 <b>{recentlyUnavailable.name} is no longer available.</b>
-                <p>Refresh the menu to remove this unavailable dish and see the latest selection.</p>
+                  <p>The menu has updated automatically. This dish is no longer available.</p>
               </div>
             )}
             {error && (
@@ -275,9 +270,6 @@ function MenuPage() {
                 </article>
               ))}
             </div>
-            <button type="button" className="menu-refresh-button" onClick={() => void loadMenu()} disabled={loading}>
-              {loading ? "Refreshing menu..." : "Refresh current menu"}
-            </button>
           </>
         )}
 
