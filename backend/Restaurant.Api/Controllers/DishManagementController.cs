@@ -5,10 +5,14 @@ using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 using Restaurant.Api.Dtos;
 using Restaurant.Api.Models;
+using Microsoft.AspNetCore.Authorization;
+using Restaurant.Api.Security;
 
 namespace Restaurant.Api.Controllers;
 
 [ApiController]
+[Authorize]
+[ServiceFilter(typeof(MenuAdminGuard))]
 [Route("dishes")]
 public sealed class DishManagementController : ControllerBase
 {

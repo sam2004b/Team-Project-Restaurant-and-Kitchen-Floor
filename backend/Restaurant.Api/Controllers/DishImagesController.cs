@@ -1,10 +1,11 @@
-
-using Restaurant.Api.Services.Menu;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Restaurant.Api.Data;
+using Restaurant.Api.Security;
+using Restaurant.Api.Services.Menu;
 using System;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,8 @@ using System.Threading.Tasks;
 namespace Restaurant.Api.Controllers;
 
 [ApiController]
+[Authorize]
+[ServiceFilter(typeof(MenuAdminGuard))]
 [Route("dishes")]
 public sealed class DishImagesController : ControllerBase
 {
