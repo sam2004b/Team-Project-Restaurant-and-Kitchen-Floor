@@ -1,4 +1,5 @@
 
+using Restaurant.Api.Services.Menu;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,15 +23,18 @@ public sealed class DishImagesController : ControllerBase
     private readonly RestaurantDbContext _db;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<DishImagesController> _logger;
+    private readonly IMenuUpdateNotifier _menuNotifier;
 
     public DishImagesController(
         RestaurantDbContext db,
         IWebHostEnvironment environment,
-        ILogger<DishImagesController> logger)
+        ILogger<DishImagesController> logger,
+        IMenuUpdateNotifier menuNotifier)
     {
         _db = db;
         _environment = environment;
         _logger = logger;
+        _menuNotifier = menuNotifier;
     }
 
     /// <summary>
@@ -187,6 +191,8 @@ public sealed class DishImagesController : ControllerBase
                 }
             }
         }
+
+        await _menuNotifier.NotifyMenuChangedAsync(cancellationToken);
 
         return Ok(new
         {
