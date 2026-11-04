@@ -1845,6 +1845,370 @@ select:focus-visible {
   }
 }
 
+.staff-page {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.staff-page .admin-header {
+  margin-bottom: 0;
+}
+
+.staff-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e8e7e1;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.staff-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.staff-card-heading .eyebrow,
+.staff-card > .eyebrow {
+  margin-bottom: 5px;
+  font-size: 0.62rem;
+}
+
+.staff-card-heading h2,
+.staff-card h1 {
+  margin: 0;
+  color: var(--green);
+  font-size: 1.15rem;
+}
+
+.staff-form,
+.staff-restaurant-form,
+.staff-invite-form {
+  display: grid;
+  align-items: end;
+  gap: 12px;
+}
+
+.staff-form {
+  max-width: 520px;
+}
+
+.staff-restaurant-form {
+  grid-template-columns: minmax(180px, 1fr) auto;
+}
+
+.staff-invite-form {
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.7fr) auto;
+}
+
+.staff-form label,
+.staff-restaurant-form label,
+.staff-invite-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.staff-form input,
+.staff-restaurant-form input,
+.staff-invite-form input,
+.staff-invite-form select,
+.staff-role-control select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #dcded8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.staff-form .primary-button,
+.staff-restaurant-form .primary-button,
+.staff-invite-form .primary-button {
+  min-height: 38px;
+  font-size: 0.75rem;
+}
+
+.staff-account-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  margin: 0;
+}
+
+.staff-account-details div {
+  display: grid;
+  gap: 4px;
+}
+
+.staff-account-details dt,
+.staff-table small {
+  color: var(--text-muted);
+  font-size: 0.67rem;
+}
+
+.staff-account-details dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.staff-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.staff-notice.success {
+  background: #edf7f0;
+  color: #26734f;
+}
+
+.staff-notice.error {
+  background: #fff1ed;
+  color: #913f31;
+}
+
+.staff-notice.warning {
+  background: #fff7e6;
+  color: #805d1f;
+}
+
+.staff-help {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.staff-collapsible {
+  padding: 0;
+}
+
+.staff-collapsible summary {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  padding: 12px 18px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.staff-collapsible summary span,
+.staff-collapsible summary strong,
+.staff-collapsible summary small {
+  display: block;
+}
+
+.staff-collapsible summary strong {
+  color: var(--green);
+  font-size: 0.8rem;
+}
+
+.staff-collapsible summary small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.staff-collapsible .staff-form {
+  max-width: none;
+  padding: 0 18px 18px;
+}
+
+.staff-invitation-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: #f5f7f2;
+  color: var(--text);
+  font-size: 0.74rem;
+}
+
+.staff-invitation-result a,
+.staff-text-button,
+.staff-page-back a,
+.staff-back-link {
+  color: var(--green);
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.staff-text-button {
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+}
+
+.staff-text-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.staff-table-wrap {
+  overflow-x: auto;
+}
+
+.staff-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.staff-table th,
+.staff-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #eeefeb;
+  font-size: 0.72rem;
+  vertical-align: middle;
+}
+
+.staff-table th {
+  color: var(--text-muted);
+  font-size: 0.59rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.staff-table td:first-child strong,
+.staff-table td:first-child small {
+  display: block;
+}
+
+.staff-table td:first-child strong {
+  color: var(--text);
+  font-size: 0.74rem;
+}
+
+.staff-role-control {
+  display: flex;
+  min-width: 190px;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-role-control select {
+  min-height: 32px;
+  font-size: 0.7rem;
+}
+
+.staff-role-control .staff-text-button {
+  white-space: nowrap;
+}
+
+.staff-status {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.staff-status.active {
+  background: #e6f4eb;
+  color: #26734f;
+}
+
+.staff-status.revoked {
+  background: #f2eeee;
+  color: #756d6b;
+}
+
+.staff-empty {
+  margin: 0;
+  padding: 20px 8px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.staff-page-back {
+  margin: 0;
+}
+
+.staff-accept-shell {
+  min-height: 100vh;
+  padding: 32px 18px;
+}
+
+.staff-accept-page {
+  display: grid;
+  width: min(100%, 620px);
+  gap: 14px;
+  margin: 0 auto;
+}
+
+.staff-accept-page .staff-card {
+  padding: 24px;
+}
+
+.staff-accept-page .staff-card h1 {
+  margin-bottom: 10px;
+  font-size: 1.6rem;
+}
+
+.staff-accept-page .staff-form {
+  margin-top: 20px;
+}
+
+.staff-field-hint {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+@media (max-width: 720px) {
+  .staff-invite-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .staff-card {
+    padding: 14px;
+  }
+
+  .staff-restaurant-form {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-account-details {
+    gap: 14px;
+  }
+
+  .staff-card-heading {
+    align-items: flex-start;
+  }
+
+  .staff-role-control {
+    min-width: 160px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .staff-accept-page .staff-card {
+    padding: 18px;
+  }
+}
+
 .hero-status-row.availability-changed {
   background: #fff0ec;
   color: #a94731;

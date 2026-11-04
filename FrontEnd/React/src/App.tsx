@@ -6,6 +6,7 @@ import {
 } from "./services/api";
 import { Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
+import { AcceptInvitationPage, StaffManagementPage } from "./StaffAccessPage";
 import { formatPrice } from "./services/currency";
 
 
@@ -283,6 +284,8 @@ function App() {
     <Routes>
       <Route path="/" element={<MenuPage />} />
       <Route path="/admin/dishes" element={<AdminDishesPage />} />
+      <Route path="/admin/staff" element={<StaffManagementPage />} />
+      <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="*" element={<MenuPage />} />
     </Routes>
   );

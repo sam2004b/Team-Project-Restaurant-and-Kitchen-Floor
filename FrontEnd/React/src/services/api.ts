@@ -1,4 +1,5 @@
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const accessTokenStorageKey = "restaurant.accessToken";
 
 export class ApiError extends Error {
     constructor(
@@ -68,6 +69,10 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
     }
+    const accessToken = getStoredAccessToken();
+    if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+    }
 
     const response = await fetch(`${apiBaseUrl}${path}`, {
         ...init,
@@ -83,6 +88,156 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export function apiGet<T>(path: string): Promise<T> {
     return apiRequest<T>(path);
+}
+
+export interface LoginResponse {
+    tokenType: string;
+    accessToken: string;
+    expiresIn: number;
+    refreshToken?: string;
+}
+
+export interface AccountResponse {
+    id: string;
+    userName: string;
+    email: string | null;
+}
+
+export interface RestaurantResponse {
+    id: number;
+    name: string;
+    address: string;
+}
+
+export interface StaffMemberResponse {
+    id: number;
+    restaurantId: number;
+    userId: string;
+    userName: string;
+    email: string | null;
+    role: string;
+    status: number | string;
+}
+
+export interface StaffInvitationResponse {
+    id: number;
+    restaurantId: number;
+    email: string;
+    role: string;
+    status: number | string;
+    expiresAtUtc: string;
+    developmentToken?: string | null;
+}
+
+export interface AcceptedInvitationResponse {
+    id: number;
+    restaurantId: number;
+    userId: string;
+    role: string;
+    status: number | string;
+}
+
+export function getStoredAccessToken(): string | null {
+    return window.sessionStorage.getItem(accessTokenStorageKey);
+}
+
+export function storeAccessToken(token: string): void {
+    window.sessionStorage.setItem(accessTokenStorageKey, token);
+}
+
+export function clearStoredAccessToken(): void {
+    window.sessionStorage.removeItem(accessTokenStorageKey);
+}
+
+export function login(username: string, password: string): Promise<LoginResponse> {
+    return apiRequest<LoginResponse>("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+    });
+}
+
+export function getCurrentAccount(): Promise<AccountResponse> {
+    return apiGet<AccountResponse>("/auth/me");
+}
+
+export function createRestaurant(
+    name: string,
+    address: string,
+): Promise<RestaurantResponse> {
+    return apiRequest<RestaurantResponse>("/restaurants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address }),
+    });
+}
+
+export function getRestaurantStaff(restaurantId: number): Promise<StaffMemberResponse[]> {
+    return apiGet<StaffMemberResponse[]>(`/restaurants/${restaurantId}/staff`);
+}
+
+export function inviteStaff(
+    restaurantId: number,
+    email: string,
+    role: string,
+): Promise<StaffInvitationResponse> {
+    return apiRequest<StaffInvitationResponse>(`/restaurants/${restaurantId}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role }),
+    });
+}
+
+export function revokeStaffInvitation(
+    restaurantId: number,
+    invitationId: number,
+): Promise<void> {
+    return apiRequest<void>(
+        `/restaurants/${restaurantId}/invitations/${invitationId}/revoke`,
+        { method: "PATCH" },
+    );
+}
+
+export function changeStaffRole(
+    restaurantId: number,
+    memberId: number,
+    role: string,
+): Promise<StaffMemberResponse> {
+    return apiRequest<StaffMemberResponse>(
+        `/restaurants/${restaurantId}/staff/${memberId}/role`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role }),
+        },
+    );
+}
+
+export function setStaffMembershipStatus(
+    restaurantId: number,
+    memberId: number,
+    active: boolean,
+): Promise<StaffMemberResponse> {
+    return apiRequest<StaffMemberResponse>(
+        `/restaurants/${restaurantId}/staff/${memberId}/${active ? "activate" : "revoke"}`,
+        { method: "PATCH" },
+    );
+}
+
+export interface AcceptInvitationRequest {
+    token: string;
+    username?: string;
+    password?: string;
+}
+
+export function acceptInvitation(
+    request: AcceptInvitationRequest,
+): Promise<AcceptedInvitationResponse> {
+    return apiRequest<AcceptedInvitationResponse>("/invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+    });
 }
 
 
