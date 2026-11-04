@@ -106,7 +106,11 @@ public static class DatabaseSeeder
 
         await SeedRestaurantsAndStaffAsync(db, userManager);
 
-      var bootstrapAdmin =
+
+        await SeedRestaurantSettingsAndTablesAsync(db);
+
+
+        var bootstrapAdmin =
     await userManager.FindByNameAsync("admin");
 
 if (bootstrapAdmin is null)
@@ -418,6 +422,141 @@ if (!claims.Any(c =>
 
         await db.SaveChangesAsync();
     }
+
+
+    private static async Task SeedRestaurantSettingsAndTablesAsync(
+        RestaurantDbContext db)
+    {
+        // ---------------------------------------
+        // 1. Find the existing restaurants.
+        // ---------------------------------------
+
+        var bistro = await db.Restaurants.SingleAsync(
+            r => r.NormalizedName == "BISTRO 21");
+
+        var cafe = await db.Restaurants.SingleAsync(
+            r => r.NormalizedName == "CAFE 8");
+
+        // ---------------------------------------
+        // 2. Create settings for each restaurant.
+        // ---------------------------------------
+
+        var restaurantIds = new[]
+        {
+        bistro.Id,
+        cafe.Id
+    };
+
+        foreach (var restaurantId in restaurantIds)
+        {
+            bool settingsExist =
+                await db.RestaurantSettings.AnyAsync(
+                    s => s.RestaurantId == restaurantId);
+
+            if (!settingsExist)
+            {
+                db.RestaurantSettings.Add(
+                    new RestaurantSettings
+                    {
+                        RestaurantId = restaurantId,
+                        DefaultSeatCapacity = 4,
+                        UpdatedAtUtc = DateTime.UtcNow
+                    });
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        // ---------------------------------------
+        // 3. Create example dining tables.
+        // ---------------------------------------
+
+        var tableDefinitions = new[]
+        {
+        (
+            RestaurantId: bistro.Id,
+            TableNumber: 1,
+            SeatCount: 4
+        ),
+        (
+            RestaurantId: bistro.Id,
+            TableNumber: 2,
+            SeatCount: 2
+        ),
+        (
+            RestaurantId: cafe.Id,
+            TableNumber: 1,
+            SeatCount: 2
+        )
+    };
+
+        foreach (var definition in tableDefinitions)
+        {
+            bool tableExists = await db.DiningTables.AnyAsync(
+                t =>
+                    t.RestaurantId == definition.RestaurantId &&
+                    t.TableNumber == definition.TableNumber);
+
+            if (!tableExists)
+            {
+                db.DiningTables.Add(new DiningTable
+                {
+                    RestaurantId = definition.RestaurantId,
+                    TableNumber = definition.TableNumber,
+                    SeatCount = definition.SeatCount,
+                    IsActive = true
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        // ---------------------------------------
+        // 4. Find Bistro 21 table 1.
+        // ---------------------------------------
+
+        var table1 = await db.DiningTables.SingleAsync(
+            t =>
+                t.RestaurantId == bistro.Id &&
+                t.TableNumber == 1);
+
+        // ---------------------------------------
+        // 5. Find Bistro 21's active waiter.
+        // ---------------------------------------
+
+        var waiterMembership =
+            await db.StaffMemberships
+                .Include(m => m.User)
+                .SingleOrDefaultAsync(
+                    m =>
+                        m.RestaurantId == bistro.Id &&
+                        m.User.UserName == "waiter" &&
+                        m.Role == StaffRoleNames.Waiter &&
+                        m.Status == MembershipStatus.Active);
+
+        // ---------------------------------------
+        // 6. Assign the waiter to table 1.
+        // ---------------------------------------
+
+        bool assignmentExists =
+            await db.TableStaffAssignments.AnyAsync(
+                a => a.DiningTableId == table1.Id);
+
+        if (waiterMembership != null && !assignmentExists)
+        {
+            db.TableStaffAssignments.Add(
+                new TableStaffAssignment
+                {
+                    RestaurantId = bistro.Id,
+                    DiningTableId = table1.Id,
+                    StaffMembershipId = waiterMembership.Id,
+                    AssignedAtUtc = DateTime.UtcNow
+                });
+
+            await db.SaveChangesAsync();
+        }
+    }
+
 
 
 }

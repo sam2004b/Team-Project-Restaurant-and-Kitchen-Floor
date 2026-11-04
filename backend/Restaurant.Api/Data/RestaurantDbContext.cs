@@ -28,6 +28,17 @@ namespace Restaurant.Api.Data
             Set<StaffInvitation>();
 
 
+        public DbSet<RestaurantSettings> RestaurantSettings =>
+            Set<RestaurantSettings>();
+
+        public DbSet<DiningTable> DiningTables =>
+            Set<DiningTable>();
+
+        public DbSet<TableStaffAssignment> TableStaffAssignments =>
+            Set<TableStaffAssignment>();
+
+
+
         protected override void OnModelCreating(
             ModelBuilder modelBuilder)
         {
@@ -224,6 +235,129 @@ namespace Restaurant.Api.Data
                  .IsUnique()
                  .HasFilter("\"TokenHash\" IS NOT NULL");
             });
+
+
+            modelBuilder.Entity<RestaurantSettings>(entity =>
+            {
+                entity.ToTable("restaurant_settings", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_restaurant_settings_default_seats_positive",
+                        "\"DefaultSeatCapacity\" > 0");
+                });
+
+                // One settings record per restaurant.
+                entity.HasKey(s => s.RestaurantId);
+
+                entity.Property(s => s.DefaultSeatCapacity)
+                    .IsRequired();
+
+                entity.Property(s => s.UpdatedAtUtc)
+                    .IsRequired();
+
+                entity.HasOne(s => s.Restaurant)
+                    .WithOne()
+                    .HasForeignKey<RestaurantSettings>(
+                        s => s.RestaurantId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+
+            modelBuilder.Entity<DiningTable>(entity =>
+            {
+                entity.ToTable("dining_tables", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_dining_tables_number_positive",
+                        "\"TableNumber\" > 0");
+
+                    table.HasCheckConstraint(
+                        "CK_dining_tables_seats_positive",
+                        "\"SeatCount\" > 0");
+                });
+
+                entity.HasKey(t => t.Id);
+
+                entity.Property(t => t.TableNumber)
+                    .IsRequired();
+
+                entity.Property(t => t.SeatCount)
+                    .IsRequired();
+
+                entity.Property(t => t.IsActive)
+                    .HasDefaultValue(true);
+
+                entity.HasOne(t => t.Restaurant)
+                    .WithMany()
+                    .HasForeignKey(t => t.RestaurantId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Table numbers must be unique
+                // inside each restaurant.
+                entity.HasIndex(t => new
+                {
+                    t.RestaurantId,
+                    t.TableNumber
+                }).IsUnique();
+            });
+
+
+            modelBuilder.Entity<TableStaffAssignment>(entity =>
+            {
+                entity.ToTable("table_staff_assignments");
+
+                entity.HasKey(a => a.Id);
+
+                entity.Property(a => a.AssignedAtUtc)
+                    .IsRequired();
+
+                // Each table can have only one current
+                // staff assignment.
+                entity.HasIndex(a => a.DiningTableId)
+                    .IsUnique();
+
+                // The assignment must reference a table
+                // belonging to the same restaurant.
+                entity.HasOne(a => a.DiningTable)
+                    .WithOne(t => t.StaffAssignment)
+                    .HasForeignKey<TableStaffAssignment>(
+                        a => new
+                        {
+                            a.RestaurantId,
+                            a.DiningTableId
+                        })
+                    .HasPrincipalKey<DiningTable>(
+                        t => new
+                        {
+                            t.RestaurantId,
+                            t.Id
+                        })
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // The assigned employee membership must
+                // belong to that same restaurant.
+                entity.HasOne(a => a.StaffMembership)
+                    .WithMany()
+                    .HasForeignKey(a => new
+                    {
+                        a.RestaurantId,
+                        a.StaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new
+                    {
+                        m.RestaurantId,
+                        m.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Efficient lookup of an employee's tables.
+                entity.HasIndex(a => new
+                {
+                    a.RestaurantId,
+                    a.StaffMembershipId
+                });
+            });
+
         }
     }
 }
