@@ -53,7 +53,10 @@ builder.Services
 
 builder.Services
     .AddAuthentication(IdentityConstants.BearerScheme)
-    .AddBearerToken(IdentityConstants.BearerScheme);
+    .AddBearerToken(IdentityConstants.BearerScheme, options =>
+    {
+        options.BearerTokenExpiration = TimeSpan.FromHours(1);
+    });
 
 // ==========================================
 // 4. AUTHORIZATION
@@ -175,10 +178,13 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddScoped<MenuAdminGuard>();
 
 builder.Services.AddScoped<OrderDishAvailabilityValidator>();
+
+builder.Services.AddScoped<StaffSessionValidator>();
+
 // ==========================================
 // 9. BUILD APPLICATION
 // ==========================================
- 
+
 var app = builder.Build();
 
 // ==========================================
@@ -252,6 +258,9 @@ app.UseStaticFiles();
 app.UseCors();
 
 app.UseAuthentication();
+
+// Validate the employee's current database session.
+app.UseMiddleware<StaffSessionMiddleware>();
 
 app.UseAuthorization();
 
