@@ -204,6 +204,21 @@ public sealed class StaffAdministrationController : ControllerBase
 
         membership.Role = effectiveRole;
         membership.Status = effectiveStatus;
+
+        // Permanently invalidate outstanding sessions when membership is
+        // revoked; reactivation must not resurrect old bearer tokens.
+        if (newStatus == MembershipStatus.Revoked)
+        {
+            var now = DateTime.UtcNow;
+            await _db.StaffSessions
+                .Where(s => s.StaffMembershipId == membership.Id &&
+                            s.RestaurantId == restaurantId &&
+                            s.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(
+                    updates => updates.SetProperty(
+                        s => s.RevokedAtUtc, (DateTime?)now), ct);
+        }
+
         await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
