@@ -69,6 +69,8 @@ builder.Services.AddAuthorization(options =>
               .RequireClaim(
                   "permission",
                   "restaurants:create"));
+
+    StaffRolePolicies.Configure(options);
 });
 
 // ==========================================
@@ -118,7 +120,6 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IDishAvailabilityService,
     DishAvailabilityService>();
-
 
 
 builder.Services.AddEndpointsApiExplorer();
