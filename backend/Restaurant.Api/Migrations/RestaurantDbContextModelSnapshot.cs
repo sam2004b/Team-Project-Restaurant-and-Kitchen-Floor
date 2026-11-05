@@ -489,6 +489,46 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.StaffSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("text");
+
+                    b.Property<int>("StaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "StaffMembershipId");
+
+                    b.HasIndex("UserId", "RevokedAtUtc");
+
+                    b.ToTable("staff_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_staff_sessions_expiry", "\"ExpiresAtUtc\" > \"CreatedAtUtc\"");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.TableStaffAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -632,6 +672,26 @@ namespace Restaurant.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Restaurant");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.StaffSession", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "StaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "StaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StaffMembership");
 
                     b.Navigation("User");
                 });
