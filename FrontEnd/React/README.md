@@ -46,6 +46,8 @@ Account and staff access management is available at
 `http://localhost:5173/admin/staff`. Sign in to the API, choose an existing
 restaurant ID (or create one if the account has bootstrap permission), send
 and revoke staff invitations, and change or refresh membership roles/status.
+The selected restaurant profile can also be loaded and updated from this page;
+profile changes require active administrator access.
 The bearer token is kept in browser session storage for the current tab session.
 Invitation links open `/invitations/accept`; invited staff can accept with an
 existing signed-in account or create a new account during acceptance. The API
