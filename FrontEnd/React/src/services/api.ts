@@ -172,6 +172,22 @@ export function createRestaurant(
     });
 }
 
+export function getRestaurantProfile(restaurantId: number): Promise<RestaurantResponse> {
+    return apiGet<RestaurantResponse>(`/restaurants/${restaurantId}/profile`);
+}
+
+export function updateRestaurantProfile(
+    restaurantId: number,
+    name: string,
+    address: string,
+): Promise<RestaurantResponse> {
+    return apiRequest<RestaurantResponse>(`/restaurants/${restaurantId}/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address }),
+    });
+}
+
 export function getRestaurantStaff(restaurantId: number): Promise<StaffMemberResponse[]> {
     return apiGet<StaffMemberResponse[]>(`/restaurants/${restaurantId}/staff`);
 }
