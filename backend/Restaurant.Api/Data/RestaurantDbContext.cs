@@ -27,6 +27,8 @@ namespace Restaurant.Api.Data
         public DbSet<StaffInvitation> StaffInvitations =>
             Set<StaffInvitation>();
 
+        public DbSet<StaffSession> StaffSessions => 
+            Set<StaffSession>();
 
         public DbSet<RestaurantSettings> RestaurantSettings =>
             Set<RestaurantSettings>();
@@ -234,6 +236,37 @@ namespace Restaurant.Api.Data
                  entity.HasIndex(i => i.TokenHash)
                  .IsUnique()
                  .HasFilter("\"TokenHash\" IS NOT NULL");
+            });
+
+            // S2-US7-T01: revocable, restaurant-scoped Identity sessions.
+            modelBuilder.Entity<StaffSession>(entity =>
+            {
+                entity.ToTable("staff_sessions", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_staff_sessions_expiry",
+                        "\"ExpiresAtUtc\" > \"CreatedAtUtc\"");
+                });
+
+                entity.HasKey(s => s.Id);
+                entity.Property(s => s.UserId).IsRequired();
+                entity.Property(s => s.CreatedAtUtc).IsRequired();
+                entity.Property(s => s.ExpiresAtUtc).IsRequired();
+
+                entity.HasOne(s => s.User)
+                    .WithMany()
+                    .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // A session's restaurant must be the membership's restaurant.
+                entity.HasOne(s => s.StaffMembership)
+                    .WithMany()
+                    .HasForeignKey(s => new { s.RestaurantId, s.StaffMembershipId })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(s => new { s.UserId, s.RevokedAtUtc });
+                entity.HasIndex(s => new { s.RestaurantId, s.StaffMembershipId });
             });
 
 
