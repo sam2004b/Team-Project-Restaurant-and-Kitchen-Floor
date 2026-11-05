@@ -92,9 +92,9 @@ public sealed class AuthController : ControllerBase
 
         if (memberships.Count == 0)
         {
-            return StatusCode(403, new
+            return Unauthorized( new
             {
-                error = "No active restaurant membership."
+                error = "Invalid Credentials or Inactive account."
             });
         }
 
