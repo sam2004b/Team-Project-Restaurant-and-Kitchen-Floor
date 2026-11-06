@@ -40,7 +40,7 @@ and manual refreshing to retrieve the latest dish availability.
 Dish creation, editing, and image management are available
 through the administrator interface.
 
-Dish management is available at `http://localhost:5173/admin/dishes`. The add/edit forms validate dish fields, display server validation errors beside the corresponding fields, and let staff mark a dish as available or stop-listed. Successful saves show a confirmation and reload the dish list from the API, so saved changes remain visible after a page refresh. The management endpoints are enabled only in the ASP.NET Development environment until administrator authentication is configured.
+Dish management is available at `http://localhost:5173/admin/dishes`. The add/edit forms validate dish fields and display server validation errors beside the corresponding fields. Staff can also stop-list or re-enable a dish directly from the list; the switch changes only after the backend confirms the update, then the list refreshes. Failed or stale updates display the API error and reload the current dish state. Availability changes are broadcast to connected customer menus, and the backend prevents unavailable dishes from being selected for new orders.
 
 Account and staff access management is available at
 `http://localhost:5173/admin/staff`. Sign in to the API, choose an existing
