@@ -42,6 +42,9 @@ namespace Restaurant.Api.Data
         public DbSet<RestaurantOrder> Orders =>
             Set<RestaurantOrder>();
 
+        public DbSet<RestaurantOrderItem> OrderItems =>
+            Set<RestaurantOrderItem>();
+
 
 
         protected override void OnModelCreating(
@@ -397,12 +400,33 @@ namespace Restaurant.Api.Data
 
             modelBuilder.Entity<RestaurantOrder>(entity =>
             {
-                entity.ToTable("orders");
-
                 entity.HasKey(o => o.Id);
 
                 entity.Property(o => o.CreatedAtUtc)
                     .IsRequired();
+
+                // Older US-8 order headers become Legacy when this migration
+                // adds the non-null column. New orders explicitly set Open.
+                entity.Property(o => o.Status)
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasDefaultValue(RestaurantOrderStates.Legacy);
+
+                entity.ToTable("orders", table =>
+                {
+                    table.HasCheckConstraint("CK_orders_state",
+                        "\"Status\" IN ('Legacy', 'Open', 'Sent')");
+                    table.HasCheckConstraint("CK_orders_sent_consistency",
+                        "(\"Status\" = 'Sent' AND \"SentAtUtc\" IS NOT NULL) " +
+                        "OR (\"Status\" <> 'Sent' AND \"SentAtUtc\" IS NULL)");
+                    table.HasCheckConstraint("CK_orders_sent_after_created",
+                        "\"SentAtUtc\" IS NULL OR \"SentAtUtc\" >= \"CreatedAtUtc\"");
+                });
+
+                entity.HasIndex(o => new { o.RestaurantId, o.DiningTableId })
+                    .IsUnique()
+                    .HasDatabaseName("UX_orders_one_open_per_table")
+                    .HasFilter("\"Status\" = 'Open'");
 
                 // Order and table must belong
                 // to the same restaurant.
@@ -442,6 +466,38 @@ namespace Restaurant.Api.Data
                     o.DiningTableId,
                     o.CreatedAtUtc
                 });
+            });
+
+            modelBuilder.Entity<RestaurantOrderItem>(entity =>
+            {
+                entity.ToTable("order_items", table =>
+                {
+                    table.HasCheckConstraint("CK_order_items_quantity_positive",
+                        "\"Quantity\" > 0");
+                    table.HasCheckConstraint("CK_order_items_price_positive",
+                        "\"UnitPriceSnapshot\" > 0");
+                });
+
+                entity.HasKey(i => i.Id);
+                entity.Property(i => i.Quantity).IsRequired();
+                entity.Property(i => i.SpecialRequest).HasMaxLength(500);
+                entity.Property(i => i.DishNameSnapshot)
+                    .IsRequired().HasMaxLength(150);
+                entity.Property(i => i.UnitPriceSnapshot).HasPrecision(10, 2);
+                entity.Property(i => i.CreatedAtUtc).IsRequired();
+
+                entity.HasOne(i => i.Order)
+                    .WithMany(o => o.Items)
+                    .HasForeignKey(i => i.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(i => i.Dish)
+                    .WithMany()
+                    .HasForeignKey(i => i.DishId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(i => i.OrderId);
+                entity.HasIndex(i => i.DishId);
             });
 
 
