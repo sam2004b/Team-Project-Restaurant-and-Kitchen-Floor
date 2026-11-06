@@ -39,6 +39,9 @@ namespace Restaurant.Api.Data
         public DbSet<TableStaffAssignment> TableStaffAssignments =>
             Set<TableStaffAssignment>();
 
+        public DbSet<RestaurantOrder> Orders =>
+            Set<RestaurantOrder>();
+
 
 
         protected override void OnModelCreating(
@@ -390,6 +393,57 @@ namespace Restaurant.Api.Data
                     a.StaffMembershipId
                 });
             });
+
+
+            modelBuilder.Entity<RestaurantOrder>(entity =>
+            {
+                entity.ToTable("orders");
+
+                entity.HasKey(o => o.Id);
+
+                entity.Property(o => o.CreatedAtUtc)
+                    .IsRequired();
+
+                // Order and table must belong
+                // to the same restaurant.
+                entity.HasOne(o => o.DiningTable)
+                    .WithMany()
+                    .HasForeignKey(o => new
+                    {
+                        o.RestaurantId,
+                        o.DiningTableId
+                    })
+                    .HasPrincipalKey(t => new
+                    {
+                        t.RestaurantId,
+                        t.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Original waiter membership must
+                // belong to the same restaurant.
+                entity.HasOne(o => o.CreatedByStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(o => new
+                    {
+                        o.RestaurantId,
+                        o.CreatedByStaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new
+                    {
+                        m.RestaurantId,
+                        m.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(o => new
+                {
+                    o.RestaurantId,
+                    o.DiningTableId,
+                    o.CreatedAtUtc
+                });
+            });
+
 
         }
     }

@@ -361,6 +361,35 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatedByStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "CreatedByStaffMembershipId");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "CreatedAtUtc");
+
+                    b.ToTable("orders", (string)null);
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantSettings", b =>
                 {
                     b.Property<int>("RestaurantId")
@@ -633,6 +662,27 @@ namespace Restaurant.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Dish");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "CreatedByStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "CreatedByStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.DiningTable", "DiningTable")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByStaffMembership");
+
+                    b.Navigation("DiningTable");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantSettings", b =>

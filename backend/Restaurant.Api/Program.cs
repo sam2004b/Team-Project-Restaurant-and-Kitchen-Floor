@@ -1,5 +1,6 @@
 using Restaurant.Api.Security;
 using Restaurant.Api.Services.Dishes;
+using Restaurant.Api.Services.Waiter;
 using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
@@ -120,6 +121,9 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IDishAvailabilityService,
     DishAvailabilityService>();
+
+builder.Services.AddScoped<
+    WaiterTableQueryService>();
 
 
 builder.Services.AddEndpointsApiExplorer();
