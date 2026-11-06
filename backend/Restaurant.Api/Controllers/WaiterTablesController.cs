@@ -1,55 +1,78 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Restaurant.Api.Data;
 using Restaurant.Api.Security;
 using Restaurant.Api.Services.Administration;
+using Restaurant.Api.Services.Waiter;
+using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Restaurant.Api.Controllers;
 
-/// <summary>Waiter-only view of the current employee's assigned tables.</summary>
+/// <summary>Waiter-only access to current table assignments and their orders.</summary>
 [ApiController]
 [Authorize(Policy = StaffRolePolicies.WaiterOnly)]
 [Route("waiter/tables")]
 public sealed class WaiterTablesController : ControllerBase
 {
-    private readonly RestaurantDbContext _db;
     private readonly RestaurantAccessService _access;
+    private readonly WaiterTableQueryService _tables;
 
     public WaiterTablesController(
-        RestaurantDbContext db,
-        RestaurantAccessService access)
+        RestaurantAccessService access,
+        WaiterTableQueryService tables)
     {
-        _db = db;
         _access = access;
+        _tables = tables;
     }
 
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        if (!int.TryParse(User.FindFirstValue(
-                StaffSessionClaims.RestaurantId), out int restaurantId) ||
-            !int.TryParse(User.FindFirstValue(
-                StaffSessionClaims.MembershipId), out int membershipId))
+        if (!TryGetStaffContext(out int restaurantId, out int membershipId))
             return Unauthorized();
 
         if (!await _access.CanSelectDishesAsync(User, restaurantId, ct))
             return Forbid();
 
-        var tables = await _db.TableStaffAssignments.AsNoTracking()
-            .Where(a => a.RestaurantId == restaurantId &&
-                        a.StaffMembershipId == membershipId &&
-                        a.DiningTable.IsActive)
-            .OrderBy(a => a.DiningTable.TableNumber)
-            .Select(a => new
-            {
-                id = a.DiningTableId,
-                a.DiningTable.TableNumber,
-                a.DiningTable.SeatCount
-            })
-            .ToListAsync(ct);
+        var tables = await _tables.GetAssignedTablesAsync(
+            restaurantId, membershipId, ct);
 
         return Ok(tables);
+    }
+
+    // Read-only order headers. Order creation is a separate Sprint 2 task.
+    [HttpGet("{tableId:int}/orders")]
+    public async Task<IActionResult> GetTableOrders(
+        int tableId,
+        CancellationToken ct)
+    {
+        if (tableId <= 0)
+            return BadRequest(new { error = "Invalid table ID." });
+
+        if (!TryGetStaffContext(out int restaurantId, out int membershipId))
+            return Unauthorized();
+
+        if (!await _access.CanSelectDishesAsync(User, restaurantId, ct))
+            return Forbid();
+
+        var orders = await _tables.GetVisibleOrdersAsync(
+            restaurantId, membershipId, tableId, ct);
+
+        // 404 avoids disclosing tables belonging to other staff/restaurants.
+        return orders is null ? NotFound() : Ok(orders);
+    }
+
+    private bool TryGetStaffContext(out int restaurantId, out int membershipId)
+    {
+        bool validRestaurant = int.TryParse(
+            User.FindFirstValue(StaffSessionClaims.RestaurantId),
+            out restaurantId);
+        bool validMembership = int.TryParse(
+            User.FindFirstValue(StaffSessionClaims.MembershipId),
+            out membershipId);
+
+        return validRestaurant && restaurantId > 0 &&
+               validMembership && membershipId > 0;
     }
 }
