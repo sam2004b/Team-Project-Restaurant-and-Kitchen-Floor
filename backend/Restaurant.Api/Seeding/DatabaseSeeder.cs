@@ -439,6 +439,8 @@ if (!claims.Any(c =>
         {
             (Username: "ivan", Email: "ivan@restaurant.test",
              Role: StaffRoleNames.Waiter),
+            (Username: "maria", Email: "maria@restaurant.test",
+             Role: StaffRoleNames.Waiter),
             (Username: "anna", Email: "anna@restaurant.test",
              Role: StaffRoleNames.Chef)
         };
