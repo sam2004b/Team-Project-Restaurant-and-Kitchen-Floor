@@ -47,6 +47,10 @@ Account and staff access management is available at
 restaurant ID (or create one if the account has bootstrap permission), send
 and revoke staff invitations, and change or refresh membership roles/status.
 The bearer token is kept in browser session storage for the current tab session.
+Chef accounts can open `/chef/availability` or `/chef/menu` to view available
+dishes from the public menu API and change availability. Dishes stopped from
+this browser are saved locally so they can be re-enabled here. Full dish-detail
+editing remains restricted to administrators by the existing API.
 Invitation links open `/invitations/accept`; invited staff can accept with an
 existing signed-in account or create a new account during acceptance. The API
 does not currently expose a restaurant or invitation listing endpoint, so the

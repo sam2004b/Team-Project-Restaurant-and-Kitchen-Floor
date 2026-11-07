@@ -1880,6 +1880,22 @@ select:focus-visible {
   margin-bottom: 14px;
 }
 
+.staff-workspace-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  text-decoration: none;
+}
+
+.chef-dish-count {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.staff-availability-switch {
+  white-space: nowrap;
+}
+
 .staff-card-heading .eyebrow,
 .staff-card > .eyebrow {
   margin-bottom: 5px;

@@ -101,6 +101,8 @@ export interface AccountResponse {
     id: string;
     userName: string;
     email: string | null;
+    restaurantId?: string;
+    role?: string;
 }
 
 export interface RestaurantResponse {
@@ -320,6 +322,22 @@ export function getMenuDishes(): Promise<MenuDishResponse[]> {
 
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {
     return apiGet<DishDetailsResponse[]>("/dishes/manage");
+}
+
+export interface ChefDishResponse {
+    id: number;
+    name: string;
+    category: string;
+    isAvailable: boolean;
+}
+
+export function getChefDishes(): Promise<ChefDishResponse[]> {
+    return getMenuDishes().then((dishes) => dishes.map(({ id, name, category, isAvailable }) => ({
+        id,
+        name,
+        category,
+        isAvailable,
+    })));
 }
 
 export function getDishDetails(id: number): Promise<DishDetailsResponse> {

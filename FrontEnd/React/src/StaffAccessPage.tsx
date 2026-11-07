@@ -100,11 +100,20 @@ function AccountPanel({
       )}
 
       {account ? (
+      <>
         <dl className="staff-account-details">
           <div><dt>Username</dt><dd>{account.userName}</dd></div>
           <div><dt>Email</dt><dd>{account.email || "Not provided"}</dd></div>
           <div><dt>Session</dt><dd>{accessToken ? "Authenticated" : "Signed out"}</dd></div>
+          {account.role && <div><dt>Restaurant role</dt><dd>{account.role}</dd></div>}
+          {account.restaurantId && <div><dt>Restaurant</dt><dd>#{account.restaurantId}</dd></div>}
         </dl>
+        {account.role === "Chef" && (
+          <Link className="secondary-button staff-workspace-link" to="/chef/availability">
+            Open Chef availability
+          </Link>
+        )}
+      </>
       ) : (
         <form className="staff-form" onSubmit={(event) => void submitLogin(event)}>
           <label>

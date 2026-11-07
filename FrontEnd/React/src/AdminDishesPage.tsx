@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { apiBaseUrl } from "./services/api";
 import {
   ApiError,
@@ -99,6 +100,7 @@ const categories = ["Pasta", "Pizza", "Soups", "Salads", "Mains", "Desserts", "D
 function AdminDishesPage() {
   const [dishes, setDishes] = useState<DishDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chefView, setChefView] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -130,6 +132,10 @@ function AdminDishesPage() {
       return true;
     } catch (caughtError) {
       if (requestVersion === dishLoadVersion.current) {
+        if (caughtError instanceof ApiError && caughtError.status === 403) {
+          setChefView(true);
+          return false;
+        }
         setError(
           caughtError instanceof Error
             ? caughtError.message
@@ -149,7 +155,9 @@ function AdminDishesPage() {
   }, []);
 
   useMenuUpdates(() => {
-    void loadDishes(false);
+    if (!chefView) {
+      void loadDishes(false);
+    }
   });
 
   const changeAvailability = async (
@@ -359,6 +367,10 @@ function AdminDishesPage() {
     const existingImage = dishes.find((dish) => dish.id === editingId)?.imageUrl;
     setImagePreview(existingImage ? `${apiBaseUrl}${existingImage}` : null);
   }, [dishes, editingId, selectedImage]);
+
+  if (chefView) {
+    return <ChefAvailabilityPage />;
+  }
 
   return (
     <div className="app-shell admin-shell">
