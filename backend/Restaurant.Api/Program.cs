@@ -1,6 +1,7 @@
 using Restaurant.Api.Security;
 using Restaurant.Api.Services.Dishes;
 using Restaurant.Api.Services.Waiter;
+using Restaurant.Api.Services.Orders;
 using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
@@ -124,6 +125,9 @@ builder.Services.AddScoped<
 
 builder.Services.AddScoped<
     WaiterTableQueryService>();
+
+// S2-US12-T01: DB-backed order draft and send-state persistence.
+builder.Services.AddScoped<OrderDraftPersistenceService>();
 
 
 builder.Services.AddEndpointsApiExplorer();
