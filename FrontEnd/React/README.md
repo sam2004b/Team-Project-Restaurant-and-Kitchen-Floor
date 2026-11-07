@@ -40,7 +40,7 @@ and manual refreshing to retrieve the latest dish availability.
 Dish creation, editing, and image management are available
 through the administrator interface.
 
-Dish management is available at `http://localhost:5173/admin/dishes`. The add/edit forms validate dish fields, display server validation errors beside the corresponding fields, and let staff mark a dish as available or stop-listed. Successful saves show a confirmation and reload the dish list from the API, so saved changes remain visible after a page refresh. The management endpoints are enabled only in the ASP.NET Development environment until administrator authentication is configured.
+Dish management is available at `http://localhost:5173/admin/dishes`. The add/edit forms validate dish fields and display server validation errors beside the corresponding fields. Staff can also stop-list or re-enable a dish directly from the list; the switch changes only after the backend confirms the update, then the list refreshes. Failed or stale updates display the API error and reload the current dish state. Availability changes are broadcast to connected customer menus, and the backend prevents unavailable dishes from being selected for new orders.
 
 Account and staff access management is available at
 `http://localhost:5173/admin/staff`. Sign in to the API, choose an existing
@@ -49,6 +49,10 @@ and revoke staff invitations, and change or refresh membership roles/status.
 The selected restaurant profile can also be loaded and updated from this page;
 profile changes require active administrator access.
 The bearer token is kept in browser session storage for the current tab session.
+Chef accounts can open `/chef/availability` or `/chef/menu` to view available
+dishes from the public menu API and change availability. Dishes stopped from
+this browser are saved locally so they can be re-enabled here. Full dish-detail
+editing remains restricted to administrators by the existing API.
 Invitation links open `/invitations/accept`; invited staff can accept with an
 existing signed-in account or create a new account during acceptance. The API
 does not currently expose a restaurant or invitation listing endpoint, so the

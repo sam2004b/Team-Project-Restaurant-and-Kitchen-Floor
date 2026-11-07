@@ -101,6 +101,8 @@ export interface AccountResponse {
     id: string;
     userName: string;
     email: string | null;
+    restaurantId?: string;
+    role?: string;
 }
 
 export interface RestaurantResponse {
@@ -320,6 +322,12 @@ export interface SaveDishRequest {
     ingredients: string[];
 }
 
+export interface DishAvailabilityResponse {
+    dishId: number;
+    isAvailable: boolean;
+    changed: boolean;
+}
+
 
 export function getMenuDishes(): Promise<MenuDishResponse[]> {
     return apiRequest<MenuDishResponse[]>("/dishes", {
@@ -330,6 +338,22 @@ export function getMenuDishes(): Promise<MenuDishResponse[]> {
 
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {
     return apiGet<DishDetailsResponse[]>("/dishes/manage");
+}
+
+export interface ChefDishResponse {
+    id: number;
+    name: string;
+    category: string;
+    isAvailable: boolean;
+}
+
+export function getChefDishes(): Promise<ChefDishResponse[]> {
+    return getMenuDishes().then((dishes) => dishes.map(({ id, name, category, isAvailable }) => ({
+        id,
+        name,
+        category,
+        isAvailable,
+    })));
 }
 
 export function getDishDetails(id: number): Promise<DishDetailsResponse> {
@@ -345,6 +369,19 @@ export function updateDish(
     request: SaveDishRequest,
 ): Promise<DishDetailsResponse> {
     return apiSend<DishDetailsResponse>(`/dishes/${id}`, "PUT", request);
+}
+
+export function updateDishAvailability(
+    id: number,
+    isAvailable: boolean,
+): Promise<DishAvailabilityResponse> {
+    return apiRequest<DishAvailabilityResponse>(`/dishes/${id}/availability`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isAvailable }),
+    });
 }
 
 export interface ApiHealth {

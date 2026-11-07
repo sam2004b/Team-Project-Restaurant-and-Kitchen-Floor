@@ -751,6 +751,15 @@ button {
   text-transform: uppercase;
 }
 
+.admin-row-availability-switch {
+  margin-top: 8px;
+  white-space: nowrap;
+}
+
+.admin-row-availability-switch input:disabled + .admin-switch {
+  opacity: 0.65;
+}
+
 .admin-dish-table tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -1885,6 +1894,22 @@ select:focus-visible {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 14px;
+}
+
+.staff-workspace-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  text-decoration: none;
+}
+
+.chef-dish-count {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.staff-availability-switch {
+  white-space: nowrap;
 }
 
 .staff-card-heading .eyebrow,

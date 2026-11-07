@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { apiBaseUrl } from "./services/api";
 import {
   ApiError,
@@ -8,10 +9,12 @@ import {
   getAdminDishes,
   getDishDetails,
   uploadDishImage,
+  updateDishAvailability,
   updateDish,
 } from "./services/api";
 import type { DishDetailsResponse, SaveDishRequest } from "./services/api";
 import { formatPrice } from "./services/currency";
+import { useMenuUpdates } from "./services/useMenuUpdates";
 
 type DishFormValues = {
   name: string;
@@ -97,8 +100,13 @@ const categories = ["Pasta", "Pizza", "Soups", "Salads", "Mains", "Desserts", "D
 function AdminDishesPage() {
   const [dishes, setDishes] = useState<DishDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chefView, setChefView] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [updatingAvailability, setUpdatingAvailability] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<DishFormErrors>({});
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -107,28 +115,94 @@ function AdminDishesPage() {
   const [ingredientDraft, setIngredientDraft] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [savedDish, setSavedDish] = useState<DishDetailsResponse | null>(null);
-  const [saveNotice, setSaveNotice] = useState<{ message: string; isWarning: boolean; title?: string } | null>(null);
-  const [updatingAvailabilityId, setUpdatingAvailabilityId] = useState<number | null>(null);
+  const [saveNotice, setSaveNotice] = useState<{
+    message: string;
+    isWarning: boolean;
+    title?: string;
+  } | null>(null);
+  const dishLoadVersion = useRef(0);
 
-  const loadDishes = async () => {
-    setLoading(true);
+  const loadDishes = async (showLoading = true): Promise<boolean> => {
+    const requestVersion = ++dishLoadVersion.current;
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      setDishes(await getAdminDishes());
+      const currentDishes = await getAdminDishes();
+      if (requestVersion === dishLoadVersion.current) {
+        setDishes(currentDishes);
+      }
+      return true;
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "An unexpected error occurred while loading dishes.",
-      );
+      if (requestVersion === dishLoadVersion.current) {
+        if (caughtError instanceof ApiError && caughtError.status === 403) {
+          setChefView(true);
+          return false;
+        }
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "An unexpected error occurred while loading dishes.",
+        );
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (requestVersion === dishLoadVersion.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     void loadDishes();
   }, []);
+
+  useMenuUpdates(() => {
+    if (!chefView) {
+      void loadDishes(false);
+    }
+  });
+
+  const changeAvailability = async (
+    dish: DishDetailsResponse,
+    isAvailable: boolean,
+  ) => {
+    setAvailabilityError(null);
+    setUpdatingAvailability((current) => new Set(current).add(dish.id));
+
+    try {
+      const result = await updateDishAvailability(dish.id, isAvailable);
+      if (result.dishId !== dish.id || result.isAvailable !== isAvailable) {
+        throw new Error("The server returned an unexpected availability state.");
+      }
+
+      setDishes((current) =>
+        current.map((item) =>
+          item.id === dish.id
+            ? { ...item, isAvailable: result.isAvailable }
+            : item,
+        ),
+      );
+
+      await loadDishes(false);
+    } catch (caughtError) {
+      setAvailabilityError(
+        `Could not update ${dish.name} availability. ${
+          caughtError instanceof Error
+            ? caughtError.message
+            : "An unexpected error occurred."
+        }`,
+      );
+      await loadDishes(false);
+    } finally {
+      setUpdatingAvailability((current) => {
+        const next = new Set(current);
+        next.delete(dish.id);
+        return next;
+      });
+    }
+  };
 
   const startCreate = () => {
     setEditingId(null);
@@ -269,47 +343,6 @@ function AdminDishesPage() {
     }
   };
 
-  const toggleDishAvailability = async (dish: DishDetailsResponse) => {
-    if (updatingAvailabilityId !== null) {
-      return;
-    }
-
-    const isAvailable = !dish.isAvailable;
-    setUpdatingAvailabilityId(dish.id);
-    setSaveNotice(null);
-
-    try {
-      const updatedDish = await updateDish(dish.id, {
-        name: dish.name,
-        price: dish.price,
-        description: dish.description ?? "",
-        category: dish.category,
-        isAvailable,
-        ingredients: dish.ingredients,
-      });
-
-      setDishes((current) =>
-        current.map((item) => item.id === updatedDish.id ? updatedDish : item),
-      );
-      setSavedDish((current) => current?.id === updatedDish.id ? updatedDish : current);
-      setSaveNotice({
-        message: `${updatedDish.name} is now ${updatedDish.isAvailable ? "available" : "unavailable"}.`,
-        isWarning: false,
-        title: "Availability updated",
-      });
-    } catch (caughtError) {
-      setSaveNotice({
-        message: caughtError instanceof Error
-          ? `Could not update availability: ${caughtError.message}`
-          : "Could not update dish availability.",
-        isWarning: true,
-        title: "Could not update availability",
-      });
-    } finally {
-      setUpdatingAvailabilityId(null);
-    }
-  };
-
   const updateForm = <K extends keyof DishFormValues>(
     key: K,
     value: DishFormValues[K],
@@ -338,6 +371,10 @@ function AdminDishesPage() {
     const existingImage = dishes.find((dish) => dish.id === editingId)?.imageUrl;
     setImagePreview(existingImage ? `${apiBaseUrl}${existingImage}` : null);
   }, [dishes, editingId, selectedImage]);
+
+  if (chefView) {
+    return <ChefAvailabilityPage />;
+  }
 
   return (
     <div className="app-shell admin-shell">
@@ -607,6 +644,12 @@ function AdminDishesPage() {
                   <button type="button" onClick={() => void loadDishes()}>Try again</button>
                 </div>
               )}
+              {availabilityError && (
+                <div className="admin-error" role="alert">
+                  <span>{availabilityError}</span>
+                  <button type="button" onClick={() => setAvailabilityError(null)}>Dismiss</button>
+                </div>
+              )}
               <div className="admin-list-heading">
                 <div><h2 id="admin-list-title">All dishes</h2></div>
               </div>
@@ -637,17 +680,25 @@ function AdminDishesPage() {
                             <td>{dish.category}</td>
                             <td className="admin-price">{formatPrice(dish.price)}</td>
                             <td>
-                              <label className="admin-availability-switch admin-table-availability">
+                              <span className={`availability-badge ${dish.isAvailable ? "available" : "unavailable"}`}>
+                                <span className="availability-dot" aria-hidden="true" />{dish.isAvailable ? "Available" : "Unavailable"}
+                              </span>
+                              <label className="admin-switch-label admin-row-availability-switch">
                                 <input
                                   type="checkbox"
-                                  role="switch"
                                   checked={dish.isAvailable}
-                                  disabled={updatingAvailabilityId !== null}
-                                  aria-label={`Set ${dish.name} ${dish.isAvailable ? "unavailable" : "available"}`}
-                                  onChange={() => void toggleDishAvailability(dish)}
+                                  disabled={updatingAvailability.has(dish.id)}
+                                  aria-label={`${dish.isAvailable ? "Stop listing" : "Re-enable"} ${dish.name} for new orders`}
+                                  onChange={(event) => void changeAvailability(dish, event.target.checked)}
                                 />
-                                <span className="admin-switch-track" aria-hidden="true"><span /></span>
-                                <span className="admin-switch-copy">{dish.isAvailable ? "Available" : "Unavailable"}</span>
+                                <span className="admin-switch" aria-hidden="true" />
+                                <span>
+                                  {updatingAvailability.has(dish.id)
+                                    ? "Saving..."
+                                    : dish.isAvailable
+                                      ? "Stop list"
+                                      : "Re-enable"}
+                                </span>
                               </label>
                             </td>
                             <td className="admin-action-cell"><button type="button" className="admin-edit-button" onClick={() => void startEdit(dish.id)}>Edit</button></td>
