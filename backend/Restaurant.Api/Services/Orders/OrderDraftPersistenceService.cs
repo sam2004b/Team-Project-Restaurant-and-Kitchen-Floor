@@ -11,6 +11,9 @@ public enum OrderWriteStatus
     Created,
     ExistingOpen,
     ItemAdded,
+    ItemUpdated,
+    ItemRemoved,
+    ItemNotFound,
     Sent,
     AlreadySent,
     NotAccessible,
@@ -142,6 +145,73 @@ public sealed class OrderDraftPersistenceService
         await _db.SaveChangesAsync(ct);
         await CommitAsync(tx, ct);
         return new(OrderWriteStatus.ItemAdded, order.Id, item.Id);
+    }
+
+    /// <summary>
+    /// Change one line's quantity and instructions while the order is Open.
+    /// A line can be edited only by the waiter currently assigned to its table.
+    /// </summary>
+    public async Task<OrderWriteResult> UpdateItemAsync(
+        int restaurantId, int waiterMembershipId, int orderId,
+        int itemId, int quantity, string? specialRequest,
+        CancellationToken ct = default)
+    {
+        if (orderId <= 0 || itemId <= 0 || quantity <= 0 ||
+            specialRequest?.Length > 500)
+            return new(OrderWriteStatus.InvalidItem,
+                Error: "Order/item IDs and quantity must be positive; notes max 500 characters.");
+
+        await using var tx = await LockRestaurantAsync(restaurantId, ct);
+        var order = await GetAccessibleOrderAsync(
+            restaurantId, waiterMembershipId, orderId, ct);
+        if (order is null)
+            return new(OrderWriteStatus.NotAccessible);
+        if (order.Status != RestaurantOrderStates.Open)
+            return new(OrderWriteStatus.OrderNotOpen, order.Id);
+
+        var item = await _db.OrderItems.SingleOrDefaultAsync(
+            i => i.Id == itemId && i.OrderId == orderId, ct);
+        if (item is null)
+            return new(OrderWriteStatus.ItemNotFound, order.Id);
+
+        var dish = await GetDishWithReadLockAsync(item.DishId, ct);
+        if (dish is null || !dish.IsAvailable)
+            return new(OrderWriteStatus.DishUnavailable, order.Id);
+
+        item.Quantity = quantity;
+        item.SpecialRequest = string.IsNullOrWhiteSpace(specialRequest)
+            ? null : specialRequest.Trim();
+        await _db.SaveChangesAsync(ct);
+        await CommitAsync(tx, ct);
+        return new(OrderWriteStatus.ItemUpdated, order.Id, item.Id);
+    }
+
+    /// <summary>Remove one item from an Open order; sending still rejects empty orders.</summary>
+    public async Task<OrderWriteResult> RemoveItemAsync(
+        int restaurantId, int waiterMembershipId, int orderId,
+        int itemId, CancellationToken ct = default)
+    {
+        if (orderId <= 0 || itemId <= 0)
+            return new(OrderWriteStatus.InvalidItem,
+                Error: "Order and item IDs must be positive.");
+
+        await using var tx = await LockRestaurantAsync(restaurantId, ct);
+        var order = await GetAccessibleOrderAsync(
+            restaurantId, waiterMembershipId, orderId, ct);
+        if (order is null)
+            return new(OrderWriteStatus.NotAccessible);
+        if (order.Status != RestaurantOrderStates.Open)
+            return new(OrderWriteStatus.OrderNotOpen, order.Id);
+
+        var item = await _db.OrderItems.SingleOrDefaultAsync(
+            i => i.Id == itemId && i.OrderId == orderId, ct);
+        if (item is null)
+            return new(OrderWriteStatus.ItemNotFound, order.Id);
+
+        _db.OrderItems.Remove(item);
+        await _db.SaveChangesAsync(ct);
+        await CommitAsync(tx, ct);
+        return new(OrderWriteStatus.ItemRemoved, order.Id, item.Id);
     }
 
     /// <summary>Durably change a non-empty Open order to Sent at most once.</summary>
