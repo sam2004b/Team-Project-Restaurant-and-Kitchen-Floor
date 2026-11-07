@@ -613,16 +613,6 @@ button {
   background: #eaf1e9;
 }
 
-.refresh-button {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #7a9a87;
-  padding: 8px 0;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
 .refresh-error button {
   border: 1px solid rgba(35, 77, 66, 0.2);
   border-radius: 999px;
@@ -630,11 +620,6 @@ button {
   color: var(--green);
   padding: 12px 18px;
   font-weight: 700;
-}
-
-.refresh-button:disabled {
-  cursor: wait;
-  opacity: 1;
 }
 
 .admin-page {
@@ -1026,6 +1011,37 @@ button {
 .admin-availability-switch input:focus-visible + .admin-switch-track {
   outline: 3px solid rgba(35, 77, 66, 0.3);
   outline-offset: 2px;
+}
+
+.admin-table-availability {
+  width: max-content;
+  gap: 8px !important;
+}
+
+.admin-table-availability .admin-switch-track {
+  width: 38px;
+  height: 22px;
+}
+
+.admin-table-availability .admin-switch-track span {
+  width: 16px;
+  height: 16px;
+}
+
+.admin-table-availability input:checked + .admin-switch-track span {
+  transform: translateX(16px);
+}
+
+.admin-table-availability .admin-switch-copy {
+  min-width: 72px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.admin-table-availability:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .admin-switch-copy {
@@ -1929,9 +1945,17 @@ select:focus-visible {
   grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.7fr) auto;
 }
 
+.staff-profile-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
 .staff-form label,
 .staff-restaurant-form label,
-.staff-invite-form label {
+.staff-invite-form label,
+.staff-profile-form label {
   display: grid;
   gap: 6px;
   color: var(--text);
@@ -1943,6 +1967,7 @@ select:focus-visible {
 .staff-restaurant-form input,
 .staff-invite-form input,
 .staff-invite-form select,
+.staff-profile-form input,
 .staff-role-control select {
   width: 100%;
   min-height: 38px;
@@ -1956,7 +1981,8 @@ select:focus-visible {
 
 .staff-form .primary-button,
 .staff-restaurant-form .primary-button,
-.staff-invite-form .primary-button {
+.staff-invite-form .primary-button,
+.staff-profile-form .primary-button {
   min-height: 38px;
   font-size: 0.75rem;
 }
@@ -2200,7 +2226,8 @@ select:focus-visible {
 }
 
 @media (max-width: 720px) {
-  .staff-invite-form {
+  .staff-invite-form,
+  .staff-profile-form {
     grid-template-columns: 1fr;
   }
 }
@@ -2239,8 +2266,7 @@ select:focus-visible {
   color: #a94731;
 }
 
-.hero-status-row.availability-changed .status-pill,
-.hero-status-row.availability-changed .refresh-button {
+.hero-status-row.availability-changed .status-pill {
   color: #a94731;
 }
 

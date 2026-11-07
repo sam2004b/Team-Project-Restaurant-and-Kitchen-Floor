@@ -1,3 +1,4 @@
+using Restaurant.Api.Security;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -27,8 +28,11 @@ public sealed class RestaurantAccessService
     {
         var userId = _users.GetUserId(principal);
 
-        if (userId is null || restaurantId <= 0)
-            return Task.FromResult(false);
+        if (userId is null ||
+    !StaffSessionScope.Matches(principal, restaurantId))
+    {
+    return Task.FromResult(false);
+    }
 
         return _db.StaffMemberships.AnyAsync(
             m =>
@@ -48,8 +52,11 @@ public sealed class RestaurantAccessService
     {
         var userId = _users.GetUserId(principal);
 
-        if (userId is null || restaurantId <= 0)
-            return Task.FromResult(false);
+        if (userId is null ||
+    !StaffSessionScope.Matches(principal, restaurantId))
+    {
+    return Task.FromResult(false);
+    }
 
         return _db.StaffMemberships
             .AsNoTracking()
@@ -74,8 +81,11 @@ public sealed class RestaurantAccessService
     {
         var userId = _users.GetUserId(principal);
 
-        if (userId is null || restaurantId <= 0)
-            return Task.FromResult(false);
+       if (userId is null ||
+    !StaffSessionScope.Matches(principal, restaurantId))
+    {
+    return Task.FromResult(false);
+    }
 
         return _db.StaffMemberships
             .AsNoTracking()

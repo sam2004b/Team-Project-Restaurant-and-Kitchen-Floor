@@ -145,7 +145,7 @@ function MenuPage() {
 
   const displayDishes = visibleDishes;
 
-  const dishCountText = useMemo(() => `${dishes.length} dishes available`, [dishes.length]);
+  
 
   return (
     <div className="app-shell">
@@ -156,13 +156,6 @@ function MenuPage() {
             <h1>PLATE Restaurant</h1>
             <p className="subtitle">Explore our menu by category</p>
 
-            <div className={`hero-status-row ${recentlyUnavailable ? "availability-changed" : ""}`}>
-              <div className="status-pill" aria-live="polite">
-                <span className="status-dot" aria-hidden="true" />
-                <span>{loading ? "Updating menu..." : dishCountText}</span>
-              </div>
-              <span className="refresh-button">{recentlyUnavailable ? "Availability changed" : "Updated menu"}</span>
-            </div>
           </div>
         </section>
 
@@ -182,7 +175,6 @@ function MenuPage() {
 
         <section className="menu-header">
           <h2>Available dishes</h2>
-          <div className="meta-text">{dishes.length} items · showing featured dishes</div>
         </section>
 
         {loading ? (

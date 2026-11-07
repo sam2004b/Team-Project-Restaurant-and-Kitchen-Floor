@@ -106,6 +106,9 @@ public static class DatabaseSeeder
 
         await SeedRestaurantsAndStaffAsync(db, userManager);
 
+        // S2-US7-T01: Ivan and Anna share one restaurant, with different roles.
+        await SeedRoleSpecificStaffAsync(db, userManager, password);
+
 
         await SeedRestaurantSettingsAndTablesAsync(db);
 
@@ -418,6 +421,62 @@ if (!claims.Any(c =>
                 Role = StaffRoleNames.Waiter,
                 Status = InvitationStatus.Pending
             });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+
+    private static async Task SeedRoleSpecificStaffAsync(
+        RestaurantDbContext db,
+        UserManager<IdentityUser> userManager,
+        string seedPassword)
+    {
+        var restaurant = await db.Restaurants.SingleAsync(
+            r => r.NormalizedName == "BISTRO 21");
+
+        var staff = new[]
+        {
+            (Username: "ivan", Email: "ivan@restaurant.test",
+             Role: StaffRoleNames.Waiter),
+            (Username: "maria", Email: "maria@restaurant.test",
+             Role: StaffRoleNames.Waiter),
+            (Username: "anna", Email: "anna@restaurant.test",
+             Role: StaffRoleNames.Chef)
+        };
+
+        foreach (var entry in staff)
+        {
+            var user = await userManager.FindByNameAsync(entry.Username);
+            if (user is null)
+            {
+                user = new IdentityUser
+                {
+                    UserName = entry.Username,
+                    Email = entry.Email,
+                    EmailConfirmed = true,
+                    LockoutEnabled = true
+                };
+                EnsureSuccess(await userManager.CreateAsync(user, seedPassword));
+            }
+
+            if (!await userManager.IsInRoleAsync(user, entry.Role))
+                EnsureSuccess(await userManager.AddToRoleAsync(user, entry.Role));
+
+            var existing = await db.StaffMemberships.SingleOrDefaultAsync(
+                m => m.RestaurantId == restaurant.Id && m.UserId == user.Id);
+
+            // Never automatically reactivate a revoked employee on reseed.
+            if (existing is null)
+            {
+                db.StaffMemberships.Add(new StaffMembership
+                {
+                    RestaurantId = restaurant.Id,
+                    UserId = user.Id,
+                    Role = entry.Role,
+                    Status = MembershipStatus.Active
+                });
+            }
         }
 
         await db.SaveChangesAsync();

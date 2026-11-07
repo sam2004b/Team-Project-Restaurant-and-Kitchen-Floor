@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurant.Api.Services.Administration;
 using Restaurant.Api.Services.Menu;
+using Restaurant.Api.Security;
 
 namespace Restaurant.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = StaffRolePolicies.WaiterOnly)]
 [Route("waiter/dishes")]
 public sealed class WaiterMenuController
     : ControllerBase

@@ -27,6 +27,8 @@ namespace Restaurant.Api.Data
         public DbSet<StaffInvitation> StaffInvitations =>
             Set<StaffInvitation>();
 
+        public DbSet<StaffSession> StaffSessions => 
+            Set<StaffSession>();
 
         public DbSet<RestaurantSettings> RestaurantSettings =>
             Set<RestaurantSettings>();
@@ -36,6 +38,12 @@ namespace Restaurant.Api.Data
 
         public DbSet<TableStaffAssignment> TableStaffAssignments =>
             Set<TableStaffAssignment>();
+
+        public DbSet<RestaurantOrder> Orders =>
+            Set<RestaurantOrder>();
+
+        public DbSet<RestaurantOrderItem> OrderItems =>
+            Set<RestaurantOrderItem>();
 
 
 
@@ -236,6 +244,37 @@ namespace Restaurant.Api.Data
                  .HasFilter("\"TokenHash\" IS NOT NULL");
             });
 
+            // S2-US7-T01: revocable, restaurant-scoped Identity sessions.
+            modelBuilder.Entity<StaffSession>(entity =>
+            {
+                entity.ToTable("staff_sessions", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_staff_sessions_expiry",
+                        "\"ExpiresAtUtc\" > \"CreatedAtUtc\"");
+                });
+
+                entity.HasKey(s => s.Id);
+                entity.Property(s => s.UserId).IsRequired();
+                entity.Property(s => s.CreatedAtUtc).IsRequired();
+                entity.Property(s => s.ExpiresAtUtc).IsRequired();
+
+                entity.HasOne(s => s.User)
+                    .WithMany()
+                    .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // A session's restaurant must be the membership's restaurant.
+                entity.HasOne(s => s.StaffMembership)
+                    .WithMany()
+                    .HasForeignKey(s => new { s.RestaurantId, s.StaffMembershipId })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(s => new { s.UserId, s.RevokedAtUtc });
+                entity.HasIndex(s => new { s.RestaurantId, s.StaffMembershipId });
+            });
+
 
             modelBuilder.Entity<RestaurantSettings>(entity =>
             {
@@ -357,6 +396,110 @@ namespace Restaurant.Api.Data
                     a.StaffMembershipId
                 });
             });
+
+
+            modelBuilder.Entity<RestaurantOrder>(entity =>
+            {
+                entity.HasKey(o => o.Id);
+
+                entity.Property(o => o.CreatedAtUtc)
+                    .IsRequired();
+
+                // Older US-8 order headers become Legacy when this migration
+                // adds the non-null column. New orders explicitly set Open.
+                entity.Property(o => o.Status)
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasDefaultValue(RestaurantOrderStates.Legacy);
+
+                entity.ToTable("orders", table =>
+                {
+                    table.HasCheckConstraint("CK_orders_state",
+                        "\"Status\" IN ('Legacy', 'Open', 'Sent')");
+                    table.HasCheckConstraint("CK_orders_sent_consistency",
+                        "(\"Status\" = 'Sent' AND \"SentAtUtc\" IS NOT NULL) " +
+                        "OR (\"Status\" <> 'Sent' AND \"SentAtUtc\" IS NULL)");
+                    table.HasCheckConstraint("CK_orders_sent_after_created",
+                        "\"SentAtUtc\" IS NULL OR \"SentAtUtc\" >= \"CreatedAtUtc\"");
+                });
+
+                entity.HasIndex(o => new { o.RestaurantId, o.DiningTableId })
+                    .IsUnique()
+                    .HasDatabaseName("UX_orders_one_open_per_table")
+                    .HasFilter("\"Status\" = 'Open'");
+
+                // Order and table must belong
+                // to the same restaurant.
+                entity.HasOne(o => o.DiningTable)
+                    .WithMany()
+                    .HasForeignKey(o => new
+                    {
+                        o.RestaurantId,
+                        o.DiningTableId
+                    })
+                    .HasPrincipalKey(t => new
+                    {
+                        t.RestaurantId,
+                        t.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Original waiter membership must
+                // belong to the same restaurant.
+                entity.HasOne(o => o.CreatedByStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(o => new
+                    {
+                        o.RestaurantId,
+                        o.CreatedByStaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new
+                    {
+                        m.RestaurantId,
+                        m.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(o => new
+                {
+                    o.RestaurantId,
+                    o.DiningTableId,
+                    o.CreatedAtUtc
+                });
+            });
+
+            modelBuilder.Entity<RestaurantOrderItem>(entity =>
+            {
+                entity.ToTable("order_items", table =>
+                {
+                    table.HasCheckConstraint("CK_order_items_quantity_positive",
+                        "\"Quantity\" > 0");
+                    table.HasCheckConstraint("CK_order_items_price_positive",
+                        "\"UnitPriceSnapshot\" > 0");
+                });
+
+                entity.HasKey(i => i.Id);
+                entity.Property(i => i.Quantity).IsRequired();
+                entity.Property(i => i.SpecialRequest).HasMaxLength(500);
+                entity.Property(i => i.DishNameSnapshot)
+                    .IsRequired().HasMaxLength(150);
+                entity.Property(i => i.UnitPriceSnapshot).HasPrecision(10, 2);
+                entity.Property(i => i.CreatedAtUtc).IsRequired();
+
+                entity.HasOne(i => i.Order)
+                    .WithMany(o => o.Items)
+                    .HasForeignKey(i => i.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(i => i.Dish)
+                    .WithMany()
+                    .HasForeignKey(i => i.DishId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(i => i.OrderId);
+                entity.HasIndex(i => i.DishId);
+            });
+
 
         }
     }

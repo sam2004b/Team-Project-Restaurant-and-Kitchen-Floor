@@ -6,6 +6,7 @@ public sealed class LoginRequest
 {
     [Required] public string? Username { get; set; }
     [Required] public string? Password { get; set; }
+    public int? RestaurantId { get; set; }
 }
 
 public sealed class CreateRestaurantRequest

@@ -361,6 +361,104 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatedByStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Legacy");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "CreatedByStaffMembershipId");
+
+                    b.HasIndex("RestaurantId", "DiningTableId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_orders_one_open_per_table")
+                        .HasFilter("\"Status\" = 'Open'");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "CreatedAtUtc");
+
+                    b.ToTable("orders", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_orders_sent_after_created", "\"SentAtUtc\" IS NULL OR \"SentAtUtc\" >= \"CreatedAtUtc\"");
+
+                            t.HasCheckConstraint("CK_orders_sent_consistency", "(\"Status\" = 'Sent' AND \"SentAtUtc\" IS NOT NULL) OR (\"Status\" <> 'Sent' AND \"SentAtUtc\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_orders_state", "\"Status\" IN ('Legacy', 'Open', 'Sent')");
+                        });
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrderItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DishId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DishNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SpecialRequest")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("UnitPriceSnapshot")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DishId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("order_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_order_items_price_positive", "\"UnitPriceSnapshot\" > 0");
+
+                            t.HasCheckConstraint("CK_order_items_quantity_positive", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantSettings", b =>
                 {
                     b.Property<int>("RestaurantId")
@@ -489,6 +587,46 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.StaffSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("text");
+
+                    b.Property<int>("StaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "StaffMembershipId");
+
+                    b.HasIndex("UserId", "RevokedAtUtc");
+
+                    b.ToTable("staff_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_staff_sessions_expiry", "\"ExpiresAtUtc\" > \"CreatedAtUtc\"");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.TableStaffAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -595,6 +733,46 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("Dish");
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "CreatedByStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "CreatedByStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.DiningTable", "DiningTable")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByStaffMembership");
+
+                    b.Navigation("DiningTable");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrderItem", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.Dish", "Dish")
+                        .WithMany()
+                        .HasForeignKey("DishId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Dish");
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantSettings", b =>
                 {
                     b.HasOne("Restaurant.Api.Models.RestaurantAccount", "Restaurant")
@@ -636,6 +814,26 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.StaffSession", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "StaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "StaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StaffMembership");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.TableStaffAssignment", b =>
                 {
                     b.HasOne("Restaurant.Api.Models.DiningTable", "DiningTable")
@@ -672,6 +870,11 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("Invitations");
 
                     b.Navigation("StaffMembers");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

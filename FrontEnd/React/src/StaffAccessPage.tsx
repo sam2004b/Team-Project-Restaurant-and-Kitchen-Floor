@@ -7,6 +7,7 @@ import {
   clearStoredAccessToken,
   createRestaurant,
   getCurrentAccount,
+  getRestaurantProfile,
   getRestaurantStaff,
   getStoredAccessToken,
   inviteStaff,
@@ -14,8 +15,10 @@ import {
   revokeStaffInvitation,
   setStaffMembershipStatus,
   storeAccessToken,
+  updateRestaurantProfile,
   type AcceptedInvitationResponse,
   type AccountResponse,
+  type RestaurantResponse,
   type StaffInvitationResponse,
   type StaffMemberResponse,
 } from "./services/api";
@@ -197,6 +200,77 @@ function CreateRestaurantPanel({
   );
 }
 
+function RestaurantProfilePanel({
+  profile,
+  loading,
+  notice,
+  onRefresh,
+  onSave,
+}: {
+  profile: RestaurantResponse | null;
+  loading: boolean;
+  notice: Notice | null;
+  onRefresh: () => void;
+  onSave: (name: string, address: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name);
+      setAddress(profile.address);
+    }
+  }, [profile]);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(name.trim(), address.trim());
+    } catch {
+      // The parent displays the API error in the profile panel.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="staff-card" aria-labelledby="restaurant-profile-title">
+      <div className="staff-card-heading">
+        <div>
+          <p className="eyebrow">RESTAURANT PROFILE</p>
+          <h2 id="restaurant-profile-title">Restaurant details</h2>
+        </div>
+        <button type="button" className="secondary-button" onClick={onRefresh} disabled={loading || saving}>
+          {loading ? "Loading..." : "Refresh"}
+        </button>
+      </div>
+      {notice && <p className={`staff-notice ${notice.type}`} role={notice.type === "error" ? "alert" : "status"}>{notice.message}</p>}
+      {loading && !profile ? (
+        <p className="staff-empty" role="status">Loading restaurant profile...</p>
+      ) : profile ? (
+        <form className="staff-profile-form" onSubmit={(event) => void submit(event)}>
+          <label>
+            Restaurant name
+            <input required maxLength={150} value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            Address
+            <input required maxLength={300} value={address} onChange={(event) => setAddress(event.target.value)} />
+          </label>
+          <button type="submit" className="primary-button" disabled={saving || loading}>
+            {saving ? "Saving..." : "Save profile"}
+          </button>
+        </form>
+      ) : (
+        <p className="staff-empty" role="status">Restaurant profile is unavailable.</p>
+      )}
+    </section>
+  );
+}
+
 function StaffDirectory({
   restaurantId,
   members,
@@ -307,6 +381,9 @@ function StaffManagementPage() {
   const [authNotice, setAuthNotice] = useState<Notice | null>(null);
   const [restaurantIdInput, setRestaurantIdInput] = useState("");
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
+  const [restaurantProfile, setRestaurantProfile] = useState<RestaurantResponse | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileNotice, setProfileNotice] = useState<Notice | null>(null);
   const [members, setMembers] = useState<StaffMemberResponse[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffNotice, setStaffNotice] = useState<Notice | null>(null);
@@ -383,6 +460,8 @@ function StaffManagementPage() {
       setAccount(null);
       setMembers([]);
       setRestaurantId(null);
+      setRestaurantProfile(null);
+      setProfileNotice(null);
       setRestaurantIdInput("");
       setRoleDrafts({});
       setStaffNotice(null);
@@ -415,6 +494,21 @@ function StaffManagementPage() {
     }
   };
 
+  const refreshProfile = async (id = restaurantId) => {
+    if (!id) return;
+    setProfileLoading(true);
+    setProfileNotice(null);
+    try {
+      setRestaurantProfile(await getRestaurantProfile(id));
+    } catch (error) {
+      setRestaurantProfile(null);
+      setProfileNotice({ type: "error", message: getErrorMessage(error, "Could not load the restaurant profile.") });
+      throw error;
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const loadRestaurant = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const id = Number(restaurantIdInput);
@@ -423,17 +517,17 @@ function StaffManagementPage() {
       return;
     }
     try {
-      await refreshStaff(id);
+      await Promise.all([refreshStaff(id), refreshProfile(id)]);
       setStaffNotice({ type: "success", message: `Memberships refreshed from the server for restaurant #${id}.` });
     } catch {
-      // refreshStaff already reports the API error.
+      // Each panel reports its own API error.
     }
   };
 
   const onRestaurantCreated = async (id: number) => {
     setRestaurantIdInput(String(id));
     try {
-      await refreshStaff(id);
+      await Promise.all([refreshStaff(id), refreshProfile(id)]);
     } catch {
       setStaffNotice({
         type: "warning",
@@ -442,11 +536,29 @@ function StaffManagementPage() {
     }
   };
 
+  const saveProfile = async (name: string, address: string) => {
+    if (!restaurantId) return;
+    if (!name || !address) {
+      setProfileNotice({ type: "error", message: "Restaurant name and address are required." });
+      return;
+    }
+    setProfileNotice(null);
+    try {
+      setRestaurantProfile(await updateRestaurantProfile(restaurantId, name, address));
+      setProfileNotice({ type: "success", message: "Restaurant profile updated." });
+    } catch (error) {
+      setProfileNotice({ type: "error", message: `Profile was not updated: ${getErrorMessage(error, "request failed.")}` });
+      throw error;
+    }
+  };
+
   const updateRestaurantIdInput = (value: string) => {
     setRestaurantIdInput(value);
     if (Number(value) !== restaurantId) {
       setRestaurantId(null);
       setMembers([]);
+      setRestaurantProfile(null);
+      setProfileNotice(null);
       setRoleDrafts({});
       setLastInvitation(null);
       setStaffNotice(null);
@@ -612,6 +724,13 @@ function StaffManagementPage() {
 
             {restaurantId && (
               <>
+                <RestaurantProfilePanel
+                  profile={restaurantProfile}
+                  loading={profileLoading}
+                  notice={profileNotice}
+                  onRefresh={() => void refreshProfile()}
+                  onSave={saveProfile}
+                />
                 <section className="staff-card" aria-labelledby="invite-title">
                   <div className="staff-card-heading">
                     <div>

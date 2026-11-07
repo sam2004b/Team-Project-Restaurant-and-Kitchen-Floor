@@ -339,6 +339,47 @@ function AdminDishesPage() {
     }
   };
 
+  const toggleDishAvailability = async (dish: DishDetailsResponse) => {
+    if (updatingAvailabilityId !== null) {
+      return;
+    }
+
+    const isAvailable = !dish.isAvailable;
+    setUpdatingAvailabilityId(dish.id);
+    setSaveNotice(null);
+
+    try {
+      const updatedDish = await updateDish(dish.id, {
+        name: dish.name,
+        price: dish.price,
+        description: dish.description ?? "",
+        category: dish.category,
+        isAvailable,
+        ingredients: dish.ingredients,
+      });
+
+      setDishes((current) =>
+        current.map((item) => item.id === updatedDish.id ? updatedDish : item),
+      );
+      setSavedDish((current) => current?.id === updatedDish.id ? updatedDish : current);
+      setSaveNotice({
+        message: `${updatedDish.name} is now ${updatedDish.isAvailable ? "available" : "unavailable"}.`,
+        isWarning: false,
+        title: "Availability updated",
+      });
+    } catch (caughtError) {
+      setSaveNotice({
+        message: caughtError instanceof Error
+          ? `Could not update availability: ${caughtError.message}`
+          : "Could not update dish availability.",
+        isWarning: true,
+        title: "Could not update availability",
+      });
+    } finally {
+      setUpdatingAvailabilityId(null);
+    }
+  };
+
   const updateForm = <K extends keyof DishFormValues>(
     key: K,
     value: DishFormValues[K],
@@ -630,7 +671,7 @@ function AdminDishesPage() {
               {saveNotice && (
                 <div className={`admin-save-notice ${saveNotice.isWarning ? "warning" : ""}`} role="status">
                   <span className="admin-save-icon" aria-hidden="true">{saveNotice.isWarning ? "!" : "✓"}</span>
-                  <span><strong>{saveNotice.isWarning ? "Dish saved with a photo warning" : "Dish saved successfully"}</strong><small>{saveNotice.message}</small></span>
+                  <span><strong>{saveNotice.title ?? (saveNotice.isWarning ? "Dish saved with a photo warning" : "Dish saved successfully")}</strong><small>{saveNotice.message}</small></span>
                   <button type="button" aria-label="Dismiss message" onClick={() => setSaveNotice(null)}>×</button>
                 </div>
               )}

@@ -1,5 +1,7 @@
 using Restaurant.Api.Security;
 using Restaurant.Api.Services.Dishes;
+using Restaurant.Api.Services.Waiter;
+using Restaurant.Api.Services.Orders;
 using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
@@ -53,7 +55,10 @@ builder.Services
 
 builder.Services
     .AddAuthentication(IdentityConstants.BearerScheme)
-    .AddBearerToken(IdentityConstants.BearerScheme);
+    .AddBearerToken(IdentityConstants.BearerScheme, options =>
+    {
+        options.BearerTokenExpiration = TimeSpan.FromHours(1);
+    });
 
 // ==========================================
 // 4. AUTHORIZATION
@@ -66,6 +71,8 @@ builder.Services.AddAuthorization(options =>
               .RequireClaim(
                   "permission",
                   "restaurants:create"));
+
+    StaffRolePolicies.Configure(options);
 });
 
 // ==========================================
@@ -116,6 +123,12 @@ builder.Services.AddScoped<
     IDishAvailabilityService,
     DishAvailabilityService>();
 
+builder.Services.AddScoped<
+    WaiterTableQueryService>();
+
+// S2-US12-T01: DB-backed order draft and send-state persistence.
+builder.Services.AddScoped<OrderDraftPersistenceService>();
+builder.Services.AddScoped<OrderDetailsQueryService>();
 
 
 builder.Services.AddEndpointsApiExplorer();
@@ -175,10 +188,13 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddScoped<MenuAdminGuard>();
 
 builder.Services.AddScoped<OrderDishAvailabilityValidator>();
+
+builder.Services.AddScoped<StaffSessionValidator>();
+
 // ==========================================
 // 9. BUILD APPLICATION
 // ==========================================
- 
+
 var app = builder.Build();
 
 // ==========================================
@@ -252,6 +268,9 @@ app.UseStaticFiles();
 app.UseCors();
 
 app.UseAuthentication();
+
+// Validate the employee's current database session.
+app.UseMiddleware<StaffSessionMiddleware>();
 
 app.UseAuthorization();
 
