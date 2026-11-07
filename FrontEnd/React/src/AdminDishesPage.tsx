@@ -115,7 +115,11 @@ function AdminDishesPage() {
   const [ingredientDraft, setIngredientDraft] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [savedDish, setSavedDish] = useState<DishDetailsResponse | null>(null);
-  const [saveNotice, setSaveNotice] = useState<{ message: string; isWarning: boolean } | null>(null);
+  const [saveNotice, setSaveNotice] = useState<{
+    message: string;
+    isWarning: boolean;
+    title?: string;
+  } | null>(null);
   const dishLoadVersion = useRef(0);
 
   const loadDishes = async (showLoading = true): Promise<boolean> => {
@@ -336,47 +340,6 @@ function AdminDishesPage() {
       }
     } finally {
       setSaving(false);
-    }
-  };
-
-  const toggleDishAvailability = async (dish: DishDetailsResponse) => {
-    if (updatingAvailabilityId !== null) {
-      return;
-    }
-
-    const isAvailable = !dish.isAvailable;
-    setUpdatingAvailabilityId(dish.id);
-    setSaveNotice(null);
-
-    try {
-      const updatedDish = await updateDish(dish.id, {
-        name: dish.name,
-        price: dish.price,
-        description: dish.description ?? "",
-        category: dish.category,
-        isAvailable,
-        ingredients: dish.ingredients,
-      });
-
-      setDishes((current) =>
-        current.map((item) => item.id === updatedDish.id ? updatedDish : item),
-      );
-      setSavedDish((current) => current?.id === updatedDish.id ? updatedDish : current);
-      setSaveNotice({
-        message: `${updatedDish.name} is now ${updatedDish.isAvailable ? "available" : "unavailable"}.`,
-        isWarning: false,
-        title: "Availability updated",
-      });
-    } catch (caughtError) {
-      setSaveNotice({
-        message: caughtError instanceof Error
-          ? `Could not update availability: ${caughtError.message}`
-          : "Could not update dish availability.",
-        isWarning: true,
-        title: "Could not update availability",
-      });
-    } finally {
-      setUpdatingAvailabilityId(null);
     }
   };
 
