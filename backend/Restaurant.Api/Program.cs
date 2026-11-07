@@ -128,6 +128,7 @@ builder.Services.AddScoped<
 
 // S2-US12-T01: DB-backed order draft and send-state persistence.
 builder.Services.AddScoped<OrderDraftPersistenceService>();
+builder.Services.AddScoped<OrderDetailsQueryService>();
 
 
 builder.Services.AddEndpointsApiExplorer();
