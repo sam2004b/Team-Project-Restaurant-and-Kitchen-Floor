@@ -667,6 +667,7 @@ function StaffManagementPage() {
         <Link className="admin-sidebar-link" to="/">Overview</Link>
         <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
         <span className="admin-sidebar-link active" aria-current="page">Staff and access</span>
+        <Link className="admin-sidebar-link" to="/admin/settings">Settings</Link>
         <div className="admin-profile">
           <span className="admin-avatar" aria-hidden="true">
             {(account?.userName?.slice(0, 2) || "ST").toUpperCase()}
