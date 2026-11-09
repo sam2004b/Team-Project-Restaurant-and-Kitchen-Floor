@@ -3,15 +3,13 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   ApiError,
-  createDiningTable,
-  createRestaurantSettings,
   getDiningTables,
   getRestaurantSettings,
   getWaiterTables,
   removeTableAssignment,
+  saveDiningTable,
+  saveRestaurantSettings,
   saveTableAssignment,
-  updateDiningTable,
-  updateRestaurantSettings,
 } from "./services/api";
 import type {
   DiningTableResponse,
@@ -159,9 +157,11 @@ export function RestaurantConfigurationPanel({
     setSettingsError(null);
     setSettingsNotice(null);
     try {
-      const saved = settings
-        ? await updateRestaurantSettings(restaurantId, Number(seatCapacity))
-        : await createRestaurantSettings(restaurantId, Number(seatCapacity));
+      const saved = await saveRestaurantSettings(
+        restaurantId,
+        Number(seatCapacity),
+        settings === null,
+      );
       setSettings(saved);
       setSeatCapacity(String(saved.defaultSeatCapacity));
       const reloadedSettings = await refreshSettings();
@@ -195,12 +195,11 @@ export function RestaurantConfigurationPanel({
 
     setCreatingTable(true);
     try {
-      await createDiningTable(
-        restaurantId,
-        Number(tableNumberDraft),
-        Number(requestedSeatCount),
-        true,
-      );
+      await saveDiningTable(restaurantId, null, {
+        tableNumber: Number(tableNumberDraft),
+        seatCount: Number(requestedSeatCount),
+        isActive: true,
+      });
       if (await refreshTables()) {
         setTableNumberDraft("");
         setSeatCountDraft("");
@@ -234,13 +233,11 @@ export function RestaurantConfigurationPanel({
 
     setSavingTableId(table.id);
     try {
-      await updateDiningTable(
-        restaurantId,
-        table.id,
-        Number(draft.tableNumber),
-        Number(draft.seatCount),
-        draft.isActive,
-      );
+      await saveDiningTable(restaurantId, table.id, {
+        tableNumber: Number(draft.tableNumber),
+        seatCount: Number(draft.seatCount),
+        isActive: draft.isActive,
+      });
       const refreshed = await refreshTables();
       setTableNotice(refreshed
         ? { type: "success", message: `Table ${draft.tableNumber} saved and reloaded from the server.` }

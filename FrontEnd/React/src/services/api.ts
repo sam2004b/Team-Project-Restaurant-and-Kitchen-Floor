@@ -143,6 +143,10 @@ export interface WaiterTableResponse {
     seatCount: number;
 }
 
+export function getWaiterTables(): Promise<WaiterTableResponse[]> {
+    return apiGet<WaiterTableResponse[]>("/waiter/tables");
+}
+
 export interface StaffMemberResponse {
     id: number;
     restaurantId: number;
