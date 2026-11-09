@@ -83,6 +83,10 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
         return throwApiError(response);
     }
 
+    if (response.status === 204) {
+        return undefined as T;
+    }
+
     return (await response.json()) as T;
 }
 
@@ -109,6 +113,34 @@ export interface RestaurantResponse {
     id: number;
     name: string;
     address: string;
+}
+
+export interface RestaurantSettingsResponse {
+    restaurantId: number;
+    defaultSeatCapacity: number;
+    updatedAtUtc: string;
+}
+
+export interface DiningTableResponse {
+    id: number;
+    restaurantId: number;
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+    assignment: {
+        id: number;
+        staffMembershipId: number;
+        userName: string | null;
+        role: string;
+        membershipStatus: string;
+        assignedAtUtc: string;
+    } | null;
+}
+
+export interface WaiterTableResponse {
+    id: number;
+    tableNumber: number;
+    seatCount: number;
 }
 
 export interface StaffMemberResponse {
@@ -188,6 +220,85 @@ export function updateRestaurantProfile(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, address }),
     });
+}
+
+export function getRestaurantSettings(restaurantId: number): Promise<RestaurantSettingsResponse> {
+    return apiGet<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`);
+}
+
+export function createRestaurantSettings(
+    restaurantId: number,
+    defaultSeatCapacity: number,
+): Promise<RestaurantSettingsResponse> {
+    return apiRequest<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultSeatCapacity }),
+    });
+}
+
+export function updateRestaurantSettings(
+    restaurantId: number,
+    defaultSeatCapacity: number,
+): Promise<RestaurantSettingsResponse> {
+    return apiRequest<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultSeatCapacity }),
+    });
+}
+
+export function getDiningTables(restaurantId: number): Promise<DiningTableResponse[]> {
+    return apiGet<DiningTableResponse[]>(`/restaurants/${restaurantId}/tables`);
+}
+
+export function createDiningTable(
+    restaurantId: number,
+    tableNumber: number,
+    seatCount: number,
+    isActive: boolean,
+): Promise<DiningTableResponse> {
+    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableNumber, seatCount, isActive }),
+    });
+}
+
+export function updateDiningTable(
+    restaurantId: number,
+    tableId: number,
+    tableNumber: number,
+    seatCount: number,
+    isActive: boolean,
+): Promise<DiningTableResponse> {
+    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables/${tableId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableNumber, seatCount, isActive }),
+    });
+}
+
+export function saveTableAssignment(
+    restaurantId: number,
+    tableId: number,
+    staffMembershipId: number,
+): Promise<DiningTableResponse> {
+    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables/${tableId}/assignment`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffMembershipId }),
+    });
+}
+
+export function removeTableAssignment(restaurantId: number, tableId: number): Promise<void> {
+    return apiRequest<void>(`/restaurants/${restaurantId}/tables/${tableId}/assignment`, {
+        method: "DELETE",
+    });
+}
+
+export function getWaiterTables(): Promise<WaiterTableResponse[]> {
+    return apiGet<WaiterTableResponse[]>("/waiter/tables");
 }
 
 export function getRestaurantStaff(restaurantId: number): Promise<StaffMemberResponse[]> {

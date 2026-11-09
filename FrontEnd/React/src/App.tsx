@@ -7,6 +7,7 @@ import {
 import { Route, Routes } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
 import { AcceptInvitationPage, StaffManagementPage } from "./StaffAccessPage";
+import { WaiterTablesPage } from "./RestaurantConfigurationPanel";
 import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { formatPrice } from "./services/currency";
 
@@ -278,6 +279,7 @@ function App() {
       <Route path="/" element={<MenuPage />} />
       <Route path="/admin/dishes" element={<AdminDishesPage />} />
       <Route path="/admin/staff" element={<StaffManagementPage />} />
+      <Route path="/waiter/tables" element={<WaiterTablesPage />} />
       <Route path="/chef/availability" element={<ChefAvailabilityPage />} />
       <Route path="/chef/menu" element={<ChefAvailabilityPage />} />
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
