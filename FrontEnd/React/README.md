@@ -49,6 +49,13 @@ and revoke staff invitations, and change or refresh membership roles/status.
 The selected restaurant profile can also be loaded and updated from this page;
 profile changes require active administrator access.
 The bearer token is kept in browser session storage for the current tab session.
+After loading a restaurant, the staff workspace also loads and saves its default
+seat-capacity setting and table configuration through the restaurant API. Table
+number and seat-count inputs require positive whole numbers; server validation,
+including duplicate-number conflicts, is shown without a success state.
+Successful table and assignment changes reload server state. Waiters can view
+their current assigned tables and seat counts at
+`http://localhost:5173/waiter/tables`.
 Chef accounts can open `/chef/availability` or `/chef/menu` to view available
 dishes from the public menu API and change availability. Dishes stopped from
 this browser are saved locally so they can be re-enabled here. Full dish-detail
