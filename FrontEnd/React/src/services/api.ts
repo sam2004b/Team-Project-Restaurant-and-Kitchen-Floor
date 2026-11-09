@@ -115,6 +115,34 @@ export interface RestaurantResponse {
     address: string;
 }
 
+export interface RestaurantSettingsResponse {
+    restaurantId: number;
+    defaultSeatCapacity: number;
+    updatedAtUtc: string;
+}
+
+export interface DiningTableResponse {
+    id: number;
+    restaurantId: number;
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+    assignment: {
+        id: number;
+        staffMembershipId: number;
+        userName: string | null;
+        role: string;
+        membershipStatus: string;
+        assignedAtUtc: string;
+    } | null;
+}
+
+export interface WaiterTableResponse {
+    id: number;
+    tableNumber: number;
+    seatCount: number;
+}
+
 export interface StaffMemberResponse {
     id: number;
     restaurantId: number;

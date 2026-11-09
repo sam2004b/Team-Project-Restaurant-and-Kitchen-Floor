@@ -23,6 +23,7 @@ import {
   type StaffMemberResponse,
 } from "./services/api";
 import { ApiError } from "./services/api";
+import { RestaurantConfigurationPanel } from "./RestaurantConfigurationPanel";
 
 const staffRoles = [
   "Administrator",
@@ -666,6 +667,7 @@ function StaffManagementPage() {
         <div className="admin-sidebar-label">WORKSPACE</div>
         <Link className="admin-sidebar-link" to="/">Overview</Link>
         <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
+        <Link className="admin-sidebar-link" to="/admin/staff#restaurant-configuration">Restaurant settings and tables</Link>
         <span className="admin-sidebar-link active" aria-current="page">Staff and access</span>
         <Link className="admin-sidebar-link" to="/admin/settings">Settings</Link>
         <div className="admin-profile">
@@ -732,6 +734,7 @@ function StaffManagementPage() {
                   onRefresh={() => void refreshProfile()}
                   onSave={saveProfile}
                 />
+                <RestaurantConfigurationPanel key={restaurantId} restaurantId={restaurantId} members={members} />
                 <section className="staff-card" aria-labelledby="invite-title">
                   <div className="staff-card-heading">
                     <div>
