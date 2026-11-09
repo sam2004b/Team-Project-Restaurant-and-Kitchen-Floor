@@ -143,6 +143,10 @@ export interface WaiterTableResponse {
     seatCount: number;
 }
 
+export function getWaiterTables(): Promise<WaiterTableResponse[]> {
+    return apiGet<WaiterTableResponse[]>("/waiter/tables");
+}
+
 export interface StaffMemberResponse {
     id: number;
     restaurantId: number;
@@ -222,61 +226,68 @@ export function updateRestaurantProfile(
     });
 }
 
+export interface RestaurantSettingsResponse {
+    restaurantId: number;
+    defaultSeatCapacity: number;
+    updatedAtUtc: string;
+}
+
+export interface StaffAssignmentResponse {
+    id: number;
+    staffMembershipId: number;
+    userName: string | null;
+    role: string;
+    membershipStatus: string;
+    assignedAtUtc: string;
+}
+
+export interface DiningTableResponse {
+    id: number;
+    restaurantId: number;
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+    assignment: StaffAssignmentResponse | null;
+}
+
 export function getRestaurantSettings(restaurantId: number): Promise<RestaurantSettingsResponse> {
     return apiGet<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`);
 }
 
-export function createRestaurantSettings(
+export function saveRestaurantSettings(
     restaurantId: number,
     defaultSeatCapacity: number,
+    create: boolean,
 ): Promise<RestaurantSettingsResponse> {
-    return apiRequest<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ defaultSeatCapacity }),
-    });
-}
-
-export function updateRestaurantSettings(
-    restaurantId: number,
-    defaultSeatCapacity: number,
-): Promise<RestaurantSettingsResponse> {
-    return apiRequest<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ defaultSeatCapacity }),
-    });
+    return apiSend<RestaurantSettingsResponse>(
+        `/restaurants/${restaurantId}/settings`,
+        create ? "POST" : "PUT",
+        { defaultSeatCapacity },
+    );
 }
 
 export function getDiningTables(restaurantId: number): Promise<DiningTableResponse[]> {
     return apiGet<DiningTableResponse[]>(`/restaurants/${restaurantId}/tables`);
 }
 
-export function createDiningTable(
-    restaurantId: number,
-    tableNumber: number,
-    seatCount: number,
-    isActive: boolean,
-): Promise<DiningTableResponse> {
-    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableNumber, seatCount, isActive }),
-    });
+export interface SaveDiningTableRequest {
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
 }
 
-export function updateDiningTable(
+export function saveDiningTable(
     restaurantId: number,
-    tableId: number,
-    tableNumber: number,
-    seatCount: number,
-    isActive: boolean,
+    tableId: number | null,
+    request: SaveDiningTableRequest,
 ): Promise<DiningTableResponse> {
-    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables/${tableId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableNumber, seatCount, isActive }),
-    });
+    return apiSend<DiningTableResponse>(
+        tableId === null
+            ? `/restaurants/${restaurantId}/tables`
+            : `/restaurants/${restaurantId}/tables/${tableId}`,
+        tableId === null ? "POST" : "PUT",
+        request,
+    );
 }
 
 export function saveTableAssignment(
@@ -284,21 +295,18 @@ export function saveTableAssignment(
     tableId: number,
     staffMembershipId: number,
 ): Promise<DiningTableResponse> {
-    return apiRequest<DiningTableResponse>(`/restaurants/${restaurantId}/tables/${tableId}/assignment`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffMembershipId }),
-    });
+    return apiSend<DiningTableResponse>(
+        `/restaurants/${restaurantId}/tables/${tableId}/assignment`,
+        "PUT",
+        { staffMembershipId },
+    );
 }
 
 export function removeTableAssignment(restaurantId: number, tableId: number): Promise<void> {
-    return apiRequest<void>(`/restaurants/${restaurantId}/tables/${tableId}/assignment`, {
-        method: "DELETE",
-    });
-}
-
-export function getWaiterTables(): Promise<WaiterTableResponse[]> {
-    return apiGet<WaiterTableResponse[]>("/waiter/tables");
+    return apiRequest<void>(
+        `/restaurants/${restaurantId}/tables/${tableId}/assignment`,
+        { method: "DELETE" },
+    );
 }
 
 export function getRestaurantStaff(restaurantId: number): Promise<StaffMemberResponse[]> {

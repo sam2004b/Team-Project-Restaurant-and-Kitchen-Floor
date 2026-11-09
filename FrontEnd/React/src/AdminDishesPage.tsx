@@ -387,6 +387,7 @@ function AdminDishesPage() {
         <Link className="admin-sidebar-link" to="/">Overview</Link>
         <span className="admin-sidebar-link active" aria-current="page">Menu management</span>
         <Link className="admin-sidebar-link" to="/admin/staff">Staff and access</Link>
+        <Link className="admin-sidebar-link" to="/admin/settings">Settings</Link>
         <span className="admin-sidebar-link">Availability</span>
         <span className="admin-sidebar-link">Kitchen</span>
         <span className="admin-sidebar-link">Tables</span>
