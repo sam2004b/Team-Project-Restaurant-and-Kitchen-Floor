@@ -113,8 +113,18 @@ function AccountPanel({
           {account.restaurantId && <div><dt>Restaurant</dt><dd>#{account.restaurantId}</dd></div>}
         </dl>
         {account.role === "Chef" && (
-          <Link className="secondary-button staff-workspace-link" to="/chef/availability">
-            Open Chef availability
+          <>
+            <Link className="secondary-button staff-workspace-link" to="/chef/availability">
+              Open Chef availability
+            </Link>
+            <Link className="secondary-button staff-workspace-link" to="/chef/orders">
+              Open kitchen orders
+            </Link>
+          </>
+        )}
+        {account.role === "Waiter" && (
+          <Link className="secondary-button staff-workspace-link" to="/waiter/orders">
+            Open waiter orders
           </Link>
         )}
       </>

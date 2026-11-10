@@ -10,6 +10,8 @@ import { AcceptInvitationPage, StaffManagementPage } from "./StaffAccessPage";
 import RestaurantSettingsPage from "./RestaurantSettingsPage";
 import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { formatPrice } from "./services/currency";
+import WaiterOrderPage from "./WaiterOrderPage";
+import KitchenOrdersPage from "./KitchenOrdersPage";
 
 
 type MenuDish = {
@@ -282,6 +284,8 @@ function App() {
       <Route path="/admin/settings" element={<RestaurantSettingsPage />} />
       <Route path="/chef/availability" element={<ChefAvailabilityPage />} />
       <Route path="/chef/menu" element={<ChefAvailabilityPage />} />
+      <Route path="/chef/orders" element={<KitchenOrdersPage />} />
+      <Route path="/waiter/orders" element={<WaiterOrderPage />} />
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="*" element={<MenuPage />} />
     </Routes>

@@ -147,6 +147,94 @@ export function getWaiterTables(): Promise<WaiterTableResponse[]> {
     return apiGet<WaiterTableResponse[]>("/waiter/tables");
 }
 
+export interface OrderItemDetailsResponse {
+    id: number;
+    dishId: number;
+    dishName: string;
+    unitPrice: number;
+    quantity: number;
+    specialRequest: string | null;
+}
+
+export interface OrderDetailsResponse {
+    id: number;
+    restaurantId: number;
+    diningTableId: number;
+    createdByStaffMembershipId: number;
+    status: "Open" | "Sent" | "Legacy";
+    createdAtUtc: string;
+    sentAtUtc: string | null;
+    items: OrderItemDetailsResponse[];
+}
+
+export interface OpenOrderResponse {
+    orderId: number;
+    status: "Open";
+    reused: boolean;
+}
+
+export interface SendOrderResponse {
+    orderId: number;
+    status: "Sent";
+    alreadySent: boolean;
+    kitchenOrder: OrderDetailsResponse;
+}
+
+export function openOrCreateOrder(tableId: number): Promise<OpenOrderResponse> {
+    return apiRequest<OpenOrderResponse>(`/waiter/tables/${tableId}/orders/open`, {
+        method: "POST",
+    });
+}
+
+export function getOrderDetails(orderId: number): Promise<OrderDetailsResponse> {
+    return apiRequest<OrderDetailsResponse>(`/waiter/orders/${orderId}/details`, {
+        cache: "no-store",
+    });
+}
+
+export function addOrderItem(
+    orderId: number,
+    dishId: number,
+    quantity: number,
+    specialRequest: string,
+): Promise<{ orderId: number; itemId: number }> {
+    return apiSend(`/waiter/orders/${orderId}/items`, "POST", {
+        dishId,
+        quantity,
+        specialRequest,
+    });
+}
+
+export function updateOrderItem(
+    orderId: number,
+    itemId: number,
+    quantity: number,
+    specialRequest: string,
+): Promise<{ orderId: number; itemId: number; updated: boolean }> {
+    return apiSend(`/waiter/orders/${orderId}/items/${itemId}`, "PUT", {
+        quantity,
+        specialRequest,
+    });
+}
+
+export function removeOrderItem(orderId: number, itemId: number): Promise<void> {
+    return apiRequest<void>(`/waiter/orders/${orderId}/items/${itemId}`, {
+        method: "DELETE",
+    });
+}
+
+export function sendOrder(orderId: number): Promise<SendOrderResponse> {
+    return apiRequest<SendOrderResponse>(`/waiter/orders/${orderId}/send`, {
+        method: "POST",
+    });
+}
+
+export function getKitchenOrders(): Promise<OrderDetailsResponse[]> {
+    return apiRequest<OrderDetailsResponse[]>("/chef/orders", {
+        cache: "no-store",
+    });
+}
+
 export interface StaffMemberResponse {
     id: number;
     restaurantId: number;
