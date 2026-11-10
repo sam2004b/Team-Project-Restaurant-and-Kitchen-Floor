@@ -601,6 +601,232 @@ button {
   }
 }
 
+.order-workspace {
+  max-width: 1120px;
+}
+
+.order-table-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.order-table-button {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.order-table-button.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px var(--green-soft);
+}
+
+.order-table-button span,
+.order-item-title span,
+.order-fee-note,
+.kitchen-order-time {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.order-composer {
+  margin-top: 24px;
+}
+
+.order-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.order-items {
+  display: grid;
+  gap: 12px;
+}
+
+.order-item {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 100px minmax(180px, 1.2fr) auto auto;
+  align-items: end;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.order-item-title {
+  display: grid;
+  gap: 5px;
+  align-self: center;
+}
+
+.order-item label,
+.order-add-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.order-item input,
+.order-add-form input,
+.order-add-form select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+
+.order-line-total {
+  align-self: center;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.order-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.order-remove-button {
+  border: 0;
+  background: transparent;
+  color: #934638;
+  font-weight: 700;
+}
+
+.order-remove-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.order-add-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(90px, 0.7fr) minmax(180px, 1.5fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.order-add-form h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--green);
+}
+
+.order-add-form > .staff-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.order-total,
+.kitchen-order-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 0 4px;
+  font-size: 1.1rem;
+}
+
+.order-fee-note {
+  margin: 8px 0 16px;
+}
+
+.order-send-button {
+  width: 100%;
+}
+
+.kitchen-order-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  align-items: start;
+  gap: 18px;
+}
+
+.kitchen-order-card {
+  margin: 0;
+}
+
+.kitchen-order-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kitchen-order-heading .eyebrow {
+  margin-bottom: 6px;
+}
+
+.kitchen-order-heading h2 {
+  margin: 0;
+  color: var(--green);
+}
+
+.kitchen-order-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e6f4eb;
+  color: #26734f;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.kitchen-order-time {
+  margin: 12px 0;
+}
+
+.kitchen-order-items {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.kitchen-order-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.kitchen-order-items p {
+  margin: 5px 0 0;
+  color: var(--text-soft);
+}
+
+.kitchen-order-total {
+  padding-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .order-item,
+  .order-add-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .order-item-title,
+  .order-add-form h3,
+  .order-add-form > .staff-help {
+    grid-column: 1 / -1;
+  }
+}
+
 .hero-status-row {
   display: flex;
   align-items: center;

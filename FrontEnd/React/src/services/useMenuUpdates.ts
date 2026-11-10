@@ -11,6 +11,7 @@ import { apiBaseUrl } from "./api";
 
 export function useMenuUpdates(
     onMenuChanged: () => void,
+    eventName = "MenuChanged",
 ): void {
     // Keep the latest callback without reconnecting
     // every time the React component renders.
@@ -74,7 +75,7 @@ export function useMenuUpdates(
             }
         };
 
-        connection.on("MenuChanged", refreshMenu);
+        connection.on(eventName, refreshMenu);
 
         connection.onreconnected(() => {
             refreshMenu();
@@ -97,9 +98,9 @@ export function useMenuUpdates(
                 clearTimeout(retryTimer);
             }
 
-            connection.off("MenuChanged", refreshMenu);
+            connection.off(eventName, refreshMenu);
 
             void connection.stop();
         };
-    }, []);
+    }, [eventName]);
 }
