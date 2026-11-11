@@ -354,19 +354,51 @@ function WaiterOrderPage() {
 
   const submitOrder = async () => {
     if (!order || operationLock.current) return;
+    const changedItems: Array<{ item: OrderItemDetailsResponse; draft: ItemDraft }> = [];
+    for (const item of order.items) {
+      const draft = itemDrafts[item.id];
+      if (!draft || (draft.quantity === String(item.quantity) &&
+          draft.specialRequest === (item.specialRequest ?? ""))) {
+        continue;
+      }
+
+      const parsedQuantity = Number(draft.quantity);
+      if (!Number.isSafeInteger(parsedQuantity) || parsedQuantity <= 0) {
+        setError("Quantity must be a positive whole number.");
+        return;
+      }
+      changedItems.push({ item, draft });
+    }
+
     operationLock.current = true;
     setSending(true);
     setError(null);
     setNotice(null);
     try {
-      const result = await sendOrder(order.id);
-      if (result.kitchenOrder.diningTableId !== order.diningTableId) {
+      for (const changedItem of changedItems) {
+        await updateOrderItem(
+          order.id,
+          changedItem.item.id,
+          Number(changedItem.draft.quantity),
+          changedItem.draft.specialRequest,
+        );
+      }
+
+      const reviewedOrder = changedItems.length > 0
+        ? await refreshOrder(order.id, order.diningTableId)
+        : order;
+      const result = await sendOrder(reviewedOrder.id);
+      if (result.kitchenOrder.diningTableId !== reviewedOrder.diningTableId) {
         setSelectedTableId(null);
         setOrder(null);
         setItemDrafts({});
         throw new Error("The returned order does not belong to the selected table.");
       }
       setOrder(result.kitchenOrder);
+      setItemDrafts(Object.fromEntries(result.kitchenOrder.items.map((item) => [
+        item.id,
+        { quantity: String(item.quantity), specialRequest: item.specialRequest ?? "" },
+      ])));
       setNotice(result.alreadySent
         ? "This order was already sent; the kitchen has one copy."
         : "Order sent to the kitchen.");
@@ -507,6 +539,13 @@ function WaiterOrderPage() {
                     )}
                   </div>
                 </div>
+
+                {order.status === "Open" && (
+                  <div className="order-review-heading">
+                    <h3>Review order before sending</h3>
+                    <p>Check each dish, quantity, and special request. Unsaved changes are saved before the order is sent.</p>
+                  </div>
+                )}
 
                 {order.items.length === 0 ? (
                   <p className="staff-help">No dishes added yet. Add at least one dish before sending.</p>
