@@ -1,4 +1,4 @@
-# QA Testing — US-23–US-26
+# QA Testing — US-12
 
 **Date** — 11/11/2026
 
@@ -8,7 +8,7 @@
 
 ## Verification checks
 
-- TC-01 — All 18 source cases passed: US-23 (5/5), US-24 (4/4), US-25 (4/4), US-26 (5/5).
+- TC-01 — All 18 source cases for US-12 passed: **PASS**.
 - TC-02 — Simultaneous order creation and double-send handling: **PASS**.
 - TC-03 — Positive quantities and scoped permissions: **PASS**.
 - TC-04 — Notes, unavailable items and empty-send handling: **PASS**.
@@ -20,7 +20,7 @@
 
 Completed manual API testing using Swagger.
 
-All 18 source cases passed: US-23 (5/5), US-24 (4/4), US-25 (4/4), and US-26 (5/5).
+All 18 source cases for US-12 passed.
 
 TC-01–TC-07 passed.
 
