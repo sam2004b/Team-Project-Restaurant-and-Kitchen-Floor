@@ -7,6 +7,10 @@ public sealed class RestaurantOrderItem
     public int OrderId { get; set; }
     public RestaurantOrder Order { get; set; } = null!;
 
+    // Null = draft line. Non-null = already submitted; never mutate this line.
+    public int? KitchenSubmissionId { get; set; }
+    public KitchenSubmission? KitchenSubmission { get; set; }
+
     public int DishId { get; set; }
     public Dish Dish { get; set; } = null!;
 

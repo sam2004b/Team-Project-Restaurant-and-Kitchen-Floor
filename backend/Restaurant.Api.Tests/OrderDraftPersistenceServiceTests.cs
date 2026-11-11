@@ -88,6 +88,67 @@ public sealed class OrderDraftPersistenceServiceTests
     }
 
     [Fact]
+    public async Task DifferentSeatsCanHaveSeparateActiveOrdersOnSameTable()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        var seat1 = await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 1);
+        var seat2 = await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 2);
+        Assert.Equal(OrderWriteStatus.Created, seat1.Status);
+        Assert.Equal(OrderWriteStatus.Created, seat2.Status);
+        Assert.NotEqual(seat1.OrderId, seat2.OrderId);
+        Assert.Equal(2, await db.Orders.CountAsync());
+
+        await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, seat1.OrderId!.Value, f.SoupId, 1, null);
+        Assert.Equal(OrderWriteStatus.Sent,
+            (await service.SendAsync(f.RestaurantId, f.WaiterId, seat1.OrderId.Value)).Status);
+
+        var reopen = await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 1);
+        Assert.Equal(OrderWriteStatus.ExistingOpen, reopen.Status);
+        Assert.Equal(seat1.OrderId, reopen.OrderId);
+        Assert.Equal(OrderWriteStatus.ItemAdded,
+            (await service.AddItemAsync(f.RestaurantId, f.WaiterId,
+                reopen.OrderId!.Value, f.CarbonaraId, 1, null)).Status);
+
+        var view = await new Restaurant.Api.Services.Waiter.WaiterTableQueryService(db)
+            .GetVisibleOrdersAsync(f.RestaurantId, f.WaiterId, f.TableId);
+        Assert.NotNull(view);
+        Assert.Equal(new[] { 1, 2 }, view.Select(o => o.SeatNumber!.Value).OrderBy(x => x));
+        Assert.Equal(OrderWriteStatus.SeatRequired,
+            (await service.GetOrCreateOpenAsync(f.RestaurantId, f.WaiterId, f.TableId)).Status);
+    }
+
+    [Fact]
+    public async Task InvalidSeatsAndAmbiguousOldOrdersReturnErrorsNotWrongOrder()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        Assert.Equal(OrderWriteStatus.InvalidSeat,
+            (await service.GetOrCreateOpenAsync(
+                f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 0)).Status);
+        Assert.Equal(OrderWriteStatus.InvalidSeat,
+            (await service.GetOrCreateOpenAsync(
+                f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 5)).Status);
+
+        db.Orders.AddRange(
+            new RestaurantOrder { RestaurantId = f.RestaurantId,
+                DiningTableId = f.TableId, CreatedByStaffMembershipId = f.WaiterId },
+            new RestaurantOrder { RestaurantId = f.RestaurantId,
+                DiningTableId = f.TableId, CreatedByStaffMembershipId = f.WaiterId });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(OrderWriteStatus.AmbiguousActiveOrders,
+            (await service.GetOrCreateOpenAsync(f.RestaurantId, f.WaiterId, f.TableId)).Status);
+        Assert.Equal(2, await db.Orders.CountAsync());
+    }
+
+    [Fact]
     public async Task CreateReturnsSameOpenOrderForTheSameTable()
     {
         var f = await CreateFixtureAsync();
@@ -187,7 +248,7 @@ public sealed class OrderDraftPersistenceServiceTests
     }
 
     [Fact]
-    public async Task SendIsDurableIdempotentAndPreventsFurtherEdits()
+    public async Task SendIsDurableIdempotentAndAllowsAdditionalPendingItems()
     {
         var f = await CreateFixtureAsync();
         int orderId;
@@ -206,8 +267,15 @@ public sealed class OrderDraftPersistenceServiceTests
                 f.RestaurantId, f.WaiterId, orderId, f.SoupId, 1, null);
 
             Assert.Equal(OrderWriteStatus.Sent, first.Status);
+            Assert.NotNull(first.SubmissionId);
             Assert.Equal(OrderWriteStatus.AlreadySent, second.Status);
-            Assert.Equal(OrderWriteStatus.OrderNotOpen, lateAdd.Status);
+            Assert.Equal(first.SubmissionId, second.SubmissionId);
+            Assert.Equal(OrderWriteStatus.ItemAdded, lateAdd.Status);
+            Assert.Equal(OrderWriteStatus.ExistingOpen,
+                (await service.GetOrCreateOpenAsync(
+                    f.RestaurantId, f.WaiterId, f.TableId)).Status);
+            Assert.Equal(OrderWriteStatus.Sent, (await service.SendAsync(
+                f.RestaurantId, f.WaiterId, orderId)).Status);
         }
 
         await using (var db = new RestaurantDbContext(f.Options))
@@ -217,7 +285,10 @@ public sealed class OrderDraftPersistenceServiceTests
             Assert.Equal(RestaurantOrderStates.Sent, saved.Status);
             Assert.NotNull(saved.SentAtUtc);
             Assert.True(saved.SentAtUtc!.Value >= saved.CreatedAtUtc);
-            Assert.Single(await db.OrderItems.ToListAsync());
+            Assert.Equal(2, await db.OrderItems.CountAsync());
+            Assert.Equal(2, await db.KitchenSubmissions.CountAsync());
+            Assert.All(await db.OrderItems.ToListAsync(),
+                i => Assert.NotNull(i.KitchenSubmissionId));
         }
     }
 

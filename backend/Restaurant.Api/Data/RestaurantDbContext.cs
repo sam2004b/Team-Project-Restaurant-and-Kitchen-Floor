@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Models;
@@ -44,6 +44,9 @@ namespace Restaurant.Api.Data
 
         public DbSet<RestaurantOrderItem> OrderItems =>
             Set<RestaurantOrderItem>();
+
+        public DbSet<KitchenSubmission> KitchenSubmissions =>
+            Set<KitchenSubmission>();
 
 
 
@@ -415,18 +418,27 @@ namespace Restaurant.Api.Data
                 entity.ToTable("orders", table =>
                 {
                     table.HasCheckConstraint("CK_orders_state",
-                        "\"Status\" IN ('Legacy', 'Open', 'Sent')");
+                        "\"Status\" IN ('Legacy', 'Open', 'Sent', 'Closed')");
+                    table.HasCheckConstraint("CK_orders_seat_number",
+                        "\"SeatNumber\" IS NULL OR \"SeatNumber\" > 0");
                     table.HasCheckConstraint("CK_orders_sent_consistency",
-                        "(\"Status\" = 'Sent' AND \"SentAtUtc\" IS NOT NULL) " +
-                        "OR (\"Status\" <> 'Sent' AND \"SentAtUtc\" IS NULL)");
+                        "(\"Status\" IN ('Sent', 'Closed') AND \"SentAtUtc\" IS NOT NULL) " +
+                        "OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL)");
+                    table.HasCheckConstraint("CK_orders_paid_consistency",
+                        "(\"Status\" = 'Closed' AND \"PaidAtUtc\" IS NOT NULL) " +
+                        "OR (\"Status\" <> 'Closed' AND \"PaidAtUtc\" IS NULL)");
                     table.HasCheckConstraint("CK_orders_sent_after_created",
                         "\"SentAtUtc\" IS NULL OR \"SentAtUtc\" >= \"CreatedAtUtc\"");
                 });
 
                 entity.HasIndex(o => new { o.RestaurantId, o.DiningTableId })
+                    .HasDatabaseName("IX_orders_active_by_table")
+                    .HasFilter("\"Status\" IN ('Open', 'Sent')");
+
+                entity.HasIndex(o => new { o.RestaurantId, o.DiningTableId, o.SeatNumber })
                     .IsUnique()
-                    .HasDatabaseName("UX_orders_one_open_per_table")
-                    .HasFilter("\"Status\" = 'Open'");
+                    .HasDatabaseName("UX_orders_one_active_per_seat")
+                    .HasFilter("\"SeatNumber\" IS NOT NULL AND \"Status\" IN ('Open', 'Sent')");
 
                 // Order and table must belong
                 // to the same restaurant.
@@ -496,8 +508,26 @@ namespace Restaurant.Api.Data
                     .HasForeignKey(i => i.DishId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                entity.HasOne(i => i.KitchenSubmission)
+                    .WithMany(s => s.Items)
+                    .HasForeignKey(i => i.KitchenSubmissionId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasIndex(i => i.OrderId);
                 entity.HasIndex(i => i.DishId);
+                entity.HasIndex(i => i.KitchenSubmissionId);
+            });
+
+            modelBuilder.Entity<KitchenSubmission>(entity =>
+            {
+                entity.ToTable("kitchen_submissions");
+                entity.HasKey(s => s.Id);
+                entity.Property(s => s.SentAtUtc).IsRequired();
+                entity.HasOne(s => s.Order)
+                    .WithMany(o => o.KitchenSubmissions)
+                    .HasForeignKey(s => s.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(s => new { s.OrderId, s.SentAtUtc });
             });
 
 

@@ -14,6 +14,10 @@ public enum OrderWriteStatus
     ItemUpdated,
     ItemRemoved,
     ItemNotFound,
+    ItemAlreadySubmitted,
+    InvalidSeat,
+    SeatRequired,
+    AmbiguousActiveOrders,
     Sent,
     AlreadySent,
     NotAccessible,
@@ -27,7 +31,8 @@ public sealed record OrderWriteResult(
     OrderWriteStatus Status,
     int? OrderId = null,
     int? ItemId = null,
-    string? Error = null);
+    string? Error = null,
+    int? SubmissionId = null);
 
 /// <summary>
 /// Persistence layer for waiter order drafts. The API in a later task should
@@ -35,44 +40,89 @@ public sealed record OrderWriteResult(
 /// </summary>
 public sealed class OrderDraftPersistenceService
 {
-    private const string OpenOrderIndex = "UX_orders_one_open_per_table";
+    private const string ActiveSeatOrderIndex = "UX_orders_one_active_per_seat";
     private readonly RestaurantDbContext _db;
 
     public OrderDraftPersistenceService(RestaurantDbContext db) => _db = db;
 
     /// <summary>
-    /// Return the existing Open order, or create exactly one for an assigned
-    /// active table. PostgreSQL row locking serializes this with reassignment
-    /// and competing order writers; a partial unique index is the final guard.
+    /// Compatibility entry point for existing frontends that do not send a seat.
+    /// Reuses a single unassigned order; if ambiguous, require explicit selection.
+    /// New clients should pass a seat number through the seat-specific endpoint.
+    /// </summary>
+    public Task<OrderWriteResult> GetOrCreateOpenAsync(
+        int restaurantId, int waiterMembershipId, int tableId,
+        CancellationToken ct = default) =>
+        GetOrCreateOpenAsync(restaurantId, waiterMembershipId, tableId,
+            seatNumber: null, ct);
+
+    /// <summary>
+    /// Reuse the active order for a SPECIFIC seat, or create it.
+    /// Restaurant row locking and the unique seat-scoped index prevent races.
+    /// An order can be reopened after its kitchen submission until it is paid.
     /// </summary>
     public async Task<OrderWriteResult> GetOrCreateOpenAsync(
         int restaurantId,
         int waiterMembershipId,
         int tableId,
+        int? seatNumber,
         CancellationToken ct = default)
     {
+        if (seatNumber.HasValue && seatNumber.Value <= 0)
+            return new(OrderWriteStatus.InvalidSeat,
+                Error: "Seat numbers start at 1.");
+
         await using var tx = await LockRestaurantAsync(restaurantId, ct);
 
         if (!await HasCurrentAssignmentAsync(
                 restaurantId, waiterMembershipId, tableId, ct))
             return new(OrderWriteStatus.NotAccessible);
 
-        var existing = await _db.Orders.AsNoTracking()
-            .SingleOrDefaultAsync(o =>
-                o.RestaurantId == restaurantId &&
-                o.DiningTableId == tableId &&
-                o.Status == RestaurantOrderStates.Open, ct);
+        var seatCount = await _db.DiningTables.AsNoTracking()
+            .Where(t => t.Id == tableId && t.RestaurantId == restaurantId)
+            .Select(t => t.SeatCount)
+            .SingleAsync(ct);
 
-        if (existing is not null)
+        if (seatNumber.HasValue && seatNumber.Value > seatCount)
+            return new(OrderWriteStatus.InvalidSeat,
+                Error: $"Seat {seatNumber} does not exist at this table (1..{seatCount}).");
+
+        var matches = await _db.Orders.AsNoTracking()
+            .Where(o => o.RestaurantId == restaurantId &&
+                o.DiningTableId == tableId &&
+                o.SeatNumber == seatNumber &&
+                (o.Status == RestaurantOrderStates.Open ||
+                 o.Status == RestaurantOrderStates.Sent))
+            .OrderBy(o => o.Id)
+            .Take(2)
+            .ToListAsync(ct);
+
+        if (matches.Count > 1)
+            return new(OrderWriteStatus.AmbiguousActiveOrders,
+                Error: "Multiple unassigned active orders exist. Select the order ID from the table's order list.");
+
+        if (matches.Count == 1)
         {
             await CommitAsync(tx, ct);
-            return new(OrderWriteStatus.ExistingOpen, existing.Id);
+            return new(OrderWriteStatus.ExistingOpen, matches[0].Id);
         }
+
+        // An old client must not silently create an unassigned order when the
+        // table is now managed per seat. Ask it to use a seat-specific route.
+        if (!seatNumber.HasValue && await _db.Orders.AsNoTracking().AnyAsync(o =>
+                o.RestaurantId == restaurantId &&
+                o.DiningTableId == tableId &&
+                o.SeatNumber != null &&
+                (o.Status == RestaurantOrderStates.Open ||
+                 o.Status == RestaurantOrderStates.Sent), ct))
+            return new(OrderWriteStatus.SeatRequired,
+                Error: "Choose a seat or select an existing order from the table list.");
 
         var order = new RestaurantOrder
         {
             RestaurantId = restaurantId,
             DiningTableId = tableId,
+            SeatNumber = seatNumber,
             CreatedByStaffMembershipId = waiterMembershipId,
             Status = RestaurantOrderStates.Open,
             CreatedAtUtc = DateTime.UtcNow
@@ -85,23 +135,23 @@ public sealed class OrderDraftPersistenceService
             await CommitAsync(tx, ct);
             return new(OrderWriteStatus.Created, order.Id);
         }
-        catch (DbUpdateException ex) when (IsOpenOrderUniqueViolation(ex))
+        catch (DbUpdateException ex) when (IsSeatOrderUniqueViolation(ex))
         {
             if (tx is not null)
                 await tx.RollbackAsync(ct);
             _db.ChangeTracker.Clear();
 
-            // Another transaction won the race. Fetch its persisted order.
-            var winner = await _db.Orders.AsNoTracking()
-                .SingleAsync(o =>
-                    o.RestaurantId == restaurantId &&
-                    o.DiningTableId == tableId &&
-                    o.Status == RestaurantOrderStates.Open, ct);
+            var winner = await _db.Orders.AsNoTracking().SingleAsync(o =>
+                o.RestaurantId == restaurantId &&
+                o.DiningTableId == tableId &&
+                o.SeatNumber == seatNumber &&
+                (o.Status == RestaurantOrderStates.Open ||
+                 o.Status == RestaurantOrderStates.Sent), ct);
             return new(OrderWriteStatus.ExistingOpen, winner.Id);
         }
     }
 
-    /// <summary>Add a line to an Open order only while the table is assigned.</summary>
+    /// <summary>Add a pending line to any active order while the table is assigned.</summary>
     public async Task<OrderWriteResult> AddItemAsync(
         int restaurantId,
         int waiterMembershipId,
@@ -122,7 +172,7 @@ public sealed class OrderDraftPersistenceService
 
         if (order is null)
             return new(OrderWriteStatus.NotAccessible);
-        if (order.Status != RestaurantOrderStates.Open)
+        if (!RestaurantOrderStates.IsActive(order.Status))
             return new(OrderWriteStatus.OrderNotOpen, order.Id);
 
         var dish = await GetDishWithReadLockAsync(dishId, ct);
@@ -148,8 +198,8 @@ public sealed class OrderDraftPersistenceService
     }
 
     /// <summary>
-    /// Change one line's quantity and instructions while the order is Open.
-    /// A line can be edited only by the waiter currently assigned to its table.
+    /// Change pending line quantity/notes in an active order.
+    /// Already submitted lines are immutable; add a new pending line instead.
     /// </summary>
     public async Task<OrderWriteResult> UpdateItemAsync(
         int restaurantId, int waiterMembershipId, int orderId,
@@ -166,13 +216,15 @@ public sealed class OrderDraftPersistenceService
             restaurantId, waiterMembershipId, orderId, ct);
         if (order is null)
             return new(OrderWriteStatus.NotAccessible);
-        if (order.Status != RestaurantOrderStates.Open)
+        if (!RestaurantOrderStates.IsActive(order.Status))
             return new(OrderWriteStatus.OrderNotOpen, order.Id);
 
         var item = await _db.OrderItems.SingleOrDefaultAsync(
             i => i.Id == itemId && i.OrderId == orderId, ct);
         if (item is null)
             return new(OrderWriteStatus.ItemNotFound, order.Id);
+        if (item.KitchenSubmissionId is not null)
+            return new(OrderWriteStatus.ItemAlreadySubmitted, order.Id, item.Id);
 
         var dish = await GetDishWithReadLockAsync(item.DishId, ct);
         if (dish is null || !dish.IsAvailable)
@@ -186,7 +238,7 @@ public sealed class OrderDraftPersistenceService
         return new(OrderWriteStatus.ItemUpdated, order.Id, item.Id);
     }
 
-    /// <summary>Remove one item from an Open order; sending still rejects empty orders.</summary>
+    /// <summary>Remove only a pending line from an active order.</summary>
     public async Task<OrderWriteResult> RemoveItemAsync(
         int restaurantId, int waiterMembershipId, int orderId,
         int itemId, CancellationToken ct = default)
@@ -200,13 +252,15 @@ public sealed class OrderDraftPersistenceService
             restaurantId, waiterMembershipId, orderId, ct);
         if (order is null)
             return new(OrderWriteStatus.NotAccessible);
-        if (order.Status != RestaurantOrderStates.Open)
+        if (!RestaurantOrderStates.IsActive(order.Status))
             return new(OrderWriteStatus.OrderNotOpen, order.Id);
 
         var item = await _db.OrderItems.SingleOrDefaultAsync(
             i => i.Id == itemId && i.OrderId == orderId, ct);
         if (item is null)
             return new(OrderWriteStatus.ItemNotFound, order.Id);
+        if (item.KitchenSubmissionId is not null)
+            return new(OrderWriteStatus.ItemAlreadySubmitted, order.Id, item.Id);
 
         _db.OrderItems.Remove(item);
         await _db.SaveChangesAsync(ct);
@@ -214,7 +268,11 @@ public sealed class OrderDraftPersistenceService
         return new(OrderWriteStatus.ItemRemoved, order.Id, item.Id);
     }
 
-    /// <summary>Durably change a non-empty Open order to Sent at most once.</summary>
+    /// <summary>
+    /// Atomically submit ONLY the still-pending lines as a new kitchen batch.
+    /// The restaurant row lock serializes concurrent send/edit requests.
+    /// Repeating Send without new lines never creates duplicate tickets.
+    /// </summary>
     public async Task<OrderWriteResult> SendAsync(
         int restaurantId,
         int waiterMembershipId,
@@ -227,37 +285,52 @@ public sealed class OrderDraftPersistenceService
 
         if (order is null)
             return new(OrderWriteStatus.NotAccessible);
-        if (order.Status == RestaurantOrderStates.Sent)
-        {
-            await CommitAsync(tx, ct);
-            return new(OrderWriteStatus.AlreadySent, order.Id);
-        }
-        if (order.Status != RestaurantOrderStates.Open)
+        if (!RestaurantOrderStates.IsActive(order.Status))
             return new(OrderWriteStatus.OrderNotOpen, order.Id);
 
-        var dishIds = await _db.Set<RestaurantOrderItem>()
-            .Where(i => i.OrderId == orderId)
-            .Select(i => i.DishId).Distinct().OrderBy(id => id)
-            .ToListAsync(ct);
+        var pending = await _db.OrderItems
+            .Where(i => i.OrderId == orderId && i.KitchenSubmissionId == null)
+            .OrderBy(i => i.Id).ToListAsync(ct);
 
-        if (dishIds.Count == 0)
-            return new(OrderWriteStatus.EmptyOrder, order.Id);
+        if (pending.Count == 0)
+        {
+            if (order.Status == RestaurantOrderStates.Open)
+                return new(OrderWriteStatus.EmptyOrder, order.Id);
 
-        // Revalidate the current menu at send time, not just when selected.
-        // FOR SHARE prevents a concurrent dish UPDATE from racing ahead of
-        // the commit on PostgreSQL, ensuring a consistent send decision.
-        foreach (var dishId in dishIds)
+            var lastSubmissionId = await _db.KitchenSubmissions.AsNoTracking()
+                .Where(s => s.OrderId == orderId)
+                .OrderByDescending(s => s.Id)
+                .Select(s => (int?)s.Id).FirstOrDefaultAsync(ct);
+            await CommitAsync(tx, ct);
+            return new(OrderWriteStatus.AlreadySent, order.Id,
+                SubmissionId: lastSubmissionId);
+        }
+
+        // Revalidate only dishes newly submitted. PostgreSQL FOR SHARE prevents
+        // concurrent availability changes between validation and commit.
+        foreach (var dishId in pending.Select(i => i.DishId).Distinct().OrderBy(id => id))
         {
             var dish = await GetDishWithReadLockAsync(dishId, ct);
             if (dish is null || !dish.IsAvailable)
                 return new(OrderWriteStatus.DishUnavailable, order.Id);
         }
 
+        var now = DateTime.UtcNow;
+        var submission = new KitchenSubmission
+        {
+            OrderId = order.Id,
+            SentAtUtc = now
+        };
+        _db.KitchenSubmissions.Add(submission);
+        foreach (var item in pending)
+            item.KitchenSubmission = submission;
+
         order.Status = RestaurantOrderStates.Sent;
-        order.SentAtUtc = DateTime.UtcNow;
+        order.SentAtUtc ??= now; // retain timestamp of the FIRST send
         await _db.SaveChangesAsync(ct);
         await CommitAsync(tx, ct);
-        return new(OrderWriteStatus.Sent, order.Id);
+        return new(OrderWriteStatus.Sent, order.Id,
+            SubmissionId: submission.Id);
     }
 
     private Task<bool> HasCurrentAssignmentAsync(
@@ -328,8 +401,8 @@ public sealed class OrderDraftPersistenceService
         IDbContextTransaction? tx, CancellationToken ct) =>
         tx is null ? Task.CompletedTask : tx.CommitAsync(ct);
 
-    private static bool IsOpenOrderUniqueViolation(DbUpdateException ex) =>
+    private static bool IsSeatOrderUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pg &&
         pg.SqlState == PostgresErrorCodes.UniqueViolation &&
-        pg.ConstraintName == OpenOrderIndex;
+        pg.ConstraintName == ActiveSeatOrderIndex;
 }

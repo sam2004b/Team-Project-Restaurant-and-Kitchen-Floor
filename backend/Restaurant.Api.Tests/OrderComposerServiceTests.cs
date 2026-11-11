@@ -223,7 +223,7 @@ public sealed class OrderComposerServiceTests
     }
 
     [Fact]
-    public async Task SentOrderCannotBeEditedOrDeleted()
+    public async Task SentItemsCannotBeEditedButNewPendingItemsCanBeUpdatedOrDeleted()
     {
         var f = await CreateFixtureAsync();
         await using var db = new RestaurantDbContext(f.Options);
@@ -233,9 +233,77 @@ public sealed class OrderComposerServiceTests
         int itemId = (await service.AddItemAsync(f.RestaurantId, f.WaiterId,
             orderId, f.DishId, 1, null)).ItemId!.Value;
         await service.SendAsync(f.RestaurantId, f.WaiterId, orderId);
-        Assert.Equal(OrderWriteStatus.OrderNotOpen, (await service.UpdateItemAsync(
+        Assert.Equal(OrderWriteStatus.ItemAlreadySubmitted, (await service.UpdateItemAsync(
             f.RestaurantId, f.WaiterId, orderId, itemId, 2, null)).Status);
-        Assert.Equal(OrderWriteStatus.OrderNotOpen, (await service.RemoveItemAsync(
+        Assert.Equal(OrderWriteStatus.ItemAlreadySubmitted, (await service.RemoveItemAsync(
             f.RestaurantId, f.WaiterId, orderId, itemId)).Status);
+
+        var newItem = await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, f.DishId, 1, "extra");
+        Assert.Equal(OrderWriteStatus.ItemAdded, newItem.Status);
+        Assert.Equal(OrderWriteStatus.ItemUpdated, (await service.UpdateItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, newItem.ItemId!.Value, 2, null)).Status);
+        Assert.Equal(OrderWriteStatus.ItemRemoved, (await service.RemoveItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, newItem.ItemId.Value)).Status);
+    }
+
+    [Fact]
+    public async Task SecondKitchenBatchDoesNotLeakPendingItemsOrResendOldItems()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        var queries = new OrderDetailsQueryService(db);
+        int orderId = (await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId)).OrderId!.Value;
+        var firstLine = await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, f.DishId, 2, "first");
+        var firstSend = await service.SendAsync(f.RestaurantId, f.WaiterId, orderId);
+        var pendingLine = await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, f.DishId, 1, "extra");
+
+        var waiterOrder = await queries.GetForWaiterAsync(f.RestaurantId, f.WaiterId, orderId);
+        Assert.NotNull(waiterOrder);
+        Assert.Equal(2, waiterOrder.Items.Count);
+        Assert.Single((await queries.GetKitchenOrderAsync(f.RestaurantId, orderId))!.Items);
+        var secondSend = await service.SendAsync(f.RestaurantId, f.WaiterId, orderId);
+        Assert.NotEqual(firstSend.SubmissionId, secondSend.SubmissionId);
+        var batches = await queries.GetKitchenSubmissionsAsync(f.RestaurantId, orderId);
+        Assert.Equal(2, batches.Count);
+        Assert.Equal(firstLine.ItemId, Assert.Single(batches[0].Items).Id);
+        Assert.Equal(pendingLine.ItemId, Assert.Single(batches[1].Items).Id);
+        Assert.Equal(2, (await queries.GetKitchenOrderAsync(f.RestaurantId, orderId))!.Items.Count);
+        Assert.Equal(OrderWriteStatus.AlreadySent, (await service.SendAsync(
+            f.RestaurantId, f.WaiterId, orderId)).Status);
+        Assert.Equal(2, await db.KitchenSubmissions.CountAsync());
+    }
+
+    [Fact]
+    public async Task PaidClosedOrderCannotAcceptMoreItemsAndRemainsInKitchenFeed()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        int orderId = (await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId)).OrderId!.Value;
+        await service.AddItemAsync(f.RestaurantId, f.WaiterId, orderId, f.DishId, 2, null);
+        await service.SendAsync(f.RestaurantId, f.WaiterId, orderId);
+
+        // Payment workflow isn't implemented in Sprint 2; emulate its final state.
+        var order = await db.Orders.SingleAsync(o => o.Id == orderId);
+        order.Status = RestaurantOrderStates.Closed;
+        order.PaidAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        Assert.Equal(OrderWriteStatus.OrderNotOpen, (await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, orderId, f.DishId, 1, null)).Status);
+        Assert.Equal(OrderWriteStatus.OrderNotOpen, (await service.SendAsync(
+            f.RestaurantId, f.WaiterId, orderId)).Status);
+        var ticket = await new OrderDetailsQueryService(db)
+            .GetKitchenOrderAsync(f.RestaurantId, orderId);
+        Assert.NotNull(ticket);
+        Assert.Equal(RestaurantOrderStates.Closed, ticket.Status);
+        Assert.Single(ticket.Items);
+        var newOrder = await service.GetOrCreateOpenAsync(f.RestaurantId, f.WaiterId, f.TableId);
+        Assert.NotEqual(orderId, newOrder.OrderId);
     }
 }
