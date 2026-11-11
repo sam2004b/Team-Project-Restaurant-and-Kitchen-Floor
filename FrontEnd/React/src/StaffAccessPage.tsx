@@ -174,73 +174,57 @@ function AccountPanel({
 
 function StaffLoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { account, status, sessionMessage, signIn, signOut } = useAuth();
+  const locationState = location.state as { returnTo?: unknown; authMessage?: unknown } | null;
+  const returnTo = typeof locationState?.returnTo === "string" &&
+    locationState.returnTo.startsWith("/") && !locationState.returnTo.startsWith("//")
+    ? locationState.returnTo
+    : null;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    typeof locationState?.authMessage === "string" ? locationState.authMessage : null,
+  );
 
   useEffect(() => {
-    let active = true;
-    const token = getStoredAccessToken();
-    if (!token) {
-      setCheckingSession(false);
-      return () => {
-        active = false;
-      };
+    if (status === "loading") return;
+    if (status === "error") {
+      setError(sessionMessage ?? "Could not verify the saved session.");
+      return;
     }
 
-    void getCurrentAccount()
-      .then((account) => {
-        if (!active) return;
-        const route = getStaffRouteForRole(account.role);
-        if (route) {
-          navigate(route, { replace: true });
-        } else {
-          clearStoredAccessToken();
-          setError("This account does not have a supported staff role.");
-          setCheckingSession(false);
-        }
-      })
-      .catch(() => {
-        if (!active) return;
-        clearStoredAccessToken();
-        setCheckingSession(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [navigate]);
+    if (status === "authenticated" && account) {
+      const route = returnTo ?? getStaffRouteForRole(account.role);
+      if (route) navigate(route, { replace: true });
+      else setError("This account does not have a supported staff role.");
+    } else if (sessionMessage) {
+      setError(sessionMessage);
+    }
+  }, [account, navigate, returnTo, sessionMessage, status]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      const response = await login(username.trim(), password);
-      if (!response.accessToken) {
-        throw new Error("The API did not return an access token.");
-      }
-
-      storeAccessToken(response.accessToken);
-      const account = await getCurrentAccount();
-      const route = getStaffRouteForRole(account.role);
+      const signedInAccount = await signIn({ username: username.trim(), password });
+      const route = getStaffRouteForRole(signedInAccount.role);
       if (!route) {
-        clearStoredAccessToken();
+        await signOut();
         throw new Error("This account does not have a supported staff role.");
       }
 
-      navigate(route, { replace: true });
+      navigate(returnTo ?? route, { replace: true });
     } catch (caughtError) {
-      clearStoredAccessToken();
       setError(getErrorMessage(caughtError, "Could not sign in."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (checkingSession) {
+  if (status === "loading") {
     return (
       <div className="auth-state-panel" role="status">
         <p>Checking your session...</p>
@@ -605,9 +589,6 @@ function StaffManagementPage() {
         setAuthNotice({ type: "success", message: `Signed in as ${currentAccount.userName}.` });
       }
     } catch (error) {
-      clearStoredAccessToken();
-      setAccessToken(null);
-      setAccount(null);
       setAuthNotice({ type: "error", message: getErrorMessage(error, "Could not sign in.") });
       throw error;
     }

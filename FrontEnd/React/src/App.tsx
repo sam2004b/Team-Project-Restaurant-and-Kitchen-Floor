@@ -2,13 +2,10 @@ import { useMenuUpdates } from "./services/useMenuUpdates";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
-  clearStoredAccessToken,
-  getCurrentAccount,
   getMenuDishes,
-  getStoredAccessToken,
-  type AccountResponse,
 } from "./services/api";
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
 import AdminDishesPage from "./AdminDishesPage";
 import { AcceptInvitationPage, StaffLoginPage, StaffManagementPage } from "./StaffAccessPage";
 import { WaiterTablesPage } from "./RestaurantConfigurationPanel";
@@ -85,7 +82,7 @@ const dishArtByName: Record<string, DishArt> = {
   "Lemon Tart": "dessert",
 };
 
-type StaffRole = "Administrator" | "Waiter" | "Chef";
+type StaffRole = "Administrator" | "Reception Manager" | "Waiter" | "Chef";
 
 function defaultWorkspace(role: string | undefined): string {
   if (role === "Waiter") return "/waiter/orders";
@@ -125,7 +122,7 @@ function ProtectedRoute({
     const signedOut = sessionMessage?.toLowerCase().includes("signed out") ?? false;
     return (
       <Navigate
-        to="/admin/staff"
+        to="/login"
         replace
         state={{
           ...(!signedOut && {
@@ -349,9 +346,7 @@ function MenuPage() {
   );
 }
 
-type AllowedRole = "Waiter" | "Chef" | "Administrator" | "Reception Manager";
-
-function normalizeRole(role?: string | null): AllowedRole | "Unknown" {
+function normalizeRole(role?: string | null): StaffRole | "Unknown" {
   const normalized = role?.trim();
   if (!normalized) return "Unknown";
 
@@ -363,94 +358,9 @@ function normalizeRole(role?: string | null): AllowedRole | "Unknown" {
   return "Unknown";
 }
 
-function ProtectedRoute({ allowedRoles, children }: { allowedRoles: AllowedRole[]; children: React.ReactNode }) {
-  const location = useLocation();
-  const [account, setAccount] = useState<AccountResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-
-    const token = getStoredAccessToken();
-    if (!token) {
-      setAccount(null);
-      setLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    getCurrentAccount()
-      .then((currentAccount) => {
-        if (!active) return;
-        setAccount(currentAccount);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!active) return;
-        clearStoredAccessToken();
-        setAccount(null);
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [location.pathname]);
-
-  if (loading) {
-    return (
-      <div className="auth-state-panel" role="status">
-        <h2>Checking your session...</h2>
-      </div>
-    );
-  }
-
-  if (!account) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-
-  const accountRole = normalizeRole(account.role);
-  if (accountRole === "Unknown" || !allowedRoles.includes(accountRole)) {
-    return (
-      <div className="auth-state-panel" role="alert">
-        <h2>Access denied</h2>
-        <p>You do not have permission to view this page.</p>
-        <button type="button" className="primary-button" onClick={() => window.location.assign("/login")}>
-          Back to sign in
-        </button>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
 function StaffWorkspaceLayout() {
   const navigate = useNavigate();
-  const [account, setAccount] = useState<AccountResponse | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    if (!getStoredAccessToken()) {
-      setAccount(null);
-      return () => {
-        active = false;
-      };
-    }
-
-    void getCurrentAccount()
-      .then((currentAccount) => {
-        if (active) setAccount(currentAccount);
-      })
-      .catch(() => {
-        if (active) setAccount(null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { account, signOut: signOutFromContext } = useAuth();
 
   const role = normalizeRole(account?.role);
   const navigation = role === "Chef"
@@ -470,8 +380,7 @@ function StaffWorkspaceLayout() {
       ];
 
   const signOut = () => {
-    clearStoredAccessToken();
-    navigate("/login", { replace: true });
+    void signOutFromContext().then(() => navigate("/login", { replace: true }));
   };
 
   return (
@@ -517,14 +426,14 @@ function App() {
       <Route path="/login" element={<StaffLoginPage />} />
       <Route path="/menu" element={<MenuPage />} />
       <Route element={<StaffWorkspaceLayout />}>
-        <Route path="/admin/dishes" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><AdminDishesPage /></ProtectedRoute>} />
-        <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><StaffManagementPage /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><RestaurantSettingsPage /></ProtectedRoute>} />
-        <Route path="/chef/availability" element={<ProtectedRoute allowedRoles={["Chef"]}><ChefAvailabilityPage /></ProtectedRoute>} />
-        <Route path="/chef/menu" element={<ProtectedRoute allowedRoles={["Chef"]}><ChefAvailabilityPage /></ProtectedRoute>} />
-        <Route path="/chef/orders" element={<ProtectedRoute allowedRoles={["Chef"]}><KitchenOrdersPage /></ProtectedRoute>} />
-        <Route path="/waiter/orders" element={<ProtectedRoute allowedRoles={["Waiter"]}><WaiterOrderPage /></ProtectedRoute>} />
-        <Route path="/waiter/tables" element={<ProtectedRoute allowedRoles={["Waiter"]}><WaiterTablesPage /></ProtectedRoute>} />
+        <Route path="/admin/dishes" element={protect(["Administrator", "Reception Manager"], <AdminDishesPage />)} />
+        <Route path="/admin/staff" element={protect(["Administrator", "Reception Manager"], <StaffManagementPage />)} />
+        <Route path="/admin/settings" element={protect(["Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
+        <Route path="/chef/availability" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+        <Route path="/chef/menu" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+        <Route path="/chef/orders" element={protect(["Chef"], <KitchenOrdersPage />)} />
+        <Route path="/waiter/orders" element={protect(["Waiter"], <WaiterOrderPage />)} />
+        <Route path="/waiter/tables" element={protect(["Waiter"], <WaiterTablesPage />)} />
       </Route>
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
