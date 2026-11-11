@@ -2,11 +2,16 @@ import { useMenuUpdates } from "./services/useMenuUpdates";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
+  clearStoredAccessToken,
+  getCurrentAccount,
   getMenuDishes,
+  getStoredAccessToken,
+  type AccountResponse,
 } from "./services/api";
-import { Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AdminDishesPage from "./AdminDishesPage";
-import { AcceptInvitationPage, StaffManagementPage } from "./StaffAccessPage";
+import { AcceptInvitationPage, StaffLoginPage, StaffManagementPage } from "./StaffAccessPage";
+import { WaiterTablesPage } from "./RestaurantConfigurationPanel";
 import RestaurantSettingsPage from "./RestaurantSettingsPage";
 import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { formatPrice } from "./services/currency";
@@ -275,19 +280,185 @@ function MenuPage() {
   );
 }
 
+type AllowedRole = "Waiter" | "Chef" | "Administrator" | "Reception Manager";
+
+function normalizeRole(role?: string | null): AllowedRole | "Unknown" {
+  const normalized = role?.trim();
+  if (!normalized) return "Unknown";
+
+  const key = normalized.toLowerCase();
+  if (key === "waiter") return "Waiter";
+  if (key === "chef") return "Chef";
+  if (key === "administrator") return "Administrator";
+  if (key === "reception manager") return "Reception Manager";
+  return "Unknown";
+}
+
+function ProtectedRoute({ allowedRoles, children }: { allowedRoles: AllowedRole[]; children: React.ReactNode }) {
+  const location = useLocation();
+  const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const token = getStoredAccessToken();
+    if (!token) {
+      setAccount(null);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    getCurrentAccount()
+      .then((currentAccount) => {
+        if (!active) return;
+        setAccount(currentAccount);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        clearStoredAccessToken();
+        setAccount(null);
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location.pathname]);
+
+  if (loading) {
+    return (
+      <div className="auth-state-panel" role="status">
+        <h2>Checking your session...</h2>
+      </div>
+    );
+  }
+
+  if (!account) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  const accountRole = normalizeRole(account.role);
+  if (accountRole === "Unknown" || !allowedRoles.includes(accountRole)) {
+    return (
+      <div className="auth-state-panel" role="alert">
+        <h2>Access denied</h2>
+        <p>You do not have permission to view this page.</p>
+        <button type="button" className="primary-button" onClick={() => window.location.assign("/login")}>
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function StaffWorkspaceLayout() {
+  const navigate = useNavigate();
+  const [account, setAccount] = useState<AccountResponse | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!getStoredAccessToken()) {
+      setAccount(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void getCurrentAccount()
+      .then((currentAccount) => {
+        if (active) setAccount(currentAccount);
+      })
+      .catch(() => {
+        if (active) setAccount(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const role = normalizeRole(account?.role);
+  const navigation = role === "Chef"
+    ? [
+      { label: "Kitchen orders", path: "/chef/orders" },
+      { label: "Dish availability", path: "/chef/availability" },
+    ]
+    : role === "Waiter"
+      ? [
+        { label: "My tables", path: "/waiter/tables" },
+        { label: "Create orders", path: "/waiter/orders" },
+      ]
+      : [
+        { label: "Menu management", path: "/admin/dishes" },
+        { label: "Staff and access", path: "/admin/staff" },
+        { label: "Settings", path: "/admin/settings" },
+      ];
+
+  const signOut = () => {
+    clearStoredAccessToken();
+    navigate("/login", { replace: true });
+  };
+
+  return (
+    <div className="staff-workspace-shell">
+      <aside className="admin-sidebar staff-shared-sidebar">
+        <Link className="admin-brand" to="/" aria-label="Plate restaurant customer menu">
+          <strong>PLATE</strong>
+          <span>RESTAURANT OPERATIONS</span>
+        </Link>
+        <div className="admin-sidebar-label">{role === "Unknown" ? "WORKSPACE" : `${role.toUpperCase()} WORKSPACE`}</div>
+        {navigation.map((item) => (
+          <NavLink
+            key={item.path}
+            className={({ isActive }) => `admin-sidebar-link${isActive ? " active" : ""}`}
+            to={item.path}
+          >
+            {item.label}
+          </NavLink>
+        ))}
+        <Link className="admin-sidebar-link" to="/">Customer menu</Link>
+        <div className="admin-profile">
+          <span className="admin-avatar" aria-hidden="true">
+            {(account?.userName?.slice(0, 2) || "ST").toUpperCase()}
+          </span>
+          <span>
+            <strong>{account?.userName || "Signed in"}</strong>
+            <small>{account?.role || "Staff account"}</small>
+          </span>
+          <button type="button" className="staff-sidebar-signout" onClick={signOut}>Sign out</button>
+        </div>
+      </aside>
+      <div className="staff-workspace-content">
+        <Outlet />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<MenuPage />} />
-      <Route path="/admin/dishes" element={<AdminDishesPage />} />
-      <Route path="/admin/staff" element={<StaffManagementPage />} />
-      <Route path="/admin/settings" element={<RestaurantSettingsPage />} />
-      <Route path="/chef/availability" element={<ChefAvailabilityPage />} />
-      <Route path="/chef/menu" element={<ChefAvailabilityPage />} />
-      <Route path="/chef/orders" element={<KitchenOrdersPage />} />
-      <Route path="/waiter/orders" element={<WaiterOrderPage />} />
+      <Route path="/login" element={<StaffLoginPage />} />
+      <Route path="/menu" element={<MenuPage />} />
+      <Route element={<StaffWorkspaceLayout />}>
+        <Route path="/admin/dishes" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><AdminDishesPage /></ProtectedRoute>} />
+        <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><StaffManagementPage /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={["Administrator", "Reception Manager"]}><RestaurantSettingsPage /></ProtectedRoute>} />
+        <Route path="/chef/availability" element={<ProtectedRoute allowedRoles={["Chef"]}><ChefAvailabilityPage /></ProtectedRoute>} />
+        <Route path="/chef/menu" element={<ProtectedRoute allowedRoles={["Chef"]}><ChefAvailabilityPage /></ProtectedRoute>} />
+        <Route path="/chef/orders" element={<ProtectedRoute allowedRoles={["Chef"]}><KitchenOrdersPage /></ProtectedRoute>} />
+        <Route path="/waiter/orders" element={<ProtectedRoute allowedRoles={["Waiter"]}><WaiterOrderPage /></ProtectedRoute>} />
+        <Route path="/waiter/tables" element={<ProtectedRoute allowedRoles={["Waiter"]}><WaiterTablesPage /></ProtectedRoute>} />
+      </Route>
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
-      <Route path="*" element={<MenuPage />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }
