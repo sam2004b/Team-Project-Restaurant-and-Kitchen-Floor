@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Restaurant.Api.Dtos.Orders;
 
@@ -29,7 +30,8 @@ public sealed record OrderItemDetailsDto(
     string DishName,
     decimal UnitPrice,
     int Quantity,
-    string? SpecialRequest);
+    string? SpecialRequest,
+    int? KitchenSubmissionId = null);
 
 public sealed record OrderDetailsDto(
     int Id,
@@ -39,4 +41,16 @@ public sealed record OrderDetailsDto(
     string Status,
     DateTime CreatedAtUtc,
     DateTime? SentAtUtc,
-    IReadOnlyList<OrderItemDetailsDto> Items);
+    IReadOnlyList<OrderItemDetailsDto> Items,
+    DateTime? PaidAtUtc = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? SeatNumber = null);
+
+public sealed record KitchenSubmissionDto(
+    int Id,
+    int OrderId,
+    int DiningTableId,
+    DateTime SentAtUtc,
+    IReadOnlyList<OrderItemDetailsDto> Items,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? SeatNumber = null);
