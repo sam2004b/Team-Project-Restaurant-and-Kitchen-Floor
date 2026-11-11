@@ -3192,6 +3192,146 @@ select:focus-visible {
   gap: 12px;
 }
 
+.waiter-board-shell {
+  display: grid;
+  grid-template-columns: 192px minmax(0, 1fr);
+}
+
+.waiter-board-page {
+  min-width: 0;
+}
+
+.waiter-board {
+  display: grid;
+  gap: 18px;
+}
+
+.waiter-board-header {
+  padding: 0;
+}
+
+.waiter-board-count {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.waiter-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 18px;
+}
+
+.waiter-table-card {
+  display: grid;
+  gap: 14px;
+  min-height: 176px;
+  padding: 14px 14px 12px;
+  border: 1px solid #dfe4dc;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(19, 28, 24, 0.03);
+}
+
+.waiter-table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.waiter-table-badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #edf6f0;
+  color: var(--green);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.waiter-table-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #e5efe8;
+  color: #2d6a52;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.waiter-table-card-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #edf0eb;
+}
+
+.waiter-table-metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.waiter-table-label {
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.waiter-table-metric strong {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.waiter-table-order {
+  margin-top: 2px;
+}
+
+.waiter-table-card-footer {
+  display: flex;
+  margin-top: auto;
+}
+
+.waiter-table-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid #dfe6df;
+  border-radius: 8px;
+  background: #f7faf7;
+  color: var(--green);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.waiter-table-link:hover {
+  background: #eef5ef;
+}
+
+.waiter-board-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  border: 1px dashed #d7ded6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
 .settings-auth-card .staff-form {
   margin-top: 16px;
 }
