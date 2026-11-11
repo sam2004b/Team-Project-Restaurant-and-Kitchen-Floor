@@ -952,6 +952,23 @@ button {
   margin-top: 24px;
 }
 
+.order-review-heading {
+  margin-top: 22px;
+}
+
+.order-review-heading h3 {
+  margin: 0;
+  color: var(--green);
+  font-size: 1rem;
+}
+
+.order-review-heading p {
+  margin: 5px 0 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .order-header-actions {
   display: flex;
   flex-wrap: wrap;
