@@ -8,8 +8,8 @@ using Restaurant.Api.Services.Orders;
 namespace Restaurant.Api.Controllers;
 
 /// <summary>
-/// Durable Chef-only kitchen feed. Every GET reads committed Sent orders from
-/// PostgreSQL, so reconnected clients can recover orders missed while offline.
+/// Durable Chef-only kitchen feed backed by committed submissions.
+/// Reconnecting clients can recover missed batches, even after payment.
 /// </summary>
 [ApiController]
 [Authorize(Policy = StaffRolePolicies.ChefOnly)]
@@ -33,6 +33,24 @@ public sealed class KitchenOrdersController : ControllerBase
         var (restaurantId, error) = await GetAuthorizedRestaurantAsync(ct);
         if (error is not null) return error;
         return Ok(await _orders.GetKitchenFeedAsync(restaurantId, ct));
+    }
+
+    // Batch feed for kitchen UI: each batch contains only newly sent items.
+    [HttpGet("submissions")]
+    public async Task<IActionResult> Submissions(CancellationToken ct)
+    {
+        var (restaurantId, error) = await GetAuthorizedRestaurantAsync(ct);
+        if (error is not null) return error;
+        return Ok(await _orders.GetKitchenSubmissionsAsync(restaurantId, ct: ct));
+    }
+
+    [HttpGet("{orderId:int}/submissions")]
+    public async Task<IActionResult> OrderSubmissions(int orderId, CancellationToken ct)
+    {
+        if (orderId <= 0) return BadRequest(new { error = "Invalid order ID." });
+        var (restaurantId, error) = await GetAuthorizedRestaurantAsync(ct);
+        if (error is not null) return error;
+        return Ok(await _orders.GetKitchenSubmissionsAsync(restaurantId, orderId, ct));
     }
 
     [HttpGet("{orderId:int}")]
