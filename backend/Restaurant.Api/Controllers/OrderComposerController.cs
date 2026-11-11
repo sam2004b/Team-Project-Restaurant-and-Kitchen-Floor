@@ -28,22 +28,37 @@ public sealed class OrderComposerController : ControllerBase
         _queries = queries;
     }
 
+    // Legacy route kept for clients that have not added per-seat selection yet.
     [HttpPost("tables/{tableId:int}/orders/open")]
-    public async Task<IActionResult> Open(int tableId, CancellationToken ct)
+    public Task<IActionResult> Open(int tableId, CancellationToken ct) =>
+        OpenCore(tableId, null, ct);
+
+    // Preferred route: each seat has its own active order, even at a shared table.
+    [HttpPost("tables/{tableId:int}/seats/{seatNumber:int}/orders/open")]
+    public Task<IActionResult> OpenSeat(int tableId, int seatNumber, CancellationToken ct) =>
+        OpenCore(tableId, seatNumber, ct);
+
+    private async Task<IActionResult> OpenCore(int tableId, int? seatNumber, CancellationToken ct)
     {
         if (tableId <= 0) return BadRequest(new { error = "Invalid table ID." });
         var context = await GetContextAsync(ct);
         if (context.Error is not null) return context.Error;
 
         var result = await _drafts.GetOrCreateOpenAsync(
-            context.RestaurantId, context.MembershipId, tableId, ct);
+            context.RestaurantId, context.MembershipId, tableId, seatNumber, ct);
         if (result.Status == OrderWriteStatus.NotAccessible)
             return NotFound(new { error = "Assigned table not found." });
+        if (result.Status is OrderWriteStatus.InvalidSeat or
+            OrderWriteStatus.SeatRequired or OrderWriteStatus.AmbiguousActiveOrders)
+            return WriteError(result);
 
+        var details = await _queries.GetForWaiterAsync(
+            context.RestaurantId, context.MembershipId, result.OrderId!.Value, ct);
         var body = new
         {
             orderId = result.OrderId,
-            status = "Open",
+            seatNumber = details?.SeatNumber,
+            status = details?.Status ?? "Open",
             reused = result.Status == OrderWriteStatus.ExistingOpen
         };
 
@@ -62,6 +77,17 @@ public sealed class OrderComposerController : ControllerBase
         var order = await _queries.GetForWaiterAsync(
             context.RestaurantId, context.MembershipId, orderId, ct);
         return order is null ? NotFound() : Ok(order);
+    }
+
+    [HttpGet("orders/{orderId:int}/submissions")]
+    public async Task<IActionResult> Submissions(int orderId, CancellationToken ct)
+    {
+        if (orderId <= 0) return BadRequest(new { error = "Invalid order ID." });
+        var context = await GetContextAsync(ct);
+        if (context.Error is not null) return context.Error;
+        var submissions = await _queries.GetForWaiterSubmissionsAsync(
+            context.RestaurantId, context.MembershipId, orderId, ct);
+        return submissions is null ? NotFound() : Ok(submissions);
     }
 
     [HttpPost("orders/{orderId:int}/items")]
@@ -124,8 +150,8 @@ public sealed class OrderComposerController : ControllerBase
         if (result.Status is not (OrderWriteStatus.Sent or OrderWriteStatus.AlreadySent))
             return WriteError(result);
 
-        // Read the durable kitchen record after the transaction commits.
-        // Repeated sends return the same order with the original SentAtUtc.
+        // Backwards-compatible kitchenOrder includes only submitted lines.
+        // submissionId identifies the newly created (or most recent) batch.
         var kitchenOrder = await _queries.GetKitchenOrderAsync(
             context.RestaurantId, orderId, ct);
         return Ok(new
@@ -133,6 +159,7 @@ public sealed class OrderComposerController : ControllerBase
             orderId,
             status = "Sent",
             alreadySent = result.Status == OrderWriteStatus.AlreadySent,
+            submissionId = result.SubmissionId,
             kitchenOrder
         });
     }
@@ -156,10 +183,14 @@ public sealed class OrderComposerController : ControllerBase
     {
         OrderWriteStatus.NotAccessible => NotFound(new { error = "Order not found or not assigned." }),
         OrderWriteStatus.ItemNotFound => NotFound(new { error = "Order item not found." }),
+        OrderWriteStatus.ItemAlreadySubmitted => Conflict(new { error = "This line was already sent to the kitchen. Add a new line for extra quantity." }),
         OrderWriteStatus.InvalidItem => BadRequest(new { error = result.Error ?? "Invalid item." }),
+        OrderWriteStatus.InvalidSeat => BadRequest(new { error = result.Error ?? "Invalid seat." }),
+        OrderWriteStatus.SeatRequired => Conflict(new { error = result.Error }),
+        OrderWriteStatus.AmbiguousActiveOrders => Conflict(new { error = result.Error }),
         OrderWriteStatus.DishUnavailable => Conflict(new { error = "Dish unavailable or missing." }),
         OrderWriteStatus.EmptyOrder => Conflict(new { error = "Cannot send an empty order." }),
-        OrderWriteStatus.OrderNotOpen => Conflict(new { error = "Order is not Open." }),
+        OrderWriteStatus.OrderNotOpen => Conflict(new { error = "Order is not active (it may be closed)." }),
         _ => StatusCode(500, new { error = "Unexpected order operation result." })
     };
 }
