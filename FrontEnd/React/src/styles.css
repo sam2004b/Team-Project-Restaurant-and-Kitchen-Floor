@@ -911,6 +911,12 @@ button {
   max-width: 1120px;
 }
 
+.workspace-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .order-table-list {
   display: flex;
   flex-wrap: wrap;

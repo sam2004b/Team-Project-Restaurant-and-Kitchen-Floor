@@ -1,5 +1,7 @@
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const accessTokenStorageKey = "restaurant.accessToken";
+export const sessionExpiredEvent = "restaurant:session-expired";
+export const authorizationDeniedEvent = "restaurant:authorization-denied";
 
 export class ApiError extends Error {
     constructor(
@@ -80,6 +82,17 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     });
 
     if (!response.ok) {
+        if (accessToken && response.status === 401 &&
+            path !== "/auth/login" && path !== "/auth/logout" &&
+            getStoredAccessToken() === accessToken) {
+            clearStoredAccessToken();
+            window.dispatchEvent(new CustomEvent(sessionExpiredEvent));
+        } else if (accessToken && response.status === 403 &&
+            path !== "/auth/me" && path !== "/auth/logout") {
+            window.dispatchEvent(new CustomEvent(authorizationDeniedEvent, {
+                detail: { path },
+            }));
+        }
         return throwApiError(response);
     }
 
@@ -273,6 +286,10 @@ export function storeAccessToken(token: string): void {
 
 export function clearStoredAccessToken(): void {
     window.sessionStorage.removeItem(accessTokenStorageKey);
+}
+
+export function logout(): Promise<void> {
+    return apiRequest<void>("/auth/logout", { method: "POST" });
 }
 
 export function login(username: string, password: string): Promise<LoginResponse> {

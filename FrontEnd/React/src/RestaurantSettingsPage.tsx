@@ -3,28 +3,23 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   ApiError,
-  clearStoredAccessToken,
-  getCurrentAccount,
   getDiningTables,
   getRestaurantProfile,
   getRestaurantSettings,
   getRestaurantStaff,
-  getStoredAccessToken,
-  login,
   removeTableAssignment,
   saveDiningTable,
   saveRestaurantSettings,
   saveTableAssignment,
-  storeAccessToken,
   updateRestaurantProfile,
 } from "./services/api";
 import type {
-  AccountResponse,
   DiningTableResponse,
   RestaurantResponse,
   RestaurantSettingsResponse,
   StaffMemberResponse,
 } from "./services/api";
+import { useAuth } from "./services/AuthContext";
 
 type Notice = { type: "success" | "error" | "warning"; message: string };
 type SettingsData = {
@@ -80,8 +75,8 @@ async function fetchSettingsData(restaurantId: number): Promise<SettingsData> {
 }
 
 function RestaurantSettingsPage() {
-  const [account, setAccount] = useState<AccountResponse | null>(null);
-  const [sessionChecking, setSessionChecking] = useState(true);
+  const { account, status, sessionMessage, signIn, signOut } = useAuth();
+  const sessionChecking = status === "loading";
   const [authNotice, setAuthNotice] = useState<Notice | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -114,42 +109,10 @@ function RestaurantSettingsPage() {
   const validRestaurantId = Number.isSafeInteger(restaurantId) && restaurantId > 0;
 
   useEffect(() => {
-    let active = true;
-    try {
-      const token = getStoredAccessToken();
-      if (!token) {
-        setSessionChecking(false);
-        return () => { active = false; };
-      }
-
-      void getCurrentAccount()
-        .then((currentAccount) => {
-          if (active) {
-            setAccount(currentAccount);
-            setAuthNotice(null);
-          }
-        })
-        .catch((error: unknown) => {
-          if (active) {
-            setAuthNotice({
-              type: "error",
-              message: `Could not verify the signed-in account: ${getErrorMessage(error, "the session is invalid or expired.")}`,
-            });
-          }
-        })
-        .finally(() => {
-          if (active) setSessionChecking(false);
-        });
-    } catch (error) {
-      setAuthNotice({
-        type: "error",
-        message: `Could not read the signed-in session: ${getErrorMessage(error, "session storage is unavailable.")}`,
-      });
-      setSessionChecking(false);
+    if (sessionMessage && status !== "authenticated") {
+      setAuthNotice({ type: "warning", message: sessionMessage });
     }
-
-    return () => { active = false; };
-  }, []);
+  }, [sessionMessage, status]);
 
   const refreshRestaurant = useCallback(async () => {
     if (!validRestaurantId) return;
@@ -194,29 +157,20 @@ function RestaurantSettingsPage() {
     setAuthSubmitting(true);
     setAuthNotice(null);
     try {
-      const response = await login(username.trim(), password);
-      if (!response.accessToken) {
-        throw new Error("The API did not return an access token.");
-      }
-      storeAccessToken(response.accessToken);
-      const currentAccount = await getCurrentAccount();
-      setAccount(currentAccount);
+      const currentAccount = await signIn({ username: username.trim(), password });
       setPassword("");
       setAuthNotice({ type: "success", message: `Signed in as ${currentAccount.userName}.` });
     } catch (error) {
       setAuthNotice({ type: "error", message: getErrorMessage(error, "Could not sign in.") });
     } finally {
       setAuthSubmitting(false);
-      setSessionChecking(false);
     }
   };
 
-  const signOut = () => {
+  const handleSignOut = async () => {
     try {
-      clearStoredAccessToken();
-      setAccount(null);
+      await signOut();
       setSettingsData(null);
-      setAuthNotice({ type: "success", message: "You have signed out." });
     } catch (error) {
       setAuthNotice({
         type: "error",
@@ -429,7 +383,7 @@ function RestaurantSettingsPage() {
               <button type="button" className="secondary-button" onClick={() => void refreshRestaurant()} disabled={loading || !validRestaurantId}>
                 {loading ? "Refreshing..." : "Refresh"}
               </button>
-              <button type="button" className="secondary-button" onClick={signOut}>Sign out</button>
+              <button type="button" className="secondary-button" onClick={() => void handleSignOut()}>Sign out</button>
             </div>
           )}
         </header>

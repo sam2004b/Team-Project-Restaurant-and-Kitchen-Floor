@@ -20,6 +20,7 @@ import type {
 } from "./services/api";
 import { formatPrice } from "./services/currency";
 import { useMenuUpdates } from "./services/useMenuUpdates";
+import WorkspaceSessionActions from "./WorkspaceSessionActions";
 
 type ItemDraft = {
   quantity: string;
@@ -325,7 +326,7 @@ function WaiterOrderPage() {
             <h1>Table orders</h1>
             <p className="subtitle">Create and update a table order. Its subtotal changes as quantities change.</p>
           </div>
-          <Link className="secondary-button" to="/admin/staff">Account</Link>
+          <WorkspaceSessionActions />
         </header>
 
         {error && <div className="admin-error" role="alert">{error}</div>}

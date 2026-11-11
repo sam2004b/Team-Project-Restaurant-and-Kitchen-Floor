@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   acceptInvitation,
   changeStaffRole,
-  clearStoredAccessToken,
   createRestaurant,
-  getCurrentAccount,
   getRestaurantProfile,
   getRestaurantStaff,
-  getStoredAccessToken,
   inviteStaff,
-  login,
   revokeStaffInvitation,
   setStaffMembershipStatus,
-  storeAccessToken,
   updateRestaurantProfile,
   type AcceptedInvitationResponse,
   type AccountResponse,
@@ -24,6 +19,7 @@ import {
 } from "./services/api";
 import { ApiError } from "./services/api";
 import { RestaurantConfigurationPanel } from "./RestaurantConfigurationPanel";
+import { useAuth } from "./services/AuthContext";
 
 const staffRoles = [
   "Administrator",
@@ -73,12 +69,14 @@ function AccountPanel({
   onLogin,
   onLogout,
   authNotice,
+  checking,
 }: {
   accessToken: string | null;
   account: AccountResponse | null;
   onLogin: (username: string, password: string) => Promise<void>;
   onLogout: () => void;
   authNotice: Notice | null;
+  checking: boolean;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -142,6 +140,8 @@ function AccountPanel({
           </Link>
         )}
       </>
+      ) : checking ? (
+        <p className="staff-empty" role="status">Checking your session...</p>
       ) : (
         <form className="staff-form" onSubmit={(event) => void submitLogin(event)}>
           <label>
@@ -174,73 +174,57 @@ function AccountPanel({
 
 function StaffLoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { account, status, sessionMessage, signIn, signOut } = useAuth();
+  const locationState = location.state as { returnTo?: unknown; authMessage?: unknown } | null;
+  const returnTo = typeof locationState?.returnTo === "string" &&
+    locationState.returnTo.startsWith("/") && !locationState.returnTo.startsWith("//")
+    ? locationState.returnTo
+    : null;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    typeof locationState?.authMessage === "string" ? locationState.authMessage : null,
+  );
 
   useEffect(() => {
-    let active = true;
-    const token = getStoredAccessToken();
-    if (!token) {
-      setCheckingSession(false);
-      return () => {
-        active = false;
-      };
+    if (status === "loading") return;
+    if (status === "error") {
+      setError(sessionMessage ?? "Could not verify the saved session.");
+      return;
     }
 
-    void getCurrentAccount()
-      .then((account) => {
-        if (!active) return;
-        const route = getStaffRouteForRole(account.role);
-        if (route) {
-          navigate(route, { replace: true });
-        } else {
-          clearStoredAccessToken();
-          setError("This account does not have a supported staff role.");
-          setCheckingSession(false);
-        }
-      })
-      .catch(() => {
-        if (!active) return;
-        clearStoredAccessToken();
-        setCheckingSession(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [navigate]);
+    if (status === "authenticated" && account) {
+      const route = returnTo ?? getStaffRouteForRole(account.role);
+      if (route) navigate(route, { replace: true });
+      else setError("This account does not have a supported staff role.");
+    } else if (sessionMessage) {
+      setError(sessionMessage);
+    }
+  }, [account, navigate, returnTo, sessionMessage, status]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      const response = await login(username.trim(), password);
-      if (!response.accessToken) {
-        throw new Error("The API did not return an access token.");
-      }
-
-      storeAccessToken(response.accessToken);
-      const account = await getCurrentAccount();
-      const route = getStaffRouteForRole(account.role);
+      const signedInAccount = await signIn({ username: username.trim(), password });
+      const route = getStaffRouteForRole(signedInAccount.role);
       if (!route) {
-        clearStoredAccessToken();
+        await signOut();
         throw new Error("This account does not have a supported staff role.");
       }
 
-      navigate(route, { replace: true });
+      navigate(returnTo ?? route, { replace: true });
     } catch (caughtError) {
-      clearStoredAccessToken();
       setError(getErrorMessage(caughtError, "Could not sign in."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (checkingSession) {
+  if (status === "loading") {
     return (
       <div className="auth-state-panel" role="status">
         <p>Checking your session...</p>
@@ -543,10 +527,11 @@ function StaffDirectory({
 }
 
 function StaffManagementPage() {
-  const navigate = useNavigate();
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [account, setAccount] = useState<AccountResponse | null>(null);
+  const { account, status, sessionMessage, signIn, signOut, refreshAccount } = useAuth();
+  const accessToken = status === "authenticated" ? "authenticated" : null;
   const [authNotice, setAuthNotice] = useState<Notice | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [restaurantIdInput, setRestaurantIdInput] = useState("");
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
   const [restaurantProfile, setRestaurantProfile] = useState<RestaurantResponse | null>(null);
@@ -565,78 +550,52 @@ function StaffManagementPage() {
   const [revokingInvitation, setRevokingInvitation] = useState(false);
 
   useEffect(() => {
-    try {
-      const token = getStoredAccessToken();
-      if (token) setAccessToken(token);
-    } catch (error) {
-      setAuthNotice({
-        type: "error",
-        message: `Could not read the signed-in session: ${getErrorMessage(error, "session storage is unavailable.")}`,
-      });
+    const state = location.state as { authMessage?: unknown } | null;
+    if (typeof state?.authMessage === "string") {
+      setAuthNotice({ type: "warning", message: state.authMessage });
+    } else if (sessionMessage) {
+      setAuthNotice({ type: "warning", message: sessionMessage });
     }
-  }, []);
+  }, [location.key, location.state, sessionMessage]);
 
   useEffect(() => {
-    if (!accessToken) {
-      setAccount(null);
-      return;
-    }
-
-    let active = true;
-    void getCurrentAccount()
-      .then((currentAccount) => {
-        if (active) {
-          setAccount(currentAccount);
-          setAuthNotice(null);
-          const staffRoute = getStaffRouteForRole(currentAccount.role);
-          if (staffRoute && staffRoute !== "/admin/staff") {
-            navigate(staffRoute, { replace: true });
-          }
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setAccount(null);
-          setAuthNotice({
-            type: "error",
-            message: `Could not verify the signed-in account: ${getErrorMessage(error, "the session is invalid or expired.")}`,
-          });
-        }
-      });
-
-    return () => { active = false; };
-  }, [accessToken, navigate]);
+    setMembers([]);
+    setRestaurantId(null);
+    setRestaurantProfile(null);
+    setRoleDrafts({});
+    setRestaurantIdInput("");
+    setLastInvitation(null);
+    setStaffNotice(null);
+    setInviteNotice(null);
+  }, [account?.id, account?.restaurantId, account?.role]);
 
   const onLogin = async (username: string, password: string) => {
     setAuthNotice(null);
     try {
-      const response = await login(username, password);
-      if (!response.accessToken) {
-        throw new Error("The API did not return an access token.");
-      }
-      storeAccessToken(response.accessToken);
-      setAccessToken(response.accessToken);
-      const currentAccount = await getCurrentAccount();
-      setAccount(currentAccount);
-      setAuthNotice({ type: "success", message: `Signed in as ${currentAccount.userName}.` });
-      const route = getStaffRouteForRole(currentAccount.role);
-      if (route && route !== "/admin/staff") {
-        navigate(route, { replace: true });
+      const currentAccount = await signIn({ username, password });
+      const state = location.state as { returnTo?: unknown } | null;
+      const returnTo = typeof state?.returnTo === "string" &&
+        state.returnTo.startsWith("/") && !state.returnTo.startsWith("//")
+        ? state.returnTo
+        : null;
+      const destination = returnTo ?? (
+        currentAccount.role === "Waiter" ? "/waiter/orders" :
+          currentAccount.role === "Chef" ? "/chef/orders" :
+            "/admin/staff"
+      );
+      if (destination !== "/admin/staff") {
+        navigate(destination, { replace: true });
+      } else {
+        setAuthNotice({ type: "success", message: `Signed in as ${currentAccount.userName}.` });
       }
     } catch (error) {
-      clearStoredAccessToken();
-      setAccessToken(null);
-      setAccount(null);
       setAuthNotice({ type: "error", message: getErrorMessage(error, "Could not sign in.") });
       throw error;
     }
   };
 
   const onLogout = () => {
-    try {
-      clearStoredAccessToken();
-      setAccessToken(null);
-      setAccount(null);
+    void signOut().then((warning) => {
       setMembers([]);
       setRestaurantId(null);
       setRestaurantProfile(null);
@@ -646,13 +605,16 @@ function StaffManagementPage() {
       setStaffNotice(null);
       setInviteNotice(null);
       setLastInvitation(null);
-      setAuthNotice({ type: "success", message: "You have signed out." });
-    } catch (error) {
+      setAuthNotice(warning
+        ? { type: "warning", message: warning }
+        : { type: "success", message: "You have signed out." });
+      navigate("/admin/staff", { replace: true });
+    }).catch((error: unknown) => {
       setAuthNotice({
         type: "error",
         message: `Could not clear the signed-in session: ${getErrorMessage(error, "session storage is unavailable.")}`,
       });
-    }
+    });
   };
 
   const refreshStaff = async (id = restaurantId) => {
@@ -802,6 +764,7 @@ function StaffManagementPage() {
     try {
       await changeStaffRole(restaurantId, member.id, role);
       try {
+        await refreshAccount();
         await refreshStaff(restaurantId);
         setStaffNotice({ type: "success", message: `${member.userName}'s role is now ${role}. Memberships were refreshed from the server.` });
       } catch {
@@ -823,6 +786,7 @@ function StaffManagementPage() {
       await setStaffMembershipStatus(restaurantId, member.id, !wasActive);
       const nextState = wasActive ? "revoked" : "active";
       try {
+        await refreshAccount();
         await refreshStaff(restaurantId);
         setStaffNotice({ type: "success", message: `${member.userName}'s membership is ${nextState}. The current membership list was refreshed.` });
       } catch {
@@ -844,9 +808,23 @@ function StaffManagementPage() {
         </Link>
         <div className="admin-sidebar-label">WORKSPACE</div>
         <Link className="admin-sidebar-link" to="/">Overview</Link>
-        <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
-        <span className="admin-sidebar-link active" aria-current="page">Staff and access</span>
-        <Link className="admin-sidebar-link" to="/admin/settings">Settings</Link>
+        {account?.role === "Administrator" ? (
+          <>
+            <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
+            <Link className="admin-sidebar-link" to="/admin/staff#restaurant-configuration">Restaurant settings and tables</Link>
+            <span className="admin-sidebar-link active" aria-current="page">Staff and access</span>
+            <Link className="admin-sidebar-link" to="/admin/settings">Settings</Link>
+          </>
+        ) : account?.role === "Waiter" ? (
+          <Link className="admin-sidebar-link" to="/waiter/orders">Waiter orders</Link>
+        ) : account?.role === "Chef" ? (
+          <>
+            <Link className="admin-sidebar-link" to="/chef/orders">Kitchen orders</Link>
+            <Link className="admin-sidebar-link" to="/chef/availability">Dish availability</Link>
+          </>
+        ) : (
+          <span className="admin-sidebar-link active" aria-current="page">Staff and access</span>
+        )}
         <div className="admin-profile">
           <span className="admin-avatar" aria-hidden="true">
             {(account?.userName?.slice(0, 2) || "ST").toUpperCase()}
@@ -870,9 +848,10 @@ function StaffManagementPage() {
           onLogin={onLogin}
           onLogout={onLogout}
           authNotice={authNotice}
+          checking={status === "loading"}
         />
 
-        {account && (
+        {account?.role === "Administrator" && (
           <>
             <CreateRestaurantPanel onCreated={onRestaurantCreated} />
 
@@ -977,6 +956,14 @@ function StaffManagementPage() {
                   onToggleStatus={(member) => void toggleMembershipStatus(member)}
                 />
               </>
+            )}
+            {account && account.role !== "Administrator" && (
+              <section className="staff-card">
+                <h2>Staff administration unavailable</h2>
+                <p className="staff-help">
+                  This account is signed in as {account.role ?? "a staff member"}. Staff and restaurant administration requires an Administrator account.
+                </p>
+              </section>
             )}
           </>
         )}
