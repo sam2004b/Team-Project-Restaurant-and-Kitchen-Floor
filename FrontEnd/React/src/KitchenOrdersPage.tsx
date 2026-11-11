@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getCurrentAccount, getKitchenOrders } from "./services/api";
 import type { OrderDetailsResponse } from "./services/api";
 import { formatPrice } from "./services/currency";
+import WorkspaceSessionActions from "./WorkspaceSessionActions";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Could not load kitchen orders.";
@@ -98,14 +99,17 @@ function KitchenOrdersPage() {
             <h1>Incoming orders</h1>
             <p className="subtitle">New tickets appear after a waiter sends an order. Reconnecting reloads the durable kitchen feed.</p>
           </div>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={loading || !authorized}
-            onClick={() => void refresh(true)}
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="workspace-session-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={loading || !authorized}
+              onClick={() => void refresh(true)}
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+            <WorkspaceSessionActions />
+          </div>
         </header>
 
         {error && (

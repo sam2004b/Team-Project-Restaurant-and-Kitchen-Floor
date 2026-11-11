@@ -4,7 +4,8 @@ import {
   apiBaseUrl,
   getMenuDishes,
 } from "./services/api";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
 import AdminDishesPage from "./AdminDishesPage";
 import { AcceptInvitationPage, StaffManagementPage } from "./StaffAccessPage";
 import RestaurantSettingsPage from "./RestaurantSettingsPage";
@@ -12,6 +13,7 @@ import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { formatPrice } from "./services/currency";
 import WaiterOrderPage from "./WaiterOrderPage";
 import KitchenOrdersPage from "./KitchenOrdersPage";
+import { useAuth } from "./services/AuthContext";
 
 
 type MenuDish = {
@@ -78,6 +80,75 @@ const dishArtByName: Record<string, DishArt> = {
   "Beef Steak": "main",
   "Lemon Tart": "dessert",
 };
+
+type StaffRole = "Administrator" | "Waiter" | "Chef";
+
+function defaultWorkspace(role: string | undefined): string {
+  if (role === "Waiter") return "/waiter/orders";
+  if (role === "Chef") return "/chef/orders";
+  return "/admin/staff";
+}
+
+function ProtectedRoute({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: StaffRole[];
+  children: ReactNode;
+}) {
+  const { account, status, sessionMessage, refreshAccount } = useAuth();
+  const location = useLocation();
+
+  if (status === "loading") {
+    return <div className="admin-loading" role="status" aria-busy="true">Checking your session...</div>;
+  }
+
+  if (status === "error") {
+    return (
+      <main className="page admin-page">
+        <section className="staff-card" role="alert">
+          <h1>Could not verify your session</h1>
+          <p>Check your connection and try again.</p>
+          <button type="button" className="primary-button" onClick={() => void refreshAccount()}>
+            Try again
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (status !== "authenticated" || !account) {
+    const signedOut = sessionMessage?.toLowerCase().includes("signed out") ?? false;
+    return (
+      <Navigate
+        to="/admin/staff"
+        replace
+        state={{
+          ...(!signedOut && {
+            returnTo: `${location.pathname}${location.search}${location.hash}`,
+          }),
+          authMessage: sessionMessage ?? "Sign in to continue to that workspace.",
+        }}
+      />
+    );
+  }
+
+  if (!allowedRoles.some((role) => role === account.role)) {
+    return (
+      <Navigate
+        to={defaultWorkspace(account.role)}
+        replace
+        state={{ authMessage: `Your ${account.role ?? "current"} role cannot open that workspace.` }}
+      />
+    );
+  }
+
+  return children;
+}
+
+function protect(allowedRoles: StaffRole[], element: ReactNode) {
+  return <ProtectedRoute allowedRoles={allowedRoles}>{element}</ProtectedRoute>;
+}
 
 function MenuPage() {
   const [dishes, setDishes] = useState<MenuDish[]>([]);
@@ -158,7 +229,6 @@ function MenuPage() {
             <p className="eyebrow">WELCOME TO</p>
             <h1>PLATE Restaurant</h1>
             <p className="subtitle">Explore our menu by category</p>
-
           </div>
         </section>
 
@@ -279,13 +349,14 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<MenuPage />} />
-      <Route path="/admin/dishes" element={<AdminDishesPage />} />
+      <Route path="/login" element={<StaffManagementPage />} />
+      <Route path="/admin/dishes" element={protect(["Administrator"], <AdminDishesPage />)} />
       <Route path="/admin/staff" element={<StaffManagementPage />} />
-      <Route path="/admin/settings" element={<RestaurantSettingsPage />} />
-      <Route path="/chef/availability" element={<ChefAvailabilityPage />} />
-      <Route path="/chef/menu" element={<ChefAvailabilityPage />} />
-      <Route path="/chef/orders" element={<KitchenOrdersPage />} />
-      <Route path="/waiter/orders" element={<WaiterOrderPage />} />
+      <Route path="/admin/settings" element={protect(["Administrator"], <RestaurantSettingsPage />)} />
+      <Route path="/chef/availability" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+      <Route path="/chef/menu" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+      <Route path="/chef/orders" element={protect(["Chef"], <KitchenOrdersPage />)} />
+      <Route path="/waiter/orders" element={protect(["Waiter"], <WaiterOrderPage />)} />
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="*" element={<MenuPage />} />
     </Routes>
