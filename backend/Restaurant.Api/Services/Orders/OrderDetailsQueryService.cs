@@ -41,17 +41,16 @@ public sealed class OrderDetailsQueryService
     public async Task<List<OrderDetailsDto>> GetKitchenFeedAsync(
         int restaurantId, CancellationToken ct = default)
     {
-        // Retrieve ALL persisted Sent orders so a reconnecting kitchen client
-        // can reconcile missed notifications without relying on a push socket.
+        // Backwards-compatible order feed: show submitted lines only, never
+        // pending additions. Closed orders remain visible to the kitchen.
         var orders = await _db.Orders.AsNoTracking()
             .Where(o => o.RestaurantId == restaurantId &&
-                        o.Status == RestaurantOrderStates.Sent)
+                        o.Items.Any(i => i.KitchenSubmissionId != null))
             .Include(o => o.Items)
             .OrderBy(o => o.SentAtUtc)
-            .ThenBy(o => o.Id)
-            .ToListAsync(ct);
+            .ThenBy(o => o.Id).ToListAsync(ct);
 
-        return orders.Select(Project).ToList();
+        return orders.Select(o => Project(o, submittedOnly: true)).ToList();
     }
 
     public async Task<OrderDetailsDto?> GetKitchenOrderAsync(
@@ -62,12 +61,45 @@ public sealed class OrderDetailsQueryService
             .SingleOrDefaultAsync(o =>
                 o.RestaurantId == restaurantId &&
                 o.Id == orderId &&
-                o.Status == RestaurantOrderStates.Sent, ct);
-
-        return order is null ? null : Project(order);
+                o.Items.Any(i => i.KitchenSubmissionId != null), ct);
+        return order is null ? null : Project(order, submittedOnly: true);
     }
 
-    private static OrderDetailsDto Project(RestaurantOrder order) =>
+    public async Task<List<KitchenSubmissionDto>> GetKitchenSubmissionsAsync(
+        int restaurantId, int? orderId = null, CancellationToken ct = default)
+    {
+        var submissions = await _db.KitchenSubmissions.AsNoTracking()
+            .Where(s => s.Order.RestaurantId == restaurantId &&
+                        (!orderId.HasValue || s.OrderId == orderId.Value))
+            .Include(s => s.Order)
+            .Include(s => s.Items)
+            .OrderBy(s => s.SentAtUtc)
+            .ThenBy(s => s.Id)
+            .ToListAsync(ct);
+
+        return submissions.Select(s => new KitchenSubmissionDto(
+            s.Id, s.OrderId, s.Order.DiningTableId, s.SentAtUtc,
+            s.Items.OrderBy(i => i.Id).Select(ProjectItem).ToList(),
+            s.Order.SeatNumber
+        )).ToList();
+    }
+
+    public async Task<List<KitchenSubmissionDto>?> GetForWaiterSubmissionsAsync(
+        int restaurantId, int membershipId, int orderId,
+        CancellationToken ct = default)
+    {
+        // Reuse the same membership and current-table-assignment check as Details.
+        if (await GetForWaiterAsync(restaurantId, membershipId, orderId, ct) is null)
+            return null;
+        return await GetKitchenSubmissionsAsync(restaurantId, orderId, ct);
+    }
+
+    private static OrderItemDetailsDto ProjectItem(RestaurantOrderItem i) =>
+        new(i.Id, i.DishId, i.DishNameSnapshot, i.UnitPriceSnapshot,
+            i.Quantity, i.SpecialRequest, i.KitchenSubmissionId);
+
+    private static OrderDetailsDto Project(RestaurantOrder order,
+        bool submittedOnly = false) =>
         new(
             order.Id,
             order.RestaurantId,
@@ -76,14 +108,8 @@ public sealed class OrderDetailsQueryService
             order.Status,
             order.CreatedAtUtc,
             order.SentAtUtc,
-            order.Items
-                .OrderBy(i => i.Id)
-                .Select(i => new OrderItemDetailsDto(
-                    i.Id,
-                    i.DishId,
-                    i.DishNameSnapshot,
-                    i.UnitPriceSnapshot,
-                    i.Quantity,
-                    i.SpecialRequest))
-                .ToList());
+            order.Items.Where(i => !submittedOnly || i.KitchenSubmissionId != null)
+                .OrderBy(i => i.Id).Select(ProjectItem).ToList(),
+            order.PaidAtUtc,
+            order.SeatNumber);
 }

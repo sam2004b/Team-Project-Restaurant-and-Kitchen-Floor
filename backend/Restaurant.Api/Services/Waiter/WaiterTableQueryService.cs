@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 using Restaurant.Api.Models;
+using System.Text.Json.Serialization;
 
 namespace Restaurant.Api.Services.Waiter;
 
@@ -10,7 +11,10 @@ public sealed record AssignedTableView(int Id, int TableNumber, int SeatCount);
 public sealed record TableOrderView(
     int Id,
     int DiningTableId,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string Status = RestaurantOrderStates.Legacy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? SeatNumber = null);
 
 /// <summary>
 /// Read-only queries scoped to the restaurant and membership from a
@@ -104,7 +108,9 @@ public sealed class WaiterTableQueryService
             .Select(o => new TableOrderView(
                 o.Id,
                 o.DiningTableId,
-                o.CreatedAtUtc))
+                o.CreatedAtUtc,
+                o.Status,
+                o.SeatNumber))
             .ToListAsync(ct);
     }
 
@@ -120,7 +126,9 @@ public sealed class WaiterTableQueryService
             .Select(o => new TableOrderView(
                 o.Id,
                 o.DiningTableId,
-                o.CreatedAtUtc))
+                o.CreatedAtUtc,
+                o.Status,
+                o.SeatNumber))
             .ToListAsync(ct);
     }
 
@@ -136,7 +144,9 @@ public sealed class WaiterTableQueryService
             .Select(o => new TableOrderView(
                 o.Id,
                 o.DiningTableId,
-                o.CreatedAtUtc))
+                o.CreatedAtUtc,
+                o.Status,
+                o.SeatNumber))
             .SingleOrDefaultAsync(ct);
     }
 }
