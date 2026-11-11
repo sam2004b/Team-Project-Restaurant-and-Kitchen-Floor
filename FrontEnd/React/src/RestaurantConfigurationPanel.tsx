@@ -554,7 +554,7 @@ export function WaiterTablesPage() {
   }, [refresh]);
 
   return (
-    <div className="app-shell admin-shell">
+    <div className="app-shell admin-shell waiter-board-shell">
       <aside className="admin-sidebar">
         <Link className="admin-brand" to="/" aria-label="Restaurant customer menu">
           <strong>PLATE</strong>
@@ -564,7 +564,7 @@ export function WaiterTablesPage() {
         <Link className="admin-sidebar-link" to="/">Customer menu</Link>
         <span className="admin-sidebar-link active" aria-current="page">My tables</span>
       </aside>
-      <main className="page admin-page staff-page">
+      <main className="page admin-page staff-page waiter-board-page">
         <header className="admin-header">
           <div>
             <p className="eyebrow">WAITER / TABLES</p>
@@ -575,32 +575,49 @@ export function WaiterTablesPage() {
             {loading ? "Refreshing..." : "Refresh"}
           </button>
         </header>
-        <section className="staff-card" aria-labelledby="waiter-tables-title">
-          <div className="staff-card-heading">
+
+        <section className="waiter-board" aria-labelledby="waiter-tables-title">
+          <div className="staff-card-heading waiter-board-header">
             <div>
               <p className="eyebrow">ASSIGNMENTS</p>
               <h2 id="waiter-tables-title">Tables assigned to you</h2>
             </div>
-            <span>{tables.length} tables</span>
+            <span className="waiter-board-count">{tables.length} tables</span>
           </div>
+
           {error && <p className="staff-notice error" role="alert">{error}</p>}
+
           {loading ? (
-            <p className="staff-empty" role="status">Loading assigned tables...</p>
+            <div className="waiter-board-empty" role="status">Loading assigned tables...</div>
           ) : error ? null : tables.length === 0 ? (
-            <p className="staff-empty" role="status">No active tables are currently assigned to this waiter account.</p>
+            <div className="waiter-board-empty" role="status">No active tables are currently assigned to this waiter account.</div>
           ) : (
-            <div className="staff-table-wrap">
-              <table className="staff-table">
-                <thead><tr><th scope="col">Table</th><th scope="col">Seats</th></tr></thead>
-                <tbody>
-                  {tables.map((table) => (
-                    <tr key={table.id}>
-                      <td><strong>Table {table.tableNumber}</strong></td>
-                      <td>{table.seatCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="waiter-board-grid">
+              {tables.map((table) => (
+                <article key={table.id} className="waiter-table-card" aria-label={`Assigned table ${table.tableNumber}`}>
+                  <div className="waiter-table-card-header">
+                    <span className="waiter-table-badge">Table {table.tableNumber}</span>
+                    <span className="waiter-table-status">Assigned</span>
+                  </div>
+                  <div className="waiter-table-card-body">
+                    <div className="waiter-table-metric">
+                      <span className="waiter-table-label">Seats</span>
+                      <strong>{table.seatCount}</strong>
+                    </div>
+                    <div className="waiter-table-metric">
+                      <span className="waiter-table-label">Status</span>
+                      <strong>Ready</strong>
+                    </div>
+                    <div className="waiter-table-metric waiter-table-order">
+                      <span className="waiter-table-label">Orders</span>
+                      <strong>Linked</strong>
+                    </div>
+                  </div>
+                  <div className="waiter-table-card-footer">
+                    <Link to="/waiter/orders" className="waiter-table-link">Open order</Link>
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>
