@@ -342,9 +342,19 @@ public sealed class WaiterTableQueryServiceTests
         using var order = System.Text.Json.JsonDocument.Parse(
             System.Text.Json.JsonSerializer.Serialize(
                 new TableOrderView(9, 1, DateTime.UtcNow), options));
-        Assert.Equal(3, order.RootElement.EnumerateObject().Count());
+        Assert.Equal(4, order.RootElement.EnumerateObject().Count());
         Assert.Equal(9, order.RootElement.GetProperty("id").GetInt32());
         Assert.Equal(1, order.RootElement.GetProperty("diningTableId").GetInt32());
         Assert.True(order.RootElement.TryGetProperty("createdAtUtc", out _));
+        Assert.Equal(
+            RestaurantOrderStates.Legacy,
+            order.RootElement.GetProperty("status").GetString());
+        Assert.False(order.RootElement.TryGetProperty("seatNumber", out _));
+
+        using var seatedOrder = System.Text.Json.JsonDocument.Parse(
+            System.Text.Json.JsonSerializer.Serialize(
+                new TableOrderView(10, 1, DateTime.UtcNow,
+                    RestaurantOrderStates.Open, 2), options));
+        Assert.Equal(2, seatedOrder.RootElement.GetProperty("seatNumber").GetInt32());
     }
 }
