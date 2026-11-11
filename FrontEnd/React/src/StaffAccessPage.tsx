@@ -28,6 +28,20 @@ const staffRoles = [
   "Reception Manager",
 ] as const;
 
+export function getStaffRouteForRole(role?: string | null): string {
+  switch (role?.trim().toLowerCase()) {
+    case "waiter":
+      return "/waiter/orders";
+    case "chef":
+      return "/chef/orders";
+    case "administrator":
+    case "reception manager":
+      return "/admin/staff";
+    default:
+      return "";
+  }
+}
+
 type Notice = {
   type: "success" | "error" | "warning";
   message: string;
@@ -155,6 +169,148 @@ function AccountPanel({
         </form>
       )}
     </section>
+  );
+}
+
+function StaffLoginPage() {
+  const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const token = getStoredAccessToken();
+    if (!token) {
+      setCheckingSession(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    void getCurrentAccount()
+      .then((account) => {
+        if (!active) return;
+        const route = getStaffRouteForRole(account.role);
+        if (route) {
+          navigate(route, { replace: true });
+        } else {
+          clearStoredAccessToken();
+          setError("This account does not have a supported staff role.");
+          setCheckingSession(false);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        clearStoredAccessToken();
+        setCheckingSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await login(username.trim(), password);
+      if (!response.accessToken) {
+        throw new Error("The API did not return an access token.");
+      }
+
+      storeAccessToken(response.accessToken);
+      const account = await getCurrentAccount();
+      const route = getStaffRouteForRole(account.role);
+      if (!route) {
+        clearStoredAccessToken();
+        throw new Error("This account does not have a supported staff role.");
+      }
+
+      navigate(route, { replace: true });
+    } catch (caughtError) {
+      clearStoredAccessToken();
+      setError(getErrorMessage(caughtError, "Could not sign in."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (checkingSession) {
+    return (
+      <div className="auth-state-panel" role="status">
+        <p>Checking your session...</p>
+      </div>
+    );
+  }
+
+  return (
+    <main className="staff-login-page">
+      <section className="staff-login-intro">
+        <Link className="staff-login-brand" to="/" aria-label="Plate Restaurant home">
+          <span className="staff-login-mark">P</span>
+          <span>PLATE</span>
+        </Link>
+        <div className="staff-login-message">
+          <p className="staff-login-kicker">RESTAURANT OPERATIONS</p>
+          <h1>Your team,<br />working in sync.</h1>
+          <p>One place for your floor and kitchen teams to stay connected and keep service moving.</p>
+          <div className="staff-login-preview" aria-hidden="true">
+            <div className="staff-login-preview-card">
+              <span className="preview-chip">FLOOR</span>
+              <span className="preview-line wide" />
+              <span className="preview-line" />
+              <span className="preview-table"><i /><i /><i /></span>
+            </div>
+            <div className="staff-login-preview-card preview-kitchen">
+              <span className="preview-chip">KITCHEN</span>
+              <span className="preview-line wide" />
+              <span className="preview-line" />
+              <span className="preview-order"><i /><i /></span>
+            </div>
+          </div>
+        </div>
+        <p className="staff-login-footnote">A calmer service starts with a connected team.</p>
+      </section>
+
+      <section className="staff-login-form-side">
+        <div className="staff-login-form-wrap">
+          <p className="staff-login-kicker">STAFF ACCESS</p>
+          <h2>Welcome back</h2>
+          <p className="staff-login-subtitle">Sign in to continue to your workspace.</p>
+          <form className="staff-form staff-login-form" onSubmit={(event) => void submit(event)}>
+            <label>
+              Username
+              <input
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            {error && <p className="staff-notice error" role="alert">{error}</p>}
+            <button type="submit" className="primary-button" disabled={submitting}>
+              {submitting ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+          <Link className="staff-login-home-link" to="/">Return to public menu</Link>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -449,6 +605,9 @@ function StaffManagementPage() {
         setAuthNotice({ type: "success", message: `Signed in as ${currentAccount.userName}.` });
       }
     } catch (error) {
+      clearStoredAccessToken();
+      setAccessToken(null);
+      setAccount(null);
       setAuthNotice({ type: "error", message: getErrorMessage(error, "Could not sign in.") });
       throw error;
     }
@@ -916,4 +1075,4 @@ function AcceptInvitationPage() {
   );
 }
 
-export { AcceptInvitationPage, StaffManagementPage };
+export { AcceptInvitationPage, StaffLoginPage, StaffManagementPage };
