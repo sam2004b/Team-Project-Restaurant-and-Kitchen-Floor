@@ -186,6 +186,18 @@ export interface OpenOrderResponse {
     reused: boolean;
 }
 
+export interface WaiterOrderHistoryEntry {
+    id: number;
+    diningTableId: number;
+    createdAtUtc: string;
+}
+
+export function getWaiterOrderHistory(): Promise<WaiterOrderHistoryEntry[]> {
+    return apiRequest<WaiterOrderHistoryEntry[]>("/waiter/orders", {
+        cache: "no-store",
+    });
+}
+
 export interface SendOrderResponse {
     orderId: number;
     status: "Sent";

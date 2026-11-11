@@ -923,6 +923,42 @@ button {
   gap: 12px;
 }
 
+.waiter-order-history {
+  display: grid;
+  gap: 8px;
+}
+
+.waiter-order-history-entry {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.6fr) minmax(100px, 0.7fr) minmax(180px, 1.3fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.waiter-order-history-entry.selected {
+  border-color: var(--green);
+  background: #f0f6f0;
+  box-shadow: 0 0 0 1px var(--green-soft);
+}
+
+.waiter-order-history-entry time {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.waiter-order-history-action {
+  color: var(--green);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: right;
+}
+
 .order-table-button {
   display: grid;
   gap: 4px;
@@ -1149,10 +1185,22 @@ button {
     grid-template-columns: 1fr 1fr;
   }
 
+  .waiter-order-history-entry {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .order-item-title,
   .order-add-form h3,
   .order-add-form > .staff-help {
     grid-column: 1 / -1;
+  }
+
+  .waiter-order-history-entry time {
+    grid-column: 1;
+  }
+
+  .waiter-order-history-action {
+    grid-column: 2;
   }
 }
 

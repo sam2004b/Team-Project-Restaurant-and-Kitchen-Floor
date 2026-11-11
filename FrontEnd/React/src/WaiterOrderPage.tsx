@@ -7,6 +7,7 @@ import {
   getCurrentAccount,
   getMenuDishes,
   getOrderDetails,
+  getWaiterOrderHistory,
   getWaiterTables,
   openOrCreateOrder,
   removeOrderItem,
@@ -17,6 +18,7 @@ import type {
   MenuDishResponse,
   OrderDetailsResponse,
   OrderItemDetailsResponse,
+  WaiterOrderHistoryEntry,
   WaiterTableResponse,
 } from "./services/api";
 import { formatPrice } from "./services/currency";
@@ -37,6 +39,9 @@ function WaiterOrderPage() {
   const [tables, setTables] = useState<WaiterTableResponse[]>([]);
   const [dishes, setDishes] = useState<MenuDishResponse[]>([]);
   const [order, setOrder] = useState<OrderDetailsResponse | null>(null);
+  const [orderHistory, setOrderHistory] = useState<WaiterOrderHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [selectedDishId, setSelectedDishId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -70,6 +75,21 @@ function WaiterOrderPage() {
     [dishes],
   );
 
+  const refreshOrderHistory = useCallback(async (showLoading = true) => {
+    if (showLoading) setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const history = await getWaiterOrderHistory();
+      setOrderHistory(history.sort(
+        (first, second) => Date.parse(second.createdAtUtc) - Date.parse(first.createdAtUtc),
+      ));
+    } catch (caughtError) {
+      setHistoryError(getErrorMessage(caughtError, "Could not load order history."));
+    } finally {
+      if (showLoading) setHistoryLoading(false);
+    }
+  }, []);
+
   const refreshDishes = useCallback(async () => {
     try {
       setDishes(await getMenuDishes());
@@ -97,6 +117,7 @@ function WaiterOrderPage() {
         }
         setAuthorized(true);
         setTables(assignedTables);
+        void refreshOrderHistory();
         try {
           const menu = await getMenuDishes();
           if (active) {
@@ -123,7 +144,7 @@ function WaiterOrderPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshOrderHistory]);
 
   useMenuUpdates(() => {
     if (authorized) void refreshDishes();
@@ -175,6 +196,7 @@ function WaiterOrderPage() {
       const assignedTables = await getWaiterTables();
       setTables(assignedTables);
       setAssignmentsUnavailable(false);
+      void refreshOrderHistory(false);
 
       const selectedTableIsAssigned = selectedTableId !== null &&
         assignedTables.some((table) => table.id === selectedTableId);
@@ -228,6 +250,7 @@ function WaiterOrderPage() {
     try {
       const opened = await openOrCreateOrder(table.id);
       await refreshOrder(opened.orderId, table.id);
+      void refreshOrderHistory(false);
     } catch (caughtError) {
       if (caughtError instanceof ApiError &&
           [401, 403, 404].includes(caughtError.status)) {
@@ -238,6 +261,29 @@ function WaiterOrderPage() {
         setItemDrafts({});
       }
       setError(getErrorMessage(caughtError, "Could not open this table's order."));
+    } finally {
+      operationLock.current = false;
+      setOpening(false);
+    }
+  };
+
+  const openHistoryOrder = async (entry: WaiterOrderHistoryEntry) => {
+    if (operationLock.current) return;
+    if (!tables.some((table) => table.id === entry.diningTableId)) {
+      setHistoryError("This order's table is no longer assigned to you. Refresh the history to update the list.");
+      return;
+    }
+    operationLock.current = true;
+    setSelectedTableId(entry.diningTableId);
+    setOrder(null);
+    setItemDrafts({});
+    setOpening(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await refreshOrder(entry.id, entry.diningTableId);
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError, "Could not open this order from history."));
     } finally {
       operationLock.current = false;
       setOpening(false);
@@ -511,6 +557,61 @@ function WaiterOrderPage() {
               )}
             </section>
 
+            <section className="staff-card" aria-labelledby="waiter-order-history-title">
+              <div className="staff-card-heading">
+                <div>
+                  <p className="eyebrow">ORDER HISTORY</p>
+                  <h2 id="waiter-order-history-title">Orders on assigned tables</h2>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={historyLoading || opening}
+                  onClick={() => void refreshOrderHistory()}
+                >
+                  {historyLoading ? "Refreshing..." : "Refresh history"}
+                </button>
+              </div>
+              {historyError && (
+                <p className="staff-notice error" role="alert">
+                  {historyError}
+                  <button type="button" className="staff-text-button" onClick={() => void refreshOrderHistory()}>
+                    Try again
+                  </button>
+                </p>
+              )}
+              {historyLoading ? (
+                <p className="staff-empty" role="status">Loading order history...</p>
+              ) : orderHistory.length === 0 ? (
+                <p className="staff-empty" role="status">No order history is available for your currently assigned tables.</p>
+              ) : (
+                <div className="waiter-order-history">
+                  {orderHistory.map((entry) => {
+                    const table = tables.find((candidate) => candidate.id === entry.diningTableId);
+                    return (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        className={`waiter-order-history-entry${order?.id === entry.id ? " selected" : ""}`}
+                        aria-pressed={order?.id === entry.id}
+                        disabled={opening || refreshingTables}
+                        onClick={() => void openHistoryOrder(entry)}
+                      >
+                        <strong>Order #{entry.id}</strong>
+                        <span>{table ? `Table ${table.tableNumber}` : "Assigned table"}</span>
+                        <time dateTime={entry.createdAtUtc}>
+                          {new Date(entry.createdAtUtc).toLocaleString()}
+                        </time>
+                        <span className="waiter-order-history-action">
+                          {order?.id === entry.id ? "Viewing" : "View order"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
             {order && activeTable && !refreshingTables && (
               <section className="staff-card order-composer" aria-labelledby="order-heading">
                 <div className="staff-card-heading">
@@ -545,6 +646,12 @@ function WaiterOrderPage() {
                     <h3>Review order before sending</h3>
                     <p>Check each dish, quantity, and special request. Unsaved changes are saved before the order is sent.</p>
                   </div>
+                )}
+
+                {order.status === "Sent" && (
+                  <p className="staff-notice warning" role="status">
+                    This order has already been sent to the kitchen. The current API only allows editing Open orders, so this order is read-only.
+                  </p>
                 )}
 
                 {order.items.length === 0 ? (

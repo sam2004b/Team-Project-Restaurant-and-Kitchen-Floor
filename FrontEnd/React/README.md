@@ -72,6 +72,9 @@ including duplicate-number conflicts, is shown without a success state.
 Successful table and assignment changes reload server state. Waiters can view
 their current assigned tables and seat counts at
 [http://localhost:5173/waiter/tables](http://localhost:5173/waiter/tables).
+The waiter order workspace includes a history of orders for currently assigned
+tables. Selecting a saved open order lets the waiter continue editing it; sent
+orders are read-only because the current API does not allow changes after send.
 Chef accounts can open
 [http://localhost:5173/chef/availability](http://localhost:5173/chef/availability)
 or [http://localhost:5173/chef/menu](http://localhost:5173/chef/menu) to view available
