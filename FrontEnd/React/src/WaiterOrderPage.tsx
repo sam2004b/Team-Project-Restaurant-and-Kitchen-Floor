@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
+  ApiError,
   addOrderItem,
   getCurrentAccount,
   getMenuDishes,
@@ -42,6 +43,8 @@ function WaiterOrderPage() {
   const [specialRequest, setSpecialRequest] = useState("");
   const [itemDrafts, setItemDrafts] = useState<Record<number, ItemDraft>>({});
   const [loading, setLoading] = useState(true);
+  const [refreshingTables, setRefreshingTables] = useState(false);
+  const [assignmentsUnavailable, setAssignmentsUnavailable] = useState(false);
   const [opening, setOpening] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
@@ -108,6 +111,7 @@ function WaiterOrderPage() {
       } catch (caughtError: unknown) {
         if (active) {
           setAuthorized(false);
+          setAssignmentsUnavailable(true);
           setError(getErrorMessage(caughtError, "Could not load the waiter workspace."));
         }
       } finally {
@@ -125,8 +129,34 @@ function WaiterOrderPage() {
     if (authorized) void refreshDishes();
   });
 
-  const refreshOrder = useCallback(async (orderId: number): Promise<OrderDetailsResponse> => {
-    const updatedOrder = await getOrderDetails(orderId);
+  const refreshOrder = useCallback(async (
+    orderId: number,
+    expectedTableId: number,
+  ): Promise<OrderDetailsResponse> => {
+    let updatedOrder: OrderDetailsResponse;
+    try {
+      updatedOrder = await getOrderDetails(orderId);
+    } catch (caughtError) {
+      if (caughtError instanceof ApiError &&
+          [401, 403, 404].includes(caughtError.status)) {
+        setSelectedTableId(null);
+        setOrder(null);
+        setItemDrafts({});
+        if (caughtError.status === 401 || caughtError.status === 403) {
+          setTables([]);
+          setAssignmentsUnavailable(true);
+        }
+      }
+      throw caughtError;
+    }
+
+    if (updatedOrder.diningTableId !== expectedTableId) {
+      setSelectedTableId(null);
+      setOrder(null);
+      setItemDrafts({});
+      throw new Error("The returned order does not belong to the selected table.");
+    }
+
     setOrder(updatedOrder);
     setItemDrafts(Object.fromEntries(updatedOrder.items.map((item) => [
       item.id,
@@ -135,17 +165,78 @@ function WaiterOrderPage() {
     return updatedOrder;
   }, []);
 
-  const openTable = async (table: WaiterTableResponse) => {
+  const refreshAssignments = async () => {
     if (operationLock.current) return;
     operationLock.current = true;
+    setRefreshingTables(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const assignedTables = await getWaiterTables();
+      setTables(assignedTables);
+      setAssignmentsUnavailable(false);
+
+      const selectedTableIsAssigned = selectedTableId !== null &&
+        assignedTables.some((table) => table.id === selectedTableId);
+      if (selectedTableId !== null && !selectedTableIsAssigned) {
+        setSelectedTableId(null);
+        setOrder(null);
+        setItemDrafts({});
+        setNotice("Your table assignment changed. The table and its order are no longer available.");
+        return;
+      }
+
+      if (order && selectedTableId !== null) {
+        try {
+          await refreshOrder(order.id, selectedTableId);
+        } catch (caughtError) {
+          setOrder(null);
+          setItemDrafts({});
+          if (caughtError instanceof ApiError &&
+              [401, 403, 404].includes(caughtError.status)) {
+            setNotice("The selected order is no longer available. Refresh assignments before continuing.");
+          } else {
+            setError(`Could not refresh the selected order: ${getErrorMessage(caughtError, "Please try again.")}`);
+          }
+        }
+      } else if (assignedTables.length === 0) {
+        setNotice("No active tables are assigned to your waiter account.");
+      }
+    } catch (caughtError) {
+      setTables([]);
+      setAssignmentsUnavailable(true);
+      setSelectedTableId(null);
+      setOrder(null);
+      setItemDrafts({});
+      setError(`Could not refresh assigned tables: ${getErrorMessage(caughtError, "Please try again.")}`);
+    } finally {
+      operationLock.current = false;
+      setRefreshingTables(false);
+    }
+  };
+
+  const openTable = async (table: WaiterTableResponse) => {
+    if (operationLock.current) return;
+    if (!tables.some((assignedTable) => assignedTable.id === table.id)) return;
+    operationLock.current = true;
+    setSelectedTableId(table.id);
+    setOrder(null);
+    setItemDrafts({});
     setOpening(true);
     setError(null);
     setNotice(null);
     try {
       const opened = await openOrCreateOrder(table.id);
-      await refreshOrder(opened.orderId);
-      setSelectedTableId(table.id);
+      await refreshOrder(opened.orderId, table.id);
     } catch (caughtError) {
+      if (caughtError instanceof ApiError &&
+          [401, 403, 404].includes(caughtError.status)) {
+        setTables([]);
+        setAssignmentsUnavailable(true);
+        setSelectedTableId(null);
+        setOrder(null);
+        setItemDrafts({});
+      }
       setError(getErrorMessage(caughtError, "Could not open this table's order."));
     } finally {
       operationLock.current = false;
@@ -173,7 +264,7 @@ function WaiterOrderPage() {
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not add this dish. Refresh the order and try again."));
       try {
-        await refreshOrder(order.id);
+        await refreshOrder(order.id, order.diningTableId);
       } catch {
         setNotice("The add request may have reached the server, but the order could not be reloaded. Refresh the order before retrying.");
       }
@@ -185,7 +276,7 @@ function WaiterOrderPage() {
     setSpecialRequest("");
     setQuantity("1");
     try {
-      await refreshOrder(order.id);
+      await refreshOrder(order.id, order.diningTableId);
     } catch (caughtError) {
       setNotice(`Dish added, but the order could not be reloaded: ${getErrorMessage(caughtError, "Please refresh the order.")}`);
     } finally {
@@ -214,7 +305,7 @@ function WaiterOrderPage() {
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not update this dish."));
       try {
-        await refreshOrder(order.id);
+        await refreshOrder(order.id, order.diningTableId);
       } catch {
         setNotice("The saved order could not be reloaded. Retry the refresh before editing again.");
       }
@@ -223,7 +314,7 @@ function WaiterOrderPage() {
       return;
     }
     try {
-      await refreshOrder(order.id);
+      await refreshOrder(order.id, order.diningTableId);
     } catch (caughtError) {
       setNotice(`Dish updated, but the order could not be reloaded: ${getErrorMessage(caughtError, "Please refresh the order.")}`);
     } finally {
@@ -243,7 +334,7 @@ function WaiterOrderPage() {
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not remove this dish."));
       try {
-        await refreshOrder(order.id);
+        await refreshOrder(order.id, order.diningTableId);
       } catch {
         setNotice("The saved order could not be reloaded. Retry the refresh before editing again.");
       }
@@ -252,7 +343,7 @@ function WaiterOrderPage() {
       return;
     }
     try {
-      await refreshOrder(order.id);
+      await refreshOrder(order.id, order.diningTableId);
     } catch (caughtError) {
       setNotice(`Dish removed, but the order could not be reloaded: ${getErrorMessage(caughtError, "Please refresh the order.")}`);
     } finally {
@@ -269,6 +360,12 @@ function WaiterOrderPage() {
     setNotice(null);
     try {
       const result = await sendOrder(order.id);
+      if (result.kitchenOrder.diningTableId !== order.diningTableId) {
+        setSelectedTableId(null);
+        setOrder(null);
+        setItemDrafts({});
+        throw new Error("The returned order does not belong to the selected table.");
+      }
       setOrder(result.kitchenOrder);
       setNotice(result.alreadySent
         ? "This order was already sent; the kitchen has one copy."
@@ -276,7 +373,7 @@ function WaiterOrderPage() {
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not send this order."));
       try {
-        const refreshedOrder = await refreshOrder(order.id);
+        const refreshedOrder = await refreshOrder(order.id, order.diningTableId);
         if (refreshedOrder.status === "Sent") {
           setOrder(refreshedOrder);
           setError(null);
@@ -299,7 +396,7 @@ function WaiterOrderPage() {
     setError(null);
     setNotice(null);
     try {
-      await refreshOrder(order.id);
+      await refreshOrder(order.id, order.diningTableId);
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not reload the order."));
     } finally {
@@ -347,9 +444,23 @@ function WaiterOrderPage() {
             <section className="staff-card">
               <div className="staff-card-heading">
                 <div><p className="eyebrow">ASSIGNED TABLES</p><h2>Choose a table</h2></div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={refreshingTables || opening || savingItem || sending || busyItemId !== null}
+                  onClick={() => void refreshAssignments()}
+                >
+                  {refreshingTables ? "Refreshing..." : "Refresh assignments"}
+                </button>
               </div>
-              {tables.length === 0 ? (
-                <p className="staff-help">No active tables are assigned to your waiter account.</p>
+              {refreshingTables ? (
+                <p className="staff-help" role="status">Refreshing assigned tables...</p>
+              ) : tables.length === 0 ? (
+                <p className="staff-help">
+                  {assignmentsUnavailable
+                    ? "Assigned tables are unavailable until they can be refreshed."
+                    : "No active tables are assigned to your waiter account."}
+                </p>
               ) : (
                 <div className="order-table-list">
                   {tables.map((table) => (
@@ -357,7 +468,7 @@ function WaiterOrderPage() {
                       type="button"
                       key={table.id}
                       className={`order-table-button${selectedTableId === table.id ? " selected" : ""}`}
-                      disabled={opening}
+                      disabled={opening || refreshingTables}
                       onClick={() => void openTable(table)}
                     >
                       <strong>Table {table.tableNumber}</strong>
@@ -368,7 +479,7 @@ function WaiterOrderPage() {
               )}
             </section>
 
-            {order && activeTable && (
+            {order && activeTable && !refreshingTables && (
               <section className="staff-card order-composer" aria-labelledby="order-heading">
                 <div className="staff-card-heading">
                   <div>
