@@ -923,6 +923,52 @@ button {
   gap: 12px;
 }
 
+.order-seat-selector {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.order-seat-selector h3 {
+  margin: 0 0 6px;
+  color: var(--green);
+}
+
+.order-seat-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.order-seat-button {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.order-seat-button span {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.order-seat-button.selected {
+  border-color: var(--green);
+  background: #f0f6f0;
+  box-shadow: 0 0 0 1px var(--green-soft);
+}
+
+.order-seat-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .waiter-order-history {
   display: grid;
   gap: 8px;
