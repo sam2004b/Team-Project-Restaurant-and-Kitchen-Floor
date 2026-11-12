@@ -167,6 +167,7 @@ export interface OrderItemDetailsResponse {
     unitPrice: number;
     quantity: number;
     specialRequest: string | null;
+    kitchenSubmissionId: number | null;
 }
 
 export interface OrderDetailsResponse {
@@ -178,12 +179,23 @@ export interface OrderDetailsResponse {
     createdAtUtc: string;
     sentAtUtc: string | null;
     items: OrderItemDetailsResponse[];
+    seatNumber: number | null;
 }
 
 export interface OpenOrderResponse {
     orderId: number;
-    status: "Open";
+    seatNumber: number | null;
+    status: "Open" | "Sent";
     reused: boolean;
+}
+
+export interface KitchenSubmissionResponse {
+    id: number;
+    orderId: number;
+    diningTableId: number;
+    sentAtUtc: string;
+    items: OrderItemDetailsResponse[];
+    seatNumber: number | null;
 }
 
 export interface WaiterOrderHistoryEntry {
@@ -205,8 +217,14 @@ export interface SendOrderResponse {
     kitchenOrder: OrderDetailsResponse;
 }
 
-export function openOrCreateOrder(tableId: number): Promise<OpenOrderResponse> {
-    return apiRequest<OpenOrderResponse>(`/waiter/tables/${tableId}/orders/open`, {
+export function openOrCreateOrder(
+    tableId: number,
+    seatNumber?: number | null,
+): Promise<OpenOrderResponse> {
+    const path = typeof seatNumber === "number"
+        ? `/waiter/tables/${tableId}/seats/${seatNumber}/orders/open`
+        : `/waiter/tables/${tableId}/orders/open`;
+    return apiRequest<OpenOrderResponse>(path, {
         method: "POST",
     });
 }
@@ -254,8 +272,14 @@ export function sendOrder(orderId: number): Promise<SendOrderResponse> {
     });
 }
 
-export function getKitchenOrders(): Promise<OrderDetailsResponse[]> {
-    return apiRequest<OrderDetailsResponse[]>("/chef/orders", {
+export function getKitchenOrders(): Promise<KitchenSubmissionResponse[]> {
+    return apiRequest<KitchenSubmissionResponse[]>("/chef/orders/submissions", {
+        cache: "no-store",
+    });
+}
+
+export function getWaiterOrderSubmissions(orderId: number): Promise<KitchenSubmissionResponse[]> {
+    return apiRequest<KitchenSubmissionResponse[]>(`/waiter/orders/${orderId}/submissions`, {
         cache: "no-store",
     });
 }

@@ -57,10 +57,12 @@ function WaiterOrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const operationLock = useRef(false);
+  const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
+  const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
   const total = useMemo(
     () => order?.items.reduce((sum, item) => {
-      const currentQuantity = order.status === "Open"
-        ? Number(itemDrafts[item.id]?.quantity ?? item.quantity)
+      const currentQuantity = itemDrafts[item.id]
+        ? Number(itemDrafts[item.id].quantity)
         : item.quantity;
       return sum + item.unitPrice * (
         Number.isSafeInteger(currentQuantity) && currentQuantity > 0
@@ -237,7 +239,7 @@ function WaiterOrderPage() {
     }
   };
 
-  const openTable = async (table: WaiterTableResponse) => {
+  const openTable = async (table: WaiterTableResponse, seatNumber?: number) => {
     if (operationLock.current) return;
     if (!tables.some((assignedTable) => assignedTable.id === table.id)) return;
     operationLock.current = true;
@@ -248,7 +250,7 @@ function WaiterOrderPage() {
     setError(null);
     setNotice(null);
     try {
-      const opened = await openOrCreateOrder(table.id);
+      const opened = await openOrCreateOrder(table.id, seatNumber);
       await refreshOrder(opened.orderId, table.id);
       void refreshOrderHistory(false);
     } catch (caughtError) {
@@ -616,7 +618,9 @@ function WaiterOrderPage() {
               <section className="staff-card order-composer" aria-labelledby="order-heading">
                 <div className="staff-card-heading">
                   <div>
-                    <p className="eyebrow">TABLE {activeTable.tableNumber} / ORDER #{order.id}</p>
+                    <p className="eyebrow">
+                      TABLE {activeTable.tableNumber}{order.seatNumber ? ` / SEAT ${order.seatNumber}` : ""} / ORDER #{order.id}
+                    </p>
                     <h2 id="order-heading">{order.status === "Sent" ? "Sent to kitchen" : "Order draft"}</h2>
                   </div>
                   <div className="order-header-actions">
@@ -633,24 +637,26 @@ function WaiterOrderPage() {
                         type="button"
                         className="secondary-button"
                         disabled={opening}
-                        onClick={() => void openTable(activeTable)}
+                        onClick={() => void reloadOrder()}
                       >
-                        {opening ? "Opening..." : "Start another order"}
+                        {opening ? "Opening..." : "Reopen order"}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {order.status === "Open" && (
+                {orderIsActive && (
                   <div className="order-review-heading">
-                    <h3>Review order before sending</h3>
-                    <p>Check each dish, quantity, and special request. Unsaved changes are saved before the order is sent.</p>
+                    <h3>{order.status === "Sent" ? "Continue this order" : "Review order before sending"}</h3>
+                    <p>{order.status === "Sent"
+                      ? "Submitted dishes can be edited here, but the current API may reject those changes."
+                      : "Review each dish, quantity, and special request before sending the order."}</p>
                   </div>
                 )}
 
-                {order.status === "Sent" && (
+                {orderIsActive && order.items.some((item) => item.kitchenSubmissionId !== null) && (
                   <p className="staff-notice warning" role="status">
-                    This order has already been sent to the kitchen. The current API only allows editing Open orders, so this order is read-only.
+                    The server rejects edits and removals for submitted dishes; those actions may fail with a conflict and won't update the kitchen ticket.
                   </p>
                 )}
 
@@ -663,18 +669,22 @@ function WaiterOrderPage() {
                         quantity: String(item.quantity),
                         specialRequest: item.specialRequest ?? "",
                       };
+                      const editable = orderIsActive;
                       return (
                         <form
                           className="order-item"
                           key={item.id}
                           onSubmit={(event) => {
                             event.preventDefault();
-                            void saveItem(item, draft);
+                            if (editable) void saveItem(item, draft);
                           }}
                         >
                           <div className="order-item-title">
                             <strong>{item.dishName}</strong>
                             <span>{formatPrice(item.unitPrice)} each</span>
+                            {item.kitchenSubmissionId !== null && (
+                              <em className="order-submitted-tag">Submitted</em>
+                            )}
                           </div>
                           <label>
                             Quantity
@@ -683,7 +693,7 @@ function WaiterOrderPage() {
                               min="1"
                               step="1"
                               required
-                              disabled={order.status !== "Open" || busyItemId === item.id || savingItem || sending}
+                              disabled={!editable || busyItemId === item.id || savingItem || sending}
                               value={draft.quantity}
                               onChange={(event) => setItemDrafts((current) => ({
                                 ...current,
@@ -695,7 +705,7 @@ function WaiterOrderPage() {
                             Special request
                             <input
                               maxLength={500}
-                              disabled={order.status !== "Open" || busyItemId === item.id || savingItem || sending}
+                              disabled={!editable || busyItemId === item.id || savingItem || sending}
                               value={draft.specialRequest}
                               onChange={(event) => setItemDrafts((current) => ({
                                 ...current,
@@ -710,7 +720,7 @@ function WaiterOrderPage() {
                                 : 0
                             ))}
                           </span>
-                          {order.status === "Open" && (
+                          {editable && (
                             <div className="order-item-actions">
                               <button
                                 type="submit"
@@ -735,7 +745,7 @@ function WaiterOrderPage() {
                   </div>
                 )}
 
-                {order.status === "Open" && (
+                {orderIsActive && (
                   <>
                     <form className="order-add-form" onSubmit={(event) => void addItem(event)}>
                       <h3>Add a dish</h3>
@@ -795,23 +805,23 @@ function WaiterOrderPage() {
                       )}
                     </form>
                     <div className="order-total">
-                      <span>Subtotal</span>
+                      <span>{order.status === "Sent" ? "Updated subtotal" : "Subtotal"}</span>
                       <strong>{formatPrice(total)}</strong>
                     </div>
                     <p className="order-fee-note">Subtotal only; no additional service fee is applied.</p>
                     <button
                       type="button"
                       className="primary-button order-send-button"
-                      disabled={order.items.length === 0 || sending || savingItem || busyItemId !== null}
+                      disabled={pendingItems.length === 0 || sending || savingItem || busyItemId !== null}
                       onClick={() => void submitOrder()}
                     >
-                      {sending ? "Sending..." : "Send order to kitchen"}
+                      {sending ? "Sending..." : order.status === "Sent" ? "Send new items to kitchen" : "Send order to kitchen"}
                     </button>
                   </>
                 )}
-                {order.status === "Sent" && (
+                {order.status === "Sent" && pendingItems.length === 0 && (
                   <div className="order-total">
-                    <span>Sent subtotal</span>
+                    <span>Kitchen subtotal</span>
                     <strong>{formatPrice(total)}</strong>
                   </div>
                 )}

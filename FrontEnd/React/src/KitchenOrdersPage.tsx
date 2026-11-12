@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getCurrentAccount, getKitchenOrders } from "./services/api";
-import type { OrderDetailsResponse } from "./services/api";
+import type { KitchenSubmissionResponse } from "./services/api";
 import { formatPrice } from "./services/currency";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
 
@@ -11,7 +11,7 @@ function getErrorMessage(error: unknown): string {
 
 function KitchenOrdersPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [orders, setOrders] = useState<OrderDetailsResponse[]>([]);
+  const [orders, setOrders] = useState<KitchenSubmissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestVersion = useRef(0);
@@ -134,25 +134,25 @@ function KitchenOrdersPage() {
         )}
         {authorized && orders.length > 0 && (
           <section className="kitchen-order-list" aria-label="Incoming kitchen orders" aria-live="polite">
-            {orders.map((order) => {
-              const subtotal = order.items.reduce(
+            {orders.map((submission) => {
+              const subtotal = submission.items.reduce(
                 (sum, item) => sum + item.unitPrice * item.quantity,
                 0,
               );
               return (
-                <article className="staff-card kitchen-order-card" key={order.id}>
+                <article className="staff-card kitchen-order-card" key={submission.id}>
                   <header className="kitchen-order-heading">
                     <div>
-                      <p className="eyebrow">TABLE ID {order.diningTableId}</p>
-                      <h2>Order #{order.id}</h2>
+                      <p className="eyebrow">TABLE {submission.diningTableId}{submission.seatNumber !== null ? ` / SEAT ${submission.seatNumber}` : ""}</p>
+                      <h2>Kitchen ticket #{submission.id}</h2>
                     </div>
-                    <span className="kitchen-order-status">{order.status}</span>
+                    <span className="kitchen-order-status">Order #{submission.orderId}</span>
                   </header>
                   <p className="kitchen-order-time">
-                    Sent {order.sentAtUtc ? new Date(order.sentAtUtc).toLocaleString() : "time unavailable"}
+                    Sent {new Date(submission.sentAtUtc).toLocaleString()}
                   </p>
                   <ul className="kitchen-order-items">
-                    {order.items.map((item) => (
+                    {submission.items.map((item) => (
                       <li key={item.id}>
                         <div>
                           <strong>{item.quantity} × {item.dishName}</strong>
