@@ -175,7 +175,7 @@ export interface OrderDetailsResponse {
     restaurantId: number;
     diningTableId: number;
     createdByStaffMembershipId: number;
-    status: "Open" | "Sent" | "Legacy";
+    status: "Open" | "Sent" | "Closed" | "Legacy";
     createdAtUtc: string;
     sentAtUtc: string | null;
     items: OrderItemDetailsResponse[];
@@ -202,6 +202,9 @@ export interface WaiterOrderHistoryEntry {
     id: number;
     diningTableId: number;
     createdAtUtc: string;
+    status: "Open" | "Sent" | "Closed" | "Legacy";
+    // Older orders can have no seat; the API omits null seat numbers.
+    seatNumber?: number | null;
 }
 
 export function getWaiterOrderHistory(): Promise<WaiterOrderHistoryEntry[]> {
@@ -214,6 +217,8 @@ export interface SendOrderResponse {
     orderId: number;
     status: "Sent";
     alreadySent: boolean;
+    submissionId: number | null;
+    // This is the kitchen-only view. Reload /details for the editable order.
     kitchenOrder: OrderDetailsResponse;
 }
 
