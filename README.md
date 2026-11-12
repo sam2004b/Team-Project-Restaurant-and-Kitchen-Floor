@@ -124,7 +124,7 @@ The application is now ready for local use.
 | Service | URL |
 |---|---|
 | Customer Menu | http://localhost:5173 |
-| Administrator Dish Management | http://localhost:5173/admin/dishes |
+| Login Page | http://localhost:5173/login |
 | Backend API | http://localhost:5020 |
 | API Documentation (Swagger) | http://localhost:5020/swagger |
 | API through Nginx | http://localhost:5173/api/dishes |

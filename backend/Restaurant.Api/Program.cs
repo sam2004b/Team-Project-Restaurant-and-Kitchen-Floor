@@ -1,3 +1,8 @@
+using Restaurant.Api.Security;
+using Restaurant.Api.Services.Dishes;
+using Restaurant.Api.Services.Waiter;
+using Restaurant.Api.Services.Orders;
+using Restaurant.Api.Hubs;
 using Microsoft.OpenApi.Models;
 using Restaurant.Api.Services.Menu;
 using Microsoft.AspNetCore.Identity;
@@ -6,8 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
 
 builder.Services.AddDbContext<RestaurantDbContext>(
     options =>
@@ -27,7 +30,9 @@ builder.Services.AddDbContext<RestaurantDbContext>(
     }
 );
 
-
+// ==========================================
+// 2. ASP.NET CORE IDENTITY
+// ==========================================
 
 builder.Services
     .AddIdentityCore<IdentityUser>(options =>
@@ -41,7 +46,48 @@ builder.Services
         options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<RestaurantDbContext>();
+    .AddEntityFrameworkStores<RestaurantDbContext>()
+    .AddSignInManager();
+
+// ==========================================
+// 3. AUTHENTICATION
+// ==========================================
+
+builder.Services
+    .AddAuthentication(IdentityConstants.BearerScheme)
+    .AddBearerToken(IdentityConstants.BearerScheme, options =>
+    {
+        options.BearerTokenExpiration = TimeSpan.FromHours(1);
+    });
+
+// ==========================================
+// 4. AUTHORIZATION
+// ==========================================
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RestaurantCreator", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireClaim(
+                  "permission",
+                  "restaurants:create"));
+
+    StaffRolePolicies.Configure(options);
+});
+
+// ==========================================
+// 5. RESTAURANT ADMINISTRATION SERVICES
+// ==========================================
+
+builder.Services.AddScoped<
+    Restaurant.Api.Services.Administration.RestaurantAccessService>();
+
+builder.Services.AddScoped<
+    Restaurant.Api.Services.Administration.InvitationDeliveryService>();
+
+// ==========================================
+// 6. CORS CONFIGURATION
+// ==========================================
 
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
@@ -55,14 +101,36 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod());
 });
 
+// ==========================================
+// 7. APPLICATION SERVICES
+// ==========================================
 
 builder.Services.AddScoped<
     IMenuReadService,
     MenuReadService>();
- 
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
+
+builder.Services.AddSignalR();
+
+builder.Services.AddScoped<
+    IMenuUpdateNotifier,
+    SignalRMenuUpdateNotifier>();
+
+
+builder.Services.AddScoped<
+    IDishAvailabilityService,
+    DishAvailabilityService>();
+
+builder.Services.AddScoped<
+    WaiterTableQueryService>();
+
+// S2-US12-T01: DB-backed order draft and send-state persistence.
+builder.Services.AddScoped<OrderDraftPersistenceService>();
+builder.Services.AddScoped<OrderDetailsQueryService>();
+
+
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -77,15 +145,61 @@ builder.Services.AddSwaggerGen(options =>
             "dish images, and administrative dish management."
     });
 
-    // Load XML comments from the API assembly.
-    var xmlFile = $"{builder.Environment.ApplicationName}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    // Define Bearer authentication in Swagger.
+    options.AddSecurityDefinition("Bearer",
+        new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            In = ParameterLocation.Header,
+            Description =
+                "Enter the access token obtained from /auth/login."
+        });
+
+    // Allow Swagger to send the token with API requests.
+    options.AddSecurityRequirement(
+        new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+
+    var xmlFile =
+        $"{builder.Environment.ApplicationName}.xml";
+
+    var xmlPath =
+        Path.Combine(
+            AppContext.BaseDirectory,
+            xmlFile);
 
     options.IncludeXmlComments(xmlPath);
 });
 
+builder.Services.AddScoped<MenuAdminGuard>();
+
+builder.Services.AddScoped<OrderDishAvailabilityValidator>();
+
+builder.Services.AddScoped<StaffSessionValidator>();
+
+// ==========================================
+// 9. BUILD APPLICATION
+// ==========================================
 
 var app = builder.Build();
+
+// ==========================================
+// 10. APPLY DATABASE MIGRATIONS
+// ==========================================
 
 if (app.Environment.IsDevelopment() &&
     app.Configuration.GetValue<bool>(
@@ -100,9 +214,13 @@ if (app.Environment.IsDevelopment() &&
     await db.Database.MigrateAsync();
 }
 
+// ==========================================
+// 11. DEVELOPMENT DATABASE SEEDING
+// ==========================================
 
-
-if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+if (args.Contains(
+    "--seed",
+    StringComparer.OrdinalIgnoreCase))
 {
     if (!app.Environment.IsDevelopment())
     {
@@ -117,10 +235,11 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
     var db = scope.ServiceProvider
         .GetRequiredService<RestaurantDbContext>();
 
-    // Ensure database schema is updated first
+    // Ensure the database schema is updated.
     await db.Database.MigrateAsync();
 
-    // Create sample users, roles and dishes
+    // Create sample users, roles, restaurants,
+    // memberships, invitations and dishes.
     await DatabaseSeeder.SeedAsync(
         scope.ServiceProvider,
         app.Configuration);
@@ -128,13 +247,19 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+// ==========================================
+// 12. SWAGGER MIDDLEWARE
+// ==========================================
 
-//Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// ==========================================
+// 13. HTTP MIDDLEWARE
+// ==========================================
 
 app.UseHttpsRedirection();
 
@@ -142,9 +267,17 @@ app.UseStaticFiles();
 
 app.UseCors();
 
+app.UseAuthentication();
+
+// Validate the employee's current database session.
+app.UseMiddleware<StaffSessionMiddleware>();
+
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<MenuHub>("/hubs/menu");
+
 
 app.MapGet("/health", () => Results.Ok(new
 {

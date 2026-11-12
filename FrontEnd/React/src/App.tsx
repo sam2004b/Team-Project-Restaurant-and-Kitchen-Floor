@@ -1,11 +1,20 @@
+import { useMenuUpdates } from "./services/useMenuUpdates";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiBaseUrl,
   getMenuDishes,
 } from "./services/api";
-import { Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
 import AdminDishesPage from "./AdminDishesPage";
+import { AcceptInvitationPage, StaffLoginPage, StaffManagementPage } from "./StaffAccessPage";
+import { WaiterTablesPage } from "./RestaurantConfigurationPanel";
+import RestaurantSettingsPage from "./RestaurantSettingsPage";
+import ChefAvailabilityPage from "./ChefAvailabilityPage";
 import { formatPrice } from "./services/currency";
+import WaiterOrderPage from "./WaiterOrderPage";
+import KitchenOrdersPage from "./KitchenOrdersPage";
+import { useAuth } from "./services/AuthContext";
 
 
 type MenuDish = {
@@ -73,6 +82,75 @@ const dishArtByName: Record<string, DishArt> = {
   "Lemon Tart": "dessert",
 };
 
+type StaffRole = "Administrator" | "Reception Manager" | "Waiter" | "Chef";
+
+function defaultWorkspace(role: string | undefined): string {
+  if (role === "Waiter") return "/waiter/orders";
+  if (role === "Chef") return "/chef/orders";
+  return "/admin/staff";
+}
+
+function ProtectedRoute({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: StaffRole[];
+  children: ReactNode;
+}) {
+  const { account, status, sessionMessage, refreshAccount } = useAuth();
+  const location = useLocation();
+
+  if (status === "loading") {
+    return <div className="admin-loading" role="status" aria-busy="true">Checking your session...</div>;
+  }
+
+  if (status === "error") {
+    return (
+      <main className="page admin-page">
+        <section className="staff-card" role="alert">
+          <h1>Could not verify your session</h1>
+          <p>Check your connection and try again.</p>
+          <button type="button" className="primary-button" onClick={() => void refreshAccount()}>
+            Try again
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (status !== "authenticated" || !account) {
+    const signedOut = sessionMessage?.toLowerCase().includes("signed out") ?? false;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          ...(!signedOut && {
+            returnTo: `${location.pathname}${location.search}${location.hash}`,
+          }),
+          authMessage: sessionMessage ?? "Sign in to continue to that workspace.",
+        }}
+      />
+    );
+  }
+
+  if (!allowedRoles.some((role) => role === account.role)) {
+    return (
+      <Navigate
+        to={defaultWorkspace(account.role)}
+        replace
+        state={{ authMessage: `Your ${account.role ?? "current"} role cannot open that workspace.` }}
+      />
+    );
+  }
+
+  return children;
+}
+
+function protect(allowedRoles: StaffRole[], element: ReactNode) {
+  return <ProtectedRoute allowedRoles={allowedRoles}>{element}</ProtectedRoute>;
+}
+
 function MenuPage() {
   const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +206,10 @@ function MenuPage() {
     void loadMenu();
   }, []);
 
+  useMenuUpdates(() => {
+    void loadMenu(false);
+  });
+
   const visibleDishes = useMemo(() => {
     if (selectedCategory === "All") {
       return dishes;
@@ -136,19 +218,9 @@ function MenuPage() {
     return dishes.filter((dish) => normalizeCategoryName(dish.category) === selectedCategory);
   }, [dishes, selectedCategory]);
 
-  const displayDishes = useMemo(() => {
-    const unavailableMatchesCategory =
-      recentlyUnavailable &&
-      (selectedCategory === "All" ||
-        normalizeCategoryName(recentlyUnavailable.category) === selectedCategory);
+  const displayDishes = visibleDishes;
 
-    return [
-      ...(unavailableMatchesCategory ? [recentlyUnavailable] : []),
-      ...visibleDishes,
-    ];
-  }, [recentlyUnavailable, selectedCategory, visibleDishes]);
-
-  const dishCountText = useMemo(() => `${dishes.length} dishes available`, [dishes.length]);
+  
 
   return (
     <div className="app-shell">
@@ -158,14 +230,6 @@ function MenuPage() {
             <p className="eyebrow">WELCOME TO</p>
             <h1>PLATE Restaurant</h1>
             <p className="subtitle">Explore our menu by category</p>
-
-            <div className={`hero-status-row ${recentlyUnavailable ? "availability-changed" : ""}`}>
-              <div className="status-pill" aria-live="polite">
-                <span className="status-dot" aria-hidden="true" />
-                <span>{loading ? "Updating menu..." : dishCountText}</span>
-              </div>
-              <span className="refresh-button">{recentlyUnavailable ? "Availability changed" : "Updated menu"}</span>
-            </div>
           </div>
         </section>
 
@@ -185,7 +249,6 @@ function MenuPage() {
 
         <section className="menu-header">
           <h2>Available dishes</h2>
-          <div className="meta-text">{dishes.length} items · showing featured dishes</div>
         </section>
 
         {loading ? (
@@ -226,7 +289,7 @@ function MenuPage() {
               <div className="availability-notice" role="status">
                 <strong>Availability changed</strong>
                 <b>{recentlyUnavailable.name} is no longer available.</b>
-                <p>Refresh the menu to remove this unavailable dish and see the latest selection.</p>
+                  <p>The menu has updated automatically. This dish is no longer available.</p>
               </div>
             )}
             {error && (
@@ -275,9 +338,6 @@ function MenuPage() {
                 </article>
               ))}
             </div>
-            <button type="button" className="menu-refresh-button" onClick={() => void loadMenu()} disabled={loading}>
-              {loading ? "Refreshing menu..." : "Refresh current menu"}
-            </button>
           </>
         )}
 
@@ -286,12 +346,97 @@ function MenuPage() {
   );
 }
 
+function normalizeRole(role?: string | null): StaffRole | "Unknown" {
+  const normalized = role?.trim();
+  if (!normalized) return "Unknown";
+
+  const key = normalized.toLowerCase();
+  if (key === "waiter") return "Waiter";
+  if (key === "chef") return "Chef";
+  if (key === "administrator") return "Administrator";
+  if (key === "reception manager") return "Reception Manager";
+  return "Unknown";
+}
+
+function StaffWorkspaceLayout() {
+  const navigate = useNavigate();
+  const { account, signOut: signOutFromContext } = useAuth();
+
+  const role = normalizeRole(account?.role);
+  const navigation = role === "Chef"
+    ? [
+      { label: "Kitchen orders", path: "/chef/orders" },
+      { label: "Dish availability", path: "/chef/availability" },
+    ]
+    : role === "Waiter"
+      ? [
+        { label: "My tables", path: "/waiter/tables" },
+        { label: "Create orders", path: "/waiter/orders" },
+      ]
+      : [
+        { label: "Menu management", path: "/admin/dishes" },
+        { label: "Staff and access", path: "/admin/staff" },
+        { label: "Settings", path: "/admin/settings" },
+      ];
+
+  const signOut = () => {
+    void signOutFromContext().then(() => navigate("/login", { replace: true }));
+  };
+
+  return (
+    <div className="staff-workspace-shell">
+      <aside className="admin-sidebar staff-shared-sidebar">
+        <Link className="admin-brand" to="/" aria-label="Plate restaurant customer menu">
+          <strong>PLATE</strong>
+          <span>RESTAURANT OPERATIONS</span>
+        </Link>
+        <div className="admin-sidebar-label">{role === "Unknown" ? "WORKSPACE" : `${role.toUpperCase()} WORKSPACE`}</div>
+        {navigation.map((item) => (
+          <NavLink
+            key={item.path}
+            className={({ isActive }) => `admin-sidebar-link${isActive ? " active" : ""}`}
+            to={item.path}
+          >
+            {item.label}
+          </NavLink>
+        ))}
+        <Link className="admin-sidebar-link" to="/">Customer menu</Link>
+        <div className="admin-profile">
+          <span className="admin-avatar" aria-hidden="true">
+            {(account?.userName?.slice(0, 2) || "ST").toUpperCase()}
+          </span>
+          <span>
+            <strong>{account?.userName || "Signed in"}</strong>
+            <small>{account?.role || "Staff account"}</small>
+          </span>
+          <button type="button" className="staff-sidebar-signout" onClick={signOut}>Sign out</button>
+        </div>
+      </aside>
+      <div className="staff-workspace-content">
+        <Outlet />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<MenuPage />} />
-      <Route path="/admin/dishes" element={<AdminDishesPage />} />
-      <Route path="*" element={<MenuPage />} />
+      <Route path="/login" element={<StaffLoginPage />} />
+      <Route path="/menu" element={<MenuPage />} />
+      <Route element={<StaffWorkspaceLayout />}>
+        <Route path="/admin/dishes" element={protect(["Administrator", "Reception Manager"], <AdminDishesPage />)} />
+        <Route path="/admin/staff" element={protect(["Administrator", "Reception Manager"], <StaffManagementPage />)} />
+        <Route path="/admin/settings" element={protect(["Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
+        <Route path="/chef/availability" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+        <Route path="/chef/menu" element={protect(["Chef"], <ChefAvailabilityPage />)} />
+        <Route path="/chef/orders" element={protect(["Chef"], <KitchenOrdersPage />)} />
+        <Route path="/waiter/orders" element={protect(["Waiter"], <WaiterOrderPage />)} />
+        <Route path="/waiter/tables" element={protect(["Waiter"], <WaiterTablesPage />)} />
+      </Route>
+      <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

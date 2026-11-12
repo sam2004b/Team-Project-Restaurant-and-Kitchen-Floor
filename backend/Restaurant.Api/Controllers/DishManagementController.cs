@@ -1,25 +1,33 @@
+using Restaurant.Api.Services.Menu;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Api.Data;
 using Restaurant.Api.Dtos;
 using Restaurant.Api.Models;
+using Microsoft.AspNetCore.Authorization;
+using Restaurant.Api.Security;
 
 namespace Restaurant.Api.Controllers;
 
 [ApiController]
+[Authorize]
+[ServiceFilter(typeof(MenuAdminGuard))]
 [Route("dishes")]
 public sealed class DishManagementController : ControllerBase
 {
     private readonly RestaurantDbContext _db;
     private readonly IWebHostEnvironment _environment;
+    private readonly IMenuUpdateNotifier _menuNotifier;
 
     public DishManagementController(
         RestaurantDbContext db,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IMenuUpdateNotifier menuNotifier)
     {
         _db = db;
         _environment = environment;
+        _menuNotifier = menuNotifier;
     }
 
     /// <summary>
@@ -102,6 +110,8 @@ public sealed class DishManagementController : ControllerBase
 
         await _db.SaveChangesAsync(cancellationToken);
 
+        await _menuNotifier.NotifyMenuChangedAsync(cancellationToken);
+
         return CreatedAtAction(
             nameof(GetDishById),
             new { id = dish.Id },
@@ -174,6 +184,8 @@ public sealed class DishManagementController : ControllerBase
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _menuNotifier.NotifyMenuChangedAsync(cancellationToken);
 
         // Reload from the database for an accurate response.
         var updated = await _db.Dishes

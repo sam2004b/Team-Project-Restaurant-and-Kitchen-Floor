@@ -1,9 +1,11 @@
-
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Restaurant.Api.Data;
+using Restaurant.Api.Security;
+using Restaurant.Api.Services.Menu;
 using System;
 using System.IO;
 using System.Linq;
@@ -14,6 +16,8 @@ using System.Threading.Tasks;
 namespace Restaurant.Api.Controllers;
 
 [ApiController]
+[Authorize]
+[ServiceFilter(typeof(MenuAdminGuard))]
 [Route("dishes")]
 public sealed class DishImagesController : ControllerBase
 {
@@ -22,15 +26,18 @@ public sealed class DishImagesController : ControllerBase
     private readonly RestaurantDbContext _db;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<DishImagesController> _logger;
+    private readonly IMenuUpdateNotifier _menuNotifier;
 
     public DishImagesController(
         RestaurantDbContext db,
         IWebHostEnvironment environment,
-        ILogger<DishImagesController> logger)
+        ILogger<DishImagesController> logger,
+        IMenuUpdateNotifier menuNotifier)
     {
         _db = db;
         _environment = environment;
         _logger = logger;
+        _menuNotifier = menuNotifier;
     }
 
     /// <summary>
@@ -187,6 +194,8 @@ public sealed class DishImagesController : ControllerBase
                 }
             }
         }
+
+        await _menuNotifier.NotifyMenuChangedAsync(cancellationToken);
 
         return Ok(new
         {

@@ -1,4 +1,7 @@
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const accessTokenStorageKey = "restaurant.accessToken";
+export const sessionExpiredEvent = "restaurant:session-expired";
+export const authorizationDeniedEvent = "restaurant:authorization-denied";
 
 export class ApiError extends Error {
     constructor(
@@ -68,6 +71,10 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
     }
+    const accessToken = getStoredAccessToken();
+    if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+    }
 
     const response = await fetch(`${apiBaseUrl}${path}`, {
         ...init,
@@ -75,7 +82,22 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     });
 
     if (!response.ok) {
+        if (accessToken && response.status === 401 &&
+            path !== "/auth/login" && path !== "/auth/logout" &&
+            getStoredAccessToken() === accessToken) {
+            clearStoredAccessToken();
+            window.dispatchEvent(new CustomEvent(sessionExpiredEvent));
+        } else if (accessToken && response.status === 403 &&
+            path !== "/auth/me" && path !== "/auth/logout") {
+            window.dispatchEvent(new CustomEvent(authorizationDeniedEvent, {
+                detail: { path },
+            }));
+        }
         return throwApiError(response);
+    }
+
+    if (response.status === 204) {
+        return undefined as T;
     }
 
     return (await response.json()) as T;
@@ -83,6 +105,422 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export function apiGet<T>(path: string): Promise<T> {
     return apiRequest<T>(path);
+}
+
+export interface LoginResponse {
+    tokenType: string;
+    accessToken: string;
+    expiresIn: number;
+    refreshToken?: string;
+}
+
+export interface AccountResponse {
+    id: string;
+    userName: string;
+    email: string | null;
+    restaurantId?: string;
+    role?: string;
+}
+
+export interface RestaurantResponse {
+    id: number;
+    name: string;
+    address: string;
+}
+
+export interface RestaurantSettingsResponse {
+    restaurantId: number;
+    defaultSeatCapacity: number;
+    updatedAtUtc: string;
+}
+
+export interface DiningTableResponse {
+    id: number;
+    restaurantId: number;
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+    assignment: {
+        id: number;
+        staffMembershipId: number;
+        userName: string | null;
+        role: string;
+        membershipStatus: string;
+        assignedAtUtc: string;
+    } | null;
+}
+
+export interface WaiterTableResponse {
+    id: number;
+    tableNumber: number;
+    seatCount: number;
+}
+
+export function getWaiterTables(): Promise<WaiterTableResponse[]> {
+    return apiGet<WaiterTableResponse[]>("/waiter/tables");
+}
+
+export interface OrderItemDetailsResponse {
+    id: number;
+    dishId: number;
+    dishName: string;
+    unitPrice: number;
+    quantity: number;
+    specialRequest: string | null;
+    kitchenSubmissionId: number | null;
+}
+
+export interface OrderDetailsResponse {
+    id: number;
+    restaurantId: number;
+    diningTableId: number;
+    createdByStaffMembershipId: number;
+    status: "Open" | "Sent" | "Closed" | "Legacy";
+    createdAtUtc: string;
+    sentAtUtc: string | null;
+    items: OrderItemDetailsResponse[];
+    seatNumber: number | null;
+}
+
+export interface OpenOrderResponse {
+    orderId: number;
+    seatNumber: number | null;
+    status: "Open" | "Sent";
+    reused: boolean;
+}
+
+export interface KitchenSubmissionResponse {
+    id: number;
+    orderId: number;
+    diningTableId: number;
+    sentAtUtc: string;
+    items: OrderItemDetailsResponse[];
+    seatNumber: number | null;
+}
+
+export interface WaiterOrderHistoryEntry {
+    id: number;
+    diningTableId: number;
+    createdAtUtc: string;
+    status: "Open" | "Sent" | "Closed" | "Legacy";
+    // Older orders can have no seat; the API omits null seat numbers.
+    seatNumber?: number | null;
+}
+
+export function getWaiterOrderHistory(): Promise<WaiterOrderHistoryEntry[]> {
+    return apiRequest<WaiterOrderHistoryEntry[]>("/waiter/orders", {
+        cache: "no-store",
+    });
+}
+
+export interface SendOrderResponse {
+    orderId: number;
+    status: "Sent";
+    alreadySent: boolean;
+    submissionId: number | null;
+    // This is the kitchen-only view. Reload /details for the editable order.
+    kitchenOrder: OrderDetailsResponse;
+}
+
+export function openOrCreateOrder(
+    tableId: number,
+    seatNumber?: number | null,
+): Promise<OpenOrderResponse> {
+    const path = typeof seatNumber === "number"
+        ? `/waiter/tables/${tableId}/seats/${seatNumber}/orders/open`
+        : `/waiter/tables/${tableId}/orders/open`;
+    return apiRequest<OpenOrderResponse>(path, {
+        method: "POST",
+    });
+}
+
+export function getOrderDetails(orderId: number): Promise<OrderDetailsResponse> {
+    return apiRequest<OrderDetailsResponse>(`/waiter/orders/${orderId}/details`, {
+        cache: "no-store",
+    });
+}
+
+export function addOrderItem(
+    orderId: number,
+    dishId: number,
+    quantity: number,
+    specialRequest: string,
+): Promise<{ orderId: number; itemId: number }> {
+    return apiSend(`/waiter/orders/${orderId}/items`, "POST", {
+        dishId,
+        quantity,
+        specialRequest,
+    });
+}
+
+export function updateOrderItem(
+    orderId: number,
+    itemId: number,
+    quantity: number,
+    specialRequest: string,
+): Promise<{ orderId: number; itemId: number; updated: boolean }> {
+    return apiSend(`/waiter/orders/${orderId}/items/${itemId}`, "PUT", {
+        quantity,
+        specialRequest,
+    });
+}
+
+export function removeOrderItem(orderId: number, itemId: number): Promise<void> {
+    return apiRequest<void>(`/waiter/orders/${orderId}/items/${itemId}`, {
+        method: "DELETE",
+    });
+}
+
+export function sendOrder(orderId: number): Promise<SendOrderResponse> {
+    return apiRequest<SendOrderResponse>(`/waiter/orders/${orderId}/send`, {
+        method: "POST",
+    });
+}
+
+export function getKitchenOrders(): Promise<KitchenSubmissionResponse[]> {
+    return apiRequest<KitchenSubmissionResponse[]>("/chef/orders/submissions", {
+        cache: "no-store",
+    });
+}
+
+export function getWaiterOrderSubmissions(orderId: number): Promise<KitchenSubmissionResponse[]> {
+    return apiRequest<KitchenSubmissionResponse[]>(`/waiter/orders/${orderId}/submissions`, {
+        cache: "no-store",
+    });
+}
+
+export interface StaffMemberResponse {
+    id: number;
+    restaurantId: number;
+    userId: string;
+    userName: string;
+    email: string | null;
+    role: string;
+    status: number | string;
+}
+
+export interface StaffInvitationResponse {
+    id: number;
+    restaurantId: number;
+    email: string;
+    role: string;
+    status: number | string;
+    expiresAtUtc: string;
+    developmentToken?: string | null;
+}
+
+export interface AcceptedInvitationResponse {
+    id: number;
+    restaurantId: number;
+    userId: string;
+    role: string;
+    status: number | string;
+}
+
+export function getStoredAccessToken(): string | null {
+    return window.sessionStorage.getItem(accessTokenStorageKey);
+}
+
+export function storeAccessToken(token: string): void {
+    window.sessionStorage.setItem(accessTokenStorageKey, token);
+}
+
+export function clearStoredAccessToken(): void {
+    window.sessionStorage.removeItem(accessTokenStorageKey);
+}
+
+export function logout(): Promise<void> {
+    return apiRequest<void>("/auth/logout", { method: "POST" });
+}
+
+export function login(username: string, password: string): Promise<LoginResponse> {
+    return apiRequest<LoginResponse>("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+    });
+}
+
+export function getCurrentAccount(): Promise<AccountResponse> {
+    return apiGet<AccountResponse>("/auth/me");
+}
+
+export function createRestaurant(
+    name: string,
+    address: string,
+): Promise<RestaurantResponse> {
+    return apiRequest<RestaurantResponse>("/restaurants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address }),
+    });
+}
+
+export function getRestaurantProfile(restaurantId: number): Promise<RestaurantResponse> {
+    return apiGet<RestaurantResponse>(`/restaurants/${restaurantId}/profile`);
+}
+
+export function updateRestaurantProfile(
+    restaurantId: number,
+    name: string,
+    address: string,
+): Promise<RestaurantResponse> {
+    return apiRequest<RestaurantResponse>(`/restaurants/${restaurantId}/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address }),
+    });
+}
+
+export interface RestaurantSettingsResponse {
+    restaurantId: number;
+    defaultSeatCapacity: number;
+    updatedAtUtc: string;
+}
+
+export interface StaffAssignmentResponse {
+    id: number;
+    staffMembershipId: number;
+    userName: string | null;
+    role: string;
+    membershipStatus: string;
+    assignedAtUtc: string;
+}
+
+export interface DiningTableResponse {
+    id: number;
+    restaurantId: number;
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+    assignment: StaffAssignmentResponse | null;
+}
+
+export function getRestaurantSettings(restaurantId: number): Promise<RestaurantSettingsResponse> {
+    return apiGet<RestaurantSettingsResponse>(`/restaurants/${restaurantId}/settings`);
+}
+
+export function saveRestaurantSettings(
+    restaurantId: number,
+    defaultSeatCapacity: number,
+    create: boolean,
+): Promise<RestaurantSettingsResponse> {
+    return apiSend<RestaurantSettingsResponse>(
+        `/restaurants/${restaurantId}/settings`,
+        create ? "POST" : "PUT",
+        { defaultSeatCapacity },
+    );
+}
+
+export function getDiningTables(restaurantId: number): Promise<DiningTableResponse[]> {
+    return apiGet<DiningTableResponse[]>(`/restaurants/${restaurantId}/tables`);
+}
+
+export interface SaveDiningTableRequest {
+    tableNumber: number;
+    seatCount: number;
+    isActive: boolean;
+}
+
+export function saveDiningTable(
+    restaurantId: number,
+    tableId: number | null,
+    request: SaveDiningTableRequest,
+): Promise<DiningTableResponse> {
+    return apiSend<DiningTableResponse>(
+        tableId === null
+            ? `/restaurants/${restaurantId}/tables`
+            : `/restaurants/${restaurantId}/tables/${tableId}`,
+        tableId === null ? "POST" : "PUT",
+        request,
+    );
+}
+
+export function saveTableAssignment(
+    restaurantId: number,
+    tableId: number,
+    staffMembershipId: number,
+): Promise<DiningTableResponse> {
+    return apiSend<DiningTableResponse>(
+        `/restaurants/${restaurantId}/tables/${tableId}/assignment`,
+        "PUT",
+        { staffMembershipId },
+    );
+}
+
+export function removeTableAssignment(restaurantId: number, tableId: number): Promise<void> {
+    return apiRequest<void>(
+        `/restaurants/${restaurantId}/tables/${tableId}/assignment`,
+        { method: "DELETE" },
+    );
+}
+
+export function getRestaurantStaff(restaurantId: number): Promise<StaffMemberResponse[]> {
+    return apiGet<StaffMemberResponse[]>(`/restaurants/${restaurantId}/staff`);
+}
+
+export function inviteStaff(
+    restaurantId: number,
+    email: string,
+    role: string,
+): Promise<StaffInvitationResponse> {
+    return apiRequest<StaffInvitationResponse>(`/restaurants/${restaurantId}/invitations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role }),
+    });
+}
+
+export function revokeStaffInvitation(
+    restaurantId: number,
+    invitationId: number,
+): Promise<void> {
+    return apiRequest<void>(
+        `/restaurants/${restaurantId}/invitations/${invitationId}/revoke`,
+        { method: "PATCH" },
+    );
+}
+
+export function changeStaffRole(
+    restaurantId: number,
+    memberId: number,
+    role: string,
+): Promise<StaffMemberResponse> {
+    return apiRequest<StaffMemberResponse>(
+        `/restaurants/${restaurantId}/staff/${memberId}/role`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role }),
+        },
+    );
+}
+
+export function setStaffMembershipStatus(
+    restaurantId: number,
+    memberId: number,
+    active: boolean,
+): Promise<StaffMemberResponse> {
+    return apiRequest<StaffMemberResponse>(
+        `/restaurants/${restaurantId}/staff/${memberId}/${active ? "activate" : "revoke"}`,
+        { method: "PATCH" },
+    );
+}
+
+export interface AcceptInvitationRequest {
+    token: string;
+    username?: string;
+    password?: string;
+}
+
+export function acceptInvitation(
+    request: AcceptInvitationRequest,
+): Promise<AcceptedInvitationResponse> {
+    return apiRequest<AcceptedInvitationResponse>("/invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+    });
 }
 
 
@@ -149,12 +587,38 @@ export interface SaveDishRequest {
     ingredients: string[];
 }
 
-export function getMenuDishes(): Promise<MenuDishResponse[]> {
-    return apiGet<MenuDishResponse[]>("/dishes");
+export interface DishAvailabilityResponse {
+    dishId: number;
+    isAvailable: boolean;
+    changed: boolean;
 }
+
+
+export function getMenuDishes(): Promise<MenuDishResponse[]> {
+    return apiRequest<MenuDishResponse[]>("/dishes", {
+        cache: "no-store",
+    });
+}
+
 
 export function getAdminDishes(): Promise<DishDetailsResponse[]> {
     return apiGet<DishDetailsResponse[]>("/dishes/manage");
+}
+
+export interface ChefDishResponse {
+    id: number;
+    name: string;
+    category: string;
+    isAvailable: boolean;
+}
+
+export function getChefDishes(): Promise<ChefDishResponse[]> {
+    return getMenuDishes().then((dishes) => dishes.map(({ id, name, category, isAvailable }) => ({
+        id,
+        name,
+        category,
+        isAvailable,
+    })));
 }
 
 export function getDishDetails(id: number): Promise<DishDetailsResponse> {
@@ -170,6 +634,19 @@ export function updateDish(
     request: SaveDishRequest,
 ): Promise<DishDetailsResponse> {
     return apiSend<DishDetailsResponse>(`/dishes/${id}`, "PUT", request);
+}
+
+export function updateDishAvailability(
+    id: number,
+    isAvailable: boolean,
+): Promise<DishAvailabilityResponse> {
+    return apiRequest<DishAvailabilityResponse>(`/dishes/${id}/availability`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isAvailable }),
+    });
 }
 
 export interface ApiHealth {
