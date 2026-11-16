@@ -31,7 +31,7 @@ public sealed class AuthController : ControllerBase
     }
 
     // ==========================================
-    // 1. STAFF LOGIN
+    // LOGIN
     // ==========================================
 
     [AllowAnonymous]
@@ -40,11 +40,10 @@ public sealed class AuthController : ControllerBase
         [FromBody] LoginRequest request,
         CancellationToken ct)
     {
-        // Find the Identity user.
         var user = await _users.FindByNameAsync(
             request.Username!);
 
-        if (user is null || !user.EmailConfirmed)
+        if (user == null || !user.EmailConfirmed)
         {
             return Unauthorized(new
             {
@@ -52,7 +51,6 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // Verify password and lockout status.
         var result = await _signIn.CheckPasswordSignInAsync(
             user,
             request.Password!,
@@ -66,7 +64,6 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // Do not bypass two-factor authentication.
         if (await _users.GetTwoFactorEnabledAsync(user))
         {
             return StatusCode(403, new
@@ -75,7 +72,61 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // Find active restaurant memberships.
+        // ==========================================
+        // GLOBAL ADMIN LOGIN
+        // ==========================================
+
+        var userClaims = await _users.GetClaimsAsync(user);
+
+        var isPlatformAdmin = userClaims.Any(c =>
+            c.Type == "permission" &&
+            c.Value == "restaurants:create");
+
+        if (isPlatformAdmin)
+        {
+            var platformSession = new PlatformAdminSession
+            {
+                UserId = user.Id,
+                SecurityStamp = user.SecurityStamp,
+                ExpiresAtUtc = DateTime.UtcNow.AddHours(1)
+            };
+
+            _db.PlatformAdminSessions.Add(platformSession);
+
+            await _db.SaveChangesAsync(ct);
+
+            var principal =
+                await _signIn.CreateUserPrincipalAsync(user);
+
+            var identity = (ClaimsIdentity)principal.Identity!;
+
+            // Do not inherit restaurant-specific roles
+            // into the global administrator session.
+            foreach (var claim in
+                identity.FindAll(identity.RoleClaimType).ToArray())
+            {
+                identity.RemoveClaim(claim);
+            }
+
+            identity.AddClaim(new Claim(
+                StaffSessionClaims.PlatformAdmin,
+                "true"));
+
+            identity.AddClaim(new Claim(
+                StaffSessionClaims.PlatformAdminSessionId,
+                platformSession.Id.ToString()));
+
+            await HttpContext.SignInAsync(
+                IdentityConstants.BearerScheme,
+                principal);
+
+            return new EmptyResult();
+        }
+
+        // ==========================================
+        // NORMAL RESTAURANT STAFF LOGIN
+        // ==========================================
+
         var memberships = await _db.StaffMemberships
             .AsNoTracking()
             .Where(m =>
@@ -92,22 +143,20 @@ public sealed class AuthController : ControllerBase
 
         if (memberships.Count == 0)
         {
-            return Unauthorized( new
+            return Unauthorized(new
             {
-                error = "Invalid Credentials or Inactive account."
+                error = "No active restaurant membership."
             });
         }
 
-        // Select the requested restaurant.
         var selected = request.RestaurantId.HasValue
-            ? memberships.SingleOrDefault(
-                m => m.RestaurantId ==
-                     request.RestaurantId.Value)
+            ? memberships.SingleOrDefault(m =>
+                m.RestaurantId == request.RestaurantId.Value)
             : memberships.Count == 1
                 ? memberships[0]
                 : null;
 
-        if (selected is null)
+        if (selected == null)
         {
             if (request.RestaurantId.HasValue)
             {
@@ -128,10 +177,6 @@ public sealed class AuthController : ControllerBase
             });
         }
 
-        // ==========================================
-        // 2. CREATE DATABASE-BACKED SESSION
-        // ==========================================
-
         var session = new StaffSession
         {
             UserId = user.Id,
@@ -145,65 +190,48 @@ public sealed class AuthController : ControllerBase
 
         await _db.SaveChangesAsync(ct);
 
-        // ==========================================
-        // 3. CREATE AUTHENTICATED PRINCIPAL
-        // ==========================================
-
-        var principal =
+        var staffPrincipal =
             await _signIn.CreateUserPrincipalAsync(user);
 
-        var identity = (ClaimsIdentity)principal.Identity!;
+        var staffIdentity =
+            (ClaimsIdentity)staffPrincipal.Identity!;
 
-        // Remove old global Identity role claims.
         foreach (var roleClaim in
-            identity.FindAll(identity.RoleClaimType).ToArray())
+            staffIdentity.FindAll(
+                staffIdentity.RoleClaimType).ToArray())
         {
-            identity.RemoveClaim(roleClaim);
+            staffIdentity.RemoveClaim(roleClaim);
         }
 
-        // Add the active restaurant-specific role.
-        identity.AddClaim(
-            new Claim(
-                identity.RoleClaimType,
-                selected.Role));
+        staffIdentity.AddClaim(new Claim(
+            staffIdentity.RoleClaimType,
+            selected.Role));
 
-        // Add the session identifier.
-        identity.AddClaim(
-            new Claim(
-                StaffSessionClaims.SessionId,
-                session.Id.ToString()));
+        staffIdentity.AddClaim(new Claim(
+            StaffSessionClaims.SessionId,
+            session.Id.ToString()));
 
-        // Add the restaurant identifier.
-        identity.AddClaim(
-            new Claim(
-                StaffSessionClaims.RestaurantId,
-                selected.RestaurantId.ToString()));
+        staffIdentity.AddClaim(new Claim(
+            StaffSessionClaims.RestaurantId,
+            selected.RestaurantId.ToString()));
 
-        // Add the staff membership identifier.
-        identity.AddClaim(
-            new Claim(
-                StaffSessionClaims.MembershipId,
-                selected.Id.ToString()));
+        staffIdentity.AddClaim(new Claim(
+            StaffSessionClaims.MembershipId,
+            selected.Id.ToString()));
 
-        // Add the current restaurant role.
-        identity.AddClaim(
-            new Claim(
-                StaffSessionClaims.RestaurantRole,
-                selected.Role));
-
-        // ==========================================
-        // 4. ISSUE BEARER TOKEN
-        // ==========================================
+        staffIdentity.AddClaim(new Claim(
+            StaffSessionClaims.RestaurantRole,
+            selected.Role));
 
         await HttpContext.SignInAsync(
             IdentityConstants.BearerScheme,
-            principal);
+            staffPrincipal);
 
         return new EmptyResult();
     }
 
     // ==========================================
-    // 5. GET CURRENT STAFF IDENTITY
+    // CURRENT USER
     // ==========================================
 
     [Authorize]
@@ -212,8 +240,13 @@ public sealed class AuthController : ControllerBase
     {
         var user = await _users.GetUserAsync(User);
 
-        if (user is null)
+        if (user == null)
             return Unauthorized();
+
+        var isPlatformAdmin =
+            User.HasClaim(
+                StaffSessionClaims.PlatformAdmin,
+                "true");
 
         return Ok(new
         {
@@ -221,19 +254,60 @@ public sealed class AuthController : ControllerBase
             user.UserName,
             user.Email,
 
+            isPlatformAdmin,
+
             restaurantId = User.FindFirstValue(
                 StaffSessionClaims.RestaurantId),
 
             membershipId = User.FindFirstValue(
                 StaffSessionClaims.MembershipId),
 
-            role = User.FindFirstValue(
-                StaffSessionClaims.RestaurantRole)
+            role = isPlatformAdmin
+                ? "PlatformAdmin"
+                : User.FindFirstValue(
+                    StaffSessionClaims.RestaurantRole)
         });
     }
 
     // ==========================================
-    // 6. LOGOUT AND REVOKE SESSION
+    // SELECT RESTAURANT CONTEXT
+    // ==========================================
+
+    [Authorize]
+    [HttpPost("select-restaurant/{restaurantId:int}")]
+    public async Task<IActionResult> SelectRestaurant(
+        int restaurantId,
+        CancellationToken ct)
+    {
+        if (!User.HasClaim(
+                StaffSessionClaims.PlatformAdmin,
+                "true"))
+        {
+            return Forbid();
+        }
+
+        // Restaurant selection is applied per request
+        // through the X-Restaurant-Id header.
+        var exists = await _db.Restaurants
+            .AnyAsync(r => r.Id == restaurantId, ct);
+
+        if (!exists)
+        {
+            return NotFound(new
+            {
+                error = "Restaurant not found."
+            });
+        }
+
+        return Ok(new
+        {
+            restaurantId,
+            message = "Restaurant selected. Send X-Restaurant-Id with subsequent requests."
+        });
+    }
+
+    // ==========================================
+    // LOGOUT
     // ==========================================
 
     [Authorize]
@@ -241,26 +315,59 @@ public sealed class AuthController : ControllerBase
     public async Task<IActionResult> Logout(
         CancellationToken ct)
     {
-        var sessionIdText = User.FindFirstValue(
-            StaffSessionClaims.SessionId);
-
         var userId = _users.GetUserId(User);
 
-        if (!Guid.TryParse(
-                sessionIdText,
-                out var sessionId) ||
-            userId is null)
-        {
+        if (userId == null)
             return Unauthorized();
+
+        // Global Admin logout
+        if (User.HasClaim(
+                StaffSessionClaims.PlatformAdmin,
+                "true"))
+        {
+            var platformSessionText =
+                User.FindFirstValue(
+                    StaffSessionClaims.PlatformAdminSessionId);
+
+            if (!Guid.TryParse(
+                    platformSessionText,
+                    out var platformSessionId))
+            {
+                return Unauthorized();
+            }
+
+            var platformSession =
+                await _db.PlatformAdminSessions
+                    .SingleOrDefaultAsync(s =>
+                        s.Id == platformSessionId &&
+                        s.UserId == userId,
+                        ct);
+
+            if (platformSession == null)
+                return Unauthorized();
+
+            platformSession.RevokedAtUtc =
+                DateTime.UtcNow;
+
+            await _db.SaveChangesAsync(ct);
+
+            return NoContent();
         }
 
+        // Normal staff logout
+        var sessionText = User.FindFirstValue(
+            StaffSessionClaims.SessionId);
+
+        if (!Guid.TryParse(sessionText, out var sessionId))
+            return Unauthorized();
+
         var session = await _db.StaffSessions
-            .SingleOrDefaultAsync(
-                s => s.Id == sessionId &&
-                     s.UserId == userId,
+            .SingleOrDefaultAsync(s =>
+                s.Id == sessionId &&
+                s.UserId == userId,
                 ct);
 
-        if (session is null)
+        if (session == null)
             return Unauthorized();
 
         session.RevokedAtUtc = DateTime.UtcNow;
