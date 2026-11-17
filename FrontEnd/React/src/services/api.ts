@@ -3,11 +3,17 @@ const accessTokenStorageKey = "restaurant.accessToken";
 export const sessionExpiredEvent = "restaurant:session-expired";
 export const authorizationDeniedEvent = "restaurant:authorization-denied";
 
+export interface LoginRestaurantOption {
+    restaurantId: number;
+    role: string;
+}
+
 export class ApiError extends Error {
     constructor(
         message: string,
         readonly status: number,
         readonly fieldErrors: Record<string, string[]> = {},
+        readonly restaurants: LoginRestaurantOption[] = [],
     ) {
         super(message);
         this.name = "ApiError";
@@ -18,6 +24,7 @@ async function throwApiError(response: Response): Promise<never> {
     const responseBody = await response.text();
     let message = `API request failed with status ${response.status}.`;
     let fieldErrors: Record<string, string[]> = {};
+    let restaurants: LoginRestaurantOption[] = [];
 
     if (responseBody) {
         try {
@@ -30,8 +37,20 @@ async function throwApiError(response: Response): Promise<never> {
                     detail?: unknown;
                     title?: unknown;
                     errors?: Record<string, unknown>;
+                    restaurants?: unknown;
                 };
 
+                restaurants = Array.isArray(details.restaurants)
+                    ? details.restaurants.flatMap((restaurant): LoginRestaurantOption[] => {
+                        if (!restaurant || typeof restaurant !== "object") return [];
+                        const option = restaurant as { restaurantId?: unknown; role?: unknown };
+                        return typeof option.restaurantId === "number" &&
+                            Number.isInteger(option.restaurantId) &&
+                            typeof option.role === "string"
+                            ? [{ restaurantId: option.restaurantId, role: option.role }]
+                            : [];
+                    })
+                    : [];
                 fieldErrors = Object.fromEntries(
                     Object.entries(details.errors ?? {}).flatMap(([field, value]) => {
                         const messages = Array.isArray(value)
@@ -63,7 +82,7 @@ async function throwApiError(response: Response): Promise<never> {
         }
     }
 
-    throw new ApiError(message, response.status, fieldErrors);
+    throw new ApiError(message, response.status, fieldErrors, restaurants);
 }
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -333,11 +352,15 @@ export function logout(): Promise<void> {
     return apiRequest<void>("/auth/logout", { method: "POST" });
 }
 
-export function login(username: string, password: string): Promise<LoginResponse> {
+export function login(
+    username: string,
+    password: string,
+    restaurantId?: number,
+): Promise<LoginResponse> {
     return apiRequest<LoginResponse>("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, ...(restaurantId === undefined ? {} : { restaurantId }) }),
     });
 }
 
