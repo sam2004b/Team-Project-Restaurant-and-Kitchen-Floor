@@ -528,8 +528,20 @@ namespace Restaurant.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PreparationStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<DateTime?>("PreparationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReadyAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("SequenceNumber")
                         .HasColumnType("integer");
@@ -556,6 +568,12 @@ namespace Restaurant.Api.Migrations
 
                     b.ToTable("order_items", null, t =>
                         {
+                            t.HasCheckConstraint("CK_order_items_preparation_requires_submission", "\"KitchenSubmissionId\" IS NOT NULL OR \"PreparationStatus\" = 'Pending'");
+
+                            t.HasCheckConstraint("CK_order_items_preparation_status", "\"PreparationStatus\" IN ('Pending', 'Preparing', 'Ready')");
+
+                            t.HasCheckConstraint("CK_order_items_preparation_timestamps", "(\"PreparationStatus\" = 'Pending' AND \"PreparationStartedAtUtc\" IS NULL AND \"ReadyAtUtc\" IS NULL) OR (\"PreparationStatus\" = 'Preparing' AND \"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NULL) OR (\"PreparationStatus\" = 'Ready' AND \"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" >= \"PreparationStartedAtUtc\")");
+
                             t.HasCheckConstraint("CK_order_items_price_positive", "\"UnitPriceSnapshot\" > 0");
 
                             t.HasCheckConstraint("CK_order_items_quantity_positive", "\"Quantity\" > 0");

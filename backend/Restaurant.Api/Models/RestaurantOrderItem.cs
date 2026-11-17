@@ -19,6 +19,14 @@ public sealed class RestaurantOrderItem
     public int Quantity { get; set; }
     public string? SpecialRequest { get; set; }
 
+    // Preparation progress belongs to this line, never the entire order.
+    // Draft lines and newly submitted lines start Pending.
+    public string PreparationStatus { get; set; } = DishPreparationStates.Pending;
+
+    // Null until kitchen staff starts / finishes this specific line.
+    public DateTime? PreparationStartedAtUtc { get; set; }
+    public DateTime? ReadyAtUtc { get; set; }
+
     // Snapshots preserve preparation and pricing details if the menu changes.
     public string DishNameSnapshot { get; set; } = string.Empty;
     public decimal UnitPriceSnapshot { get; set; }
