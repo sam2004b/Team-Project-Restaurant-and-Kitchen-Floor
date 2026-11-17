@@ -31,7 +31,10 @@ public sealed record OrderItemDetailsDto(
     decimal UnitPrice,
     int Quantity,
     string? SpecialRequest,
-    int? KitchenSubmissionId = null);
+    int? KitchenSubmissionId = null,
+    string PreparationStatus = "New",
+    DateTime? PreparationStartedAtUtc = null,
+    DateTime? ReadyAtUtc = null);
 
 public sealed record OrderDetailsDto(
     int Id,

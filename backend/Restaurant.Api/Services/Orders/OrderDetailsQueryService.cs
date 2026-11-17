@@ -104,7 +104,10 @@ public sealed class OrderDetailsQueryService
 
     private static OrderItemDetailsDto ProjectItem(RestaurantOrderItem i) =>
         new(i.Id, i.DishId, i.DishNameSnapshot, i.UnitPriceSnapshot,
-            i.Quantity, i.SpecialRequest, i.KitchenSubmissionId);
+            i.Quantity, i.SpecialRequest, i.KitchenSubmissionId,
+            i.PreparationStatus == DishPreparationStates.Pending
+                ? "New" : i.PreparationStatus,
+            i.PreparationStartedAtUtc, i.ReadyAtUtc);
 
     private static OrderDetailsDto Project(RestaurantOrder order,
         bool submittedOnly = false) =>
