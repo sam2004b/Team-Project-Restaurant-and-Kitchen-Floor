@@ -21,14 +21,14 @@ import {
 import type { AccountResponse } from "./api";
 
 type AuthStatus = "loading" | "authenticated" | "anonymous" | "error";
-type LoginCredentials = { username: string; password: string };
+type LoginCredentials = { username: string; password: string; restaurantId?: number };
 
 type AuthContextValue = {
   account: AccountResponse | null;
   status: AuthStatus;
   sessionMessage: string | null;
   signIn: (credentials: LoginCredentials) => Promise<AccountResponse>;
-  signOut: () => Promise<string | null>;
+  signOut: (options?: { sessionAlreadyRevoked?: boolean }) => Promise<string | null>;
   refreshAccount: () => Promise<AccountResponse | null>;
 };
 
@@ -132,13 +132,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshAccount]);
 
-  const signIn = useCallback(async ({ username, password }: LoginCredentials) => {
+  const signIn = useCallback(async ({ username, password, restaurantId }: LoginCredentials) => {
     setSessionMessage(null);
     setStatus("loading");
     setAccount(null);
     try {
       clearStoredAccessToken();
-      const response = await login(username, password);
+      const response = await login(username, password, restaurantId);
       if (!response.accessToken) {
         throw new Error("The API did not return an access token.");
       }
@@ -160,10 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshAccount]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async ({ sessionAlreadyRevoked = false }: { sessionAlreadyRevoked?: boolean } = {}) => {
     let warning: string | null = null;
     try {
-      if (getStoredAccessToken()) await logout();
+      if (!sessionAlreadyRevoked && getStoredAccessToken()) await logout();
     } catch (error) {
       warning = error instanceof Error
         ? `Signed out on this device, but the server session could not be revoked: ${error.message}`
@@ -178,7 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setAccount(null);
       setStatus("anonymous");
-      setSessionMessage(warning ?? "You have signed out.");
+      setSessionMessage(warning ?? (
+        sessionAlreadyRevoked
+          ? "Your restaurant access was revoked. Sign in with an active membership to continue."
+          : "You have signed out."
+      ));
     }
     return warning;
   }, []);
