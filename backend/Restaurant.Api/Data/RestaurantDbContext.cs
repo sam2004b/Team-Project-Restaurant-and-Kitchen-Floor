@@ -558,12 +558,36 @@ namespace Restaurant.Api.Data
 
                     table.HasCheckConstraint("CK_order_items_sequence_positive",
                         "\"SequenceNumber\" > 0");
+
+                    table.HasCheckConstraint("CK_order_items_preparation_status",
+                        "\"PreparationStatus\" IN ('Pending', 'Preparing', 'Ready')");
+
+                    // Draft items must not show kitchen progress.
+                    table.HasCheckConstraint("CK_order_items_preparation_requires_submission",
+                        "\"KitchenSubmissionId\" IS NOT NULL " +
+                        "OR \"PreparationStatus\" = 'Pending'");
+
+                    // Timestamp requirements are checked per line, not per order.
+                    table.HasCheckConstraint("CK_order_items_preparation_timestamps",
+                        "(\"PreparationStatus\" = 'Pending' AND " +
+                        "\"PreparationStartedAtUtc\" IS NULL AND \"ReadyAtUtc\" IS NULL) " +
+                        "OR (\"PreparationStatus\" = 'Preparing' AND " +
+                        "\"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NULL) " +
+                        "OR (\"PreparationStatus\" = 'Ready' AND " +
+                        "\"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NOT NULL " +
+                        "AND \"ReadyAtUtc\" >= \"PreparationStartedAtUtc\")");
                 });
 
                 entity.HasKey(i => i.Id);
 
                 entity.Property(i => i.Quantity).IsRequired();
                 entity.Property(i => i.SequenceNumber).IsRequired();
+                entity.Property(i => i.PreparationStatus)
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasDefaultValue(DishPreparationStates.Pending);
+                entity.Property(i => i.PreparationStartedAtUtc);
+                entity.Property(i => i.ReadyAtUtc);
                 entity.Property(i => i.SpecialRequest).HasMaxLength(500);
 
                 entity.Property(i => i.DishNameSnapshot)
