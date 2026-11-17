@@ -45,6 +45,7 @@ public sealed class OrderDetailsQueryService
         // pending additions. Closed orders remain visible to the kitchen.
         var orders = await _db.Orders.AsNoTracking()
             .Where(o => o.RestaurantId == restaurantId &&
+                        o.SentAtUtc != null &&
                         o.Items.Any(i => i.KitchenSubmissionId != null))
             .Include(o => o.Items)
             .OrderBy(o => o.SentAtUtc)
@@ -68,18 +69,25 @@ public sealed class OrderDetailsQueryService
     public async Task<List<KitchenSubmissionDto>> GetKitchenSubmissionsAsync(
         int restaurantId, int? orderId = null, CancellationToken ct = default)
     {
-        var submissions = await _db.KitchenSubmissions.AsNoTracking()
-            .Where(s => s.Order.RestaurantId == restaurantId &&
+        var submissionQuery = _db.KitchenSubmissions.AsNoTracking()
+            .Where(s => s.RestaurantId == restaurantId &&
+                        s.Order.RestaurantId == restaurantId &&
                         (!orderId.HasValue || s.OrderId == orderId.Value))
             .Include(s => s.Order)
-            .Include(s => s.Items)
-            .OrderBy(s => s.SentAtUtc)
-            .ThenBy(s => s.Id)
-            .ToListAsync(ct);
+            .Include(s => s.Items);
+
+        // Per-order batches use their persisted sequence; the restaurant-wide
+        // feed uses chronological send time and an ID tie-breaker.
+        var submissions = orderId.HasValue
+            ? await submissionQuery.OrderBy(s => s.SequenceNumber)
+                .ThenBy(s => s.Id).ToListAsync(ct)
+            : await submissionQuery.OrderBy(s => s.SentAtUtc)
+                .ThenBy(s => s.Id).ToListAsync(ct);
 
         return submissions.Select(s => new KitchenSubmissionDto(
             s.Id, s.OrderId, s.Order.DiningTableId, s.SentAtUtc,
-            s.Items.OrderBy(i => i.Id).Select(ProjectItem).ToList(),
+            s.Items.OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id)
+                .Select(ProjectItem).ToList(),
             s.Order.SeatNumber
         )).ToList();
     }
@@ -109,7 +117,8 @@ public sealed class OrderDetailsQueryService
             order.CreatedAtUtc,
             order.SentAtUtc,
             order.Items.Where(i => !submittedOnly || i.KitchenSubmissionId != null)
-                .OrderBy(i => i.Id).Select(ProjectItem).ToList(),
+                .OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id)
+                .Select(ProjectItem).ToList(),
             order.PaidAtUtc,
             order.SeatNumber);
 }

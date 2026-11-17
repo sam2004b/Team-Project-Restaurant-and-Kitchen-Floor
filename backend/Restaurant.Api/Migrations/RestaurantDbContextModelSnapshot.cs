@@ -331,14 +331,32 @@ namespace Restaurant.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("SentAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OrderId", "SentAtUtc");
+                    b.HasAlternateKey("OrderId", "Id");
 
-                    b.ToTable("kitchen_submissions", (string)null);
+                    b.HasIndex("OrderId", "SequenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_kitchen_submissions_order_sequence");
+
+                    b.HasIndex("RestaurantId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "SentAtUtc", "Id")
+                        .HasDatabaseName("IX_kitchen_submissions_restaurant_sent_id");
+
+                    b.ToTable("kitchen_submissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_kitchen_submissions_sequence_positive", "\"SequenceNumber\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.PlatformAdminSession", b =>
@@ -452,6 +470,8 @@ namespace Restaurant.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("RestaurantId", "Id");
+
                     b.HasIndex("RestaurantId", "CreatedByStaffMembershipId");
 
                     b.HasIndex("RestaurantId", "DiningTableId")
@@ -464,6 +484,10 @@ namespace Restaurant.Api.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_orders_one_active_per_seat")
                         .HasFilter("\"SeatNumber\" IS NOT NULL AND \"Status\" IN ('Open', 'Sent')");
+
+                    b.HasIndex("RestaurantId", "SentAtUtc", "Id")
+                        .HasDatabaseName("IX_orders_restaurant_sent_id")
+                        .HasFilter("\"SentAtUtc\" IS NOT NULL");
 
                     b.ToTable("orders", null, t =>
                         {
@@ -507,6 +531,9 @@ namespace Restaurant.Api.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SpecialRequest")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -519,15 +546,21 @@ namespace Restaurant.Api.Migrations
 
                     b.HasIndex("DishId");
 
-                    b.HasIndex("KitchenSubmissionId");
-
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("OrderId", "KitchenSubmissionId");
+
+                    b.HasIndex("OrderId", "SequenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_order_items_order_sequence");
 
                     b.ToTable("order_items", null, t =>
                         {
                             t.HasCheckConstraint("CK_order_items_price_positive", "\"UnitPriceSnapshot\" > 0");
 
                             t.HasCheckConstraint("CK_order_items_quantity_positive", "\"Quantity\" > 0");
+
+                            t.HasCheckConstraint("CK_order_items_sequence_positive", "\"SequenceNumber\" > 0");
                         });
                 });
 
@@ -809,7 +842,8 @@ namespace Restaurant.Api.Migrations
                 {
                     b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
                         .WithMany("KitchenSubmissions")
-                        .HasForeignKey("OrderId")
+                        .HasForeignKey("RestaurantId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -858,7 +892,8 @@ namespace Restaurant.Api.Migrations
 
                     b.HasOne("Restaurant.Api.Models.KitchenSubmission", "KitchenSubmission")
                         .WithMany("Items")
-                        .HasForeignKey("KitchenSubmissionId")
+                        .HasForeignKey("OrderId", "KitchenSubmissionId")
+                        .HasPrincipalKey("OrderId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")

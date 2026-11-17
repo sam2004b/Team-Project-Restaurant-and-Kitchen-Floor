@@ -340,4 +340,93 @@ public sealed class OrderDraftPersistenceServiceTests
         Assert.Equal(f.WaiterId,
             (await db.Orders.SingleAsync()).CreatedByStaffMembershipId);
     }
+
+    [Fact]
+    public async Task KitchenBatchesKeepTenantSequenceAndPreparationInstructions()
+    {
+        var f = await CreateFixtureAsync();
+        int otherRestaurantId;
+        int orderId;
+
+        await using (var db = new RestaurantDbContext(f.Options))
+        {
+            var other = new RestaurantAccount
+            {
+                Name = "Different Kitchen", Address = "Different street"
+            };
+            db.Restaurants.Add(other);
+            await db.SaveChangesAsync();
+            otherRestaurantId = other.Id;
+
+            var service = new OrderDraftPersistenceService(db);
+            orderId = (await service.GetOrCreateOpenAsync(
+                f.RestaurantId, f.WaiterId, f.TableId, seatNumber: 2))
+                .OrderId!.Value;
+
+            await service.AddItemAsync(
+                f.RestaurantId, f.WaiterId, orderId, f.CarbonaraId, 2,
+                "no cheese");
+            await service.AddItemAsync(
+                f.RestaurantId, f.WaiterId, orderId, f.SoupId, 1,
+                "extra hot");
+            Assert.Equal(OrderWriteStatus.Sent,
+                (await service.SendAsync(f.RestaurantId, f.WaiterId, orderId)).Status);
+
+            // Waiter can add another kitchen submission without closing the order.
+            await service.AddItemAsync(
+                f.RestaurantId, f.WaiterId, orderId, f.SoupId, 3,
+                "no salt");
+            Assert.Equal(OrderWriteStatus.Sent,
+                (await service.SendAsync(f.RestaurantId, f.WaiterId, orderId)).Status);
+        }
+
+        // A new DbContext verifies that every field really was persisted.
+        await using (var db = new RestaurantDbContext(f.Options))
+        {
+            var batches = await db.KitchenSubmissions.AsNoTracking()
+                .Where(s => s.OrderId == orderId)
+                .OrderBy(s => s.SequenceNumber).ToListAsync();
+            Assert.Equal(new[] { 1, 2 }, batches.Select(s => s.SequenceNumber));
+            Assert.All(batches, s => Assert.Equal(f.RestaurantId, s.RestaurantId));
+
+            var lines = await db.OrderItems.AsNoTracking()
+                .Where(i => i.OrderId == orderId)
+                .OrderBy(i => i.SequenceNumber).ToListAsync();
+            Assert.Equal(new[] { 1, 2, 3 }, lines.Select(i => i.SequenceNumber));
+            Assert.Equal(new[] { 2, 1, 3 }, lines.Select(i => i.Quantity));
+            Assert.Equal(new[] { "no cheese", "extra hot", "no salt" },
+                lines.Select(i => i.SpecialRequest));
+
+            var queries = new OrderDetailsQueryService(db);
+            Assert.Equal(2, (await queries.GetKitchenSubmissionsAsync(
+                f.RestaurantId, orderId)).Count);
+            Assert.Empty(await queries.GetKitchenSubmissionsAsync(otherRestaurantId));
+        }
+    }
+
+    [Fact]
+    public async Task KitchenModelHasTenantSafeCompositeForeignKeysAndSequenceIndexes()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var kitchen = db.Model.FindEntityType(typeof(KitchenSubmission))!;
+        var items = db.Model.FindEntityType(typeof(RestaurantOrderItem))!;
+
+        var kitchenToOrder = kitchen.GetForeignKeys().Single(fk =>
+            fk.PrincipalEntityType.ClrType == typeof(RestaurantOrder));
+        Assert.Equal(new[] { "RestaurantId", "OrderId" },
+            kitchenToOrder.Properties.Select(p => p.Name));
+
+        var itemToSubmission = items.GetForeignKeys().Single(fk =>
+            fk.PrincipalEntityType.ClrType == typeof(KitchenSubmission));
+        Assert.Equal(new[] { "OrderId", "KitchenSubmissionId" },
+            itemToSubmission.Properties.Select(p => p.Name));
+
+        Assert.Contains(kitchen.GetIndexes(), ix => ix.IsUnique &&
+            ix.Properties.Select(p => p.Name).SequenceEqual(
+                new[] { "OrderId", "SequenceNumber" }));
+        Assert.Contains(items.GetIndexes(), ix => ix.IsUnique &&
+            ix.Properties.Select(p => p.Name).SequenceEqual(
+                new[] { "OrderId", "SequenceNumber" }));
+    }
 }

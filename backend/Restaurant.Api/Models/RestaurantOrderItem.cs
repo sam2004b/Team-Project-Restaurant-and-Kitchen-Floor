@@ -14,6 +14,8 @@ public sealed class RestaurantOrderItem
     public int DishId { get; set; }
     public Dish Dish { get; set; } = null!;
 
+    // Stable one-based preparation order within the parent order.
+    public int SequenceNumber { get; set; }
     public int Quantity { get; set; }
     public string? SpecialRequest { get; set; }
 

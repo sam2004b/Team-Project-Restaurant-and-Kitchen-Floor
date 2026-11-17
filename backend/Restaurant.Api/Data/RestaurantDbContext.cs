@@ -533,6 +533,17 @@ namespace Restaurant.Api.Data
                     o.DiningTableId,
                     o.CreatedAtUtc
                 });
+
+                // Chef feed: filter by restaurant and stream orders by send time.
+                // Unlike the active-table index, includes paid/closed orders.
+                entity.HasIndex(o => new
+                {
+                    o.RestaurantId,
+                    o.SentAtUtc,
+                    o.Id
+                })
+                    .HasDatabaseName("IX_orders_restaurant_sent_id")
+                    .HasFilter("\"SentAtUtc\" IS NOT NULL");
             });
 
             modelBuilder.Entity<RestaurantOrderItem>(entity =>
@@ -544,11 +555,15 @@ namespace Restaurant.Api.Data
 
                     table.HasCheckConstraint("CK_order_items_price_positive",
                         "\"UnitPriceSnapshot\" > 0");
+
+                    table.HasCheckConstraint("CK_order_items_sequence_positive",
+                        "\"SequenceNumber\" > 0");
                 });
 
                 entity.HasKey(i => i.Id);
 
                 entity.Property(i => i.Quantity).IsRequired();
+                entity.Property(i => i.SequenceNumber).IsRequired();
                 entity.Property(i => i.SpecialRequest).HasMaxLength(500);
 
                 entity.Property(i => i.DishNameSnapshot)
@@ -570,35 +585,49 @@ namespace Restaurant.Api.Data
                     .HasForeignKey(i => i.DishId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // A submitted line can reference only a batch of the SAME
+                // order; this also prevents cross-restaurant ticket mixing.
                 entity.HasOne(i => i.KitchenSubmission)
                     .WithMany(s => s.Items)
-                    .HasForeignKey(i => i.KitchenSubmissionId)
+                    .HasForeignKey(i => new { i.OrderId, i.KitchenSubmissionId })
+                    .HasPrincipalKey(s => new { s.OrderId, s.Id })
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasIndex(i => i.OrderId);
                 entity.HasIndex(i => i.DishId);
-                entity.HasIndex(i => i.KitchenSubmissionId);
+                entity.HasIndex(i => new { i.OrderId, i.KitchenSubmissionId });
+                entity.HasIndex(i => new { i.OrderId, i.SequenceNumber })
+                    .IsUnique()
+                    .HasDatabaseName("UX_order_items_order_sequence");
             });
 
             modelBuilder.Entity<KitchenSubmission>(entity =>
             {
-                entity.ToTable("kitchen_submissions");
+                entity.ToTable("kitchen_submissions", table =>
+                {
+                    table.HasCheckConstraint("CK_kitchen_submissions_sequence_positive",
+                        "\"SequenceNumber\" > 0");
+                });
 
                 entity.HasKey(s => s.Id);
+                entity.Property(s => s.RestaurantId).IsRequired();
+                entity.Property(s => s.SequenceNumber).IsRequired();
+                entity.Property(s => s.SentAtUtc).IsRequired();
 
-                entity.Property(s => s.SentAtUtc)
-                    .IsRequired();
-
+                // Tenant-safe composite FK, backed by a unique alternate key.
                 entity.HasOne(s => s.Order)
                     .WithMany(o => o.KitchenSubmissions)
-                    .HasForeignKey(s => s.OrderId)
+                    .HasForeignKey(s => new { s.RestaurantId, s.OrderId })
+                    .HasPrincipalKey(o => new { o.RestaurantId, o.Id })
                     .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasIndex(s => new
-                {
-                    s.OrderId,
-                    s.SentAtUtc
-                });
+                entity.HasIndex(s => new { s.OrderId, s.SequenceNumber })
+                    .IsUnique()
+                    .HasDatabaseName("UX_kitchen_submissions_order_sequence");
+
+                // Efficient ordered feed for a single restaurant.
+                entity.HasIndex(s => new { s.RestaurantId, s.SentAtUtc, s.Id })
+                    .HasDatabaseName("IX_kitchen_submissions_restaurant_sent_id");
             });
         }
     }
