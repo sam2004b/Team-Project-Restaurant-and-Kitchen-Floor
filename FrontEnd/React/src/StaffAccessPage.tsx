@@ -10,6 +10,7 @@ import {
   inviteStaff,
   revokeStaffInvitation,
   setStaffMembershipStatus,
+  selectRestaurantContext,
   updateRestaurantProfile,
   type AcceptedInvitationResponse,
   type AccountResponse,
@@ -33,7 +34,7 @@ const staffRoles = [
 export function getStaffRouteForRole(role?: string | null): string {
   switch (role?.trim().toLowerCase()) {
     case "platformadmin":
-      return "/platform-admin";
+      return "/admin/staff";
 
     case "waiter":
       return "/waiter/orders";
@@ -729,6 +730,9 @@ function StaffManagementPage() {
       return;
     }
     try {
+      if (account?.role === "PlatformAdmin") {
+        await selectRestaurantContext(id);
+      }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
       setStaffNotice({ type: "success", message: `Memberships refreshed from the server for restaurant #${id}.` });
     } catch {
@@ -739,6 +743,9 @@ function StaffManagementPage() {
   const onRestaurantCreated = async (id: number) => {
     setRestaurantIdInput(String(id));
     try {
+      if (account?.role === "PlatformAdmin") {
+        await selectRestaurantContext(id);
+      }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
     } catch {
       setStaffNotice({
@@ -890,7 +897,7 @@ function StaffManagementPage() {
         </Link>
         <div className="admin-sidebar-label">WORKSPACE</div>
         <Link className="admin-sidebar-link" to="/">Overview</Link>
-        {account?.role === "Administrator" ? (
+        {account?.role === "Administrator" || account?.role === "PlatformAdmin" ? (
           <>
             <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
             <Link className="admin-sidebar-link" to="/admin/staff#restaurant-configuration">Restaurant settings and tables</Link>
@@ -933,7 +940,7 @@ function StaffManagementPage() {
           checking={status === "loading"}
         />
 
-        {account?.role === "Administrator" && (
+        {(account?.role === "Administrator" || account?.role === "PlatformAdmin") && (
           <>
             <CreateRestaurantPanel onCreated={onRestaurantCreated} />
 

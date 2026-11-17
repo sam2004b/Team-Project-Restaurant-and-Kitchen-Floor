@@ -90,7 +90,7 @@ type StaffRole =
   | "Chef";
 
 function defaultWorkspace(role: string | undefined): string {
-  if (role === "PlatformAdmin") return "/platform-admin";
+  if (role === "PlatformAdmin") return "/admin/staff";
   if (role === "Waiter") return "/waiter/orders";
   if (role === "Chef") return "/chef/orders";
 
@@ -358,6 +358,7 @@ function normalizeRole(role?: string | null): StaffRole | "Unknown" {
   if (!normalized) return "Unknown";
 
   const key = normalized.toLowerCase();
+  if (key === "platformadmin") return "PlatformAdmin";
   if (key === "waiter") return "Waiter";
   if (key === "chef") return "Chef";
   if (key === "administrator") return "Administrator";
@@ -433,9 +434,9 @@ function App() {
       <Route path="/login" element={<StaffLoginPage />} />
       <Route path="/menu" element={<MenuPage />} />
       <Route element={<StaffWorkspaceLayout />}>
-        <Route path="/admin/dishes" element={protect(["Administrator", "Reception Manager"], <AdminDishesPage />)} />
-        <Route path="/admin/staff" element={protect(["Administrator", "Reception Manager"], <StaffManagementPage />)} />
-        <Route path="/admin/settings" element={protect(["Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
+        <Route path="/admin/dishes" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <AdminDishesPage />)} />
+        <Route path="/admin/staff" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <StaffManagementPage />)} />
+        <Route path="/admin/settings" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
         <Route path="/chef/availability" element={protect(["Chef"], <ChefAvailabilityPage />)} />
         <Route path="/chef/menu" element={protect(["Chef"], <ChefAvailabilityPage />)} />
         <Route path="/chef/orders" element={protect(["Chef"], <KitchenOrdersPage />)} />

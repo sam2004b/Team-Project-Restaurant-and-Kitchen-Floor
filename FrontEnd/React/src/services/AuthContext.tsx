@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import {
   authorizationDeniedEvent,
   clearStoredAccessToken,
+  clearSelectedRestaurant,
   getCurrentAccount,
   getStoredAccessToken,
   login,
@@ -138,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccount(null);
     try {
       clearStoredAccessToken();
+      clearSelectedRestaurant();
       const response = await login(username, password, restaurantId);
       if (!response.accessToken) {
         throw new Error("The API did not return an access token.");
@@ -172,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestVersion.current += 1;
       try {
         clearStoredAccessToken();
+        clearSelectedRestaurant();
       } catch (error) {
         const detail = error instanceof Error ? error.message : "session storage is unavailable.";
         warning = `${warning ? `${warning} ` : ""}The local session could not be cleared: ${detail}`;

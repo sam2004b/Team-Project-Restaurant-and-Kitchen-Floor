@@ -1,5 +1,6 @@
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const accessTokenStorageKey = "restaurant.accessToken";
+const selectedRestaurantStorageKey = "restaurant.selectedRestaurantId";
 export const sessionExpiredEvent = "restaurant:session-expired";
 export const authorizationDeniedEvent = "restaurant:authorization-denied";
 
@@ -93,6 +94,12 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     const accessToken = getStoredAccessToken();
     if (accessToken) {
         headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+
+    // PlatformAdmin restaurant context is selected per request by the backend.
+    const selectedRestaurantId = window.sessionStorage.getItem(selectedRestaurantStorageKey);
+    if (selectedRestaurantId && !headers.has("X-Restaurant-Id")) {
+        headers.set("X-Restaurant-Id", selectedRestaurantId);
     }
 
     const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -346,6 +353,30 @@ export function storeAccessToken(token: string): void {
 
 export function clearStoredAccessToken(): void {
     window.sessionStorage.removeItem(accessTokenStorageKey);
+}
+
+export function getSelectedRestaurantId(): number | null {
+    const value = window.sessionStorage.getItem(selectedRestaurantStorageKey);
+    if (!value) return null;
+    const id = Number(value);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+export function clearSelectedRestaurant(): void {
+    window.sessionStorage.removeItem(selectedRestaurantStorageKey);
+}
+
+export async function selectRestaurantContext(restaurantId: number): Promise<void> {
+    if (!Number.isSafeInteger(restaurantId) || restaurantId <= 0) {
+        throw new Error("Enter a valid positive restaurant ID.");
+    }
+
+    await apiRequest<{ restaurantId: number; message: string }>(
+        `/auth/select-restaurant/${restaurantId}`,
+        { method: "POST" },
+    );
+
+    window.sessionStorage.setItem(selectedRestaurantStorageKey, String(restaurantId));
 }
 
 export function logout(): Promise<void> {
