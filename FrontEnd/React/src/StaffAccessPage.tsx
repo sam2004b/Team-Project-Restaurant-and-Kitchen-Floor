@@ -10,9 +10,11 @@ import {
   inviteStaff,
   revokeStaffInvitation,
   setStaffMembershipStatus,
+  selectRestaurantContext,
   updateRestaurantProfile,
   type AcceptedInvitationResponse,
   type AccountResponse,
+  type LoginRestaurantOption,
   type RestaurantResponse,
   type StaffInvitationResponse,
   type StaffMemberResponse,
@@ -28,19 +30,27 @@ const staffRoles = [
   "Reception Manager",
 ] as const;
 
+
 export function getStaffRouteForRole(role?: string | null): string {
   switch (role?.trim().toLowerCase()) {
+    case "platformadmin":
+      return "/admin/staff";
+
     case "waiter":
       return "/waiter/orders";
+
     case "chef":
       return "/chef/orders";
+
     case "administrator":
     case "reception manager":
       return "/admin/staff";
+
     default:
       return "";
   }
 }
+
 
 type Notice = {
   type: "success" | "error" | "warning";
@@ -175,7 +185,7 @@ function AccountPanel({
 function StaffLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { account, status, sessionMessage, signIn, signOut } = useAuth();
+  const { account, status, sessionMessage, signIn,  } = useAuth();
   const locationState = location.state as { returnTo?: unknown; authMessage?: unknown } | null;
   const returnTo = typeof locationState?.returnTo === "string" &&
     locationState.returnTo.startsWith("/") && !locationState.returnTo.startsWith("//")
@@ -184,6 +194,8 @@ function StaffLoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [restaurants, setRestaurants] = useState<LoginRestaurantOption[]>([]);
+  const [restaurantId, setRestaurantId] = useState("");
   const [error, setError] = useState<string | null>(
     typeof locationState?.authMessage === "string" ? locationState.authMessage : null,
   );
@@ -209,16 +221,51 @@ function StaffLoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const signedInAccount = await signIn({ username: username.trim(), password });
+      const signedInAccount = await signIn({
+        username: username.trim(),
+        password,
+        ...(restaurantId ? { restaurantId: Number(restaurantId) } : {}),
+      });
       const route = getStaffRouteForRole(signedInAccount.role);
       if (!route) {
-        await signOut();
-        throw new Error("This account does not have a supported staff role.");
-      }
+  throw new Error(
+    `No dashboard is configured for role: ${signedInAccount.role}`
+  );
+}
 
       navigate(returnTo ?? route, { replace: true });
     } catch (caughtError) {
-      setError(getErrorMessage(caughtError, "Could not sign in."));
+      if (caughtError instanceof ApiError && caughtError.status === 409 &&
+        caughtError.restaurants.length > 0) {
+        const administratorMembership = caughtError.restaurants.find(
+          (restaurant) => restaurant.role.toLowerCase() === "administrator",
+        );
+        if (administratorMembership) {
+          try {
+            const administrator = await signIn({
+              username: username.trim(),
+              password,
+              restaurantId: administratorMembership.restaurantId,
+            });
+            const route = getStaffRouteForRole(administrator.role);
+            if (!route) {
+                      throw new Error(
+                        `No dashboard is configured for role: ${administrator.role}`
+                         );
+                     }
+
+            navigate(returnTo ?? route, { replace: true });
+          } catch (retryError) {
+            setError(getErrorMessage(retryError, "Could not sign in."));
+          }
+          return;
+        }
+
+        setRestaurants(caughtError.restaurants);
+        setError("This account has access to multiple restaurants. Choose one to continue.");
+      } else {
+        setError(getErrorMessage(caughtError, "Could not sign in."));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -273,7 +320,11 @@ function StaffLoginPage() {
                 autoComplete="username"
                 required
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  setRestaurants([]);
+                  setRestaurantId("");
+                }}
               />
             </label>
             <label>
@@ -283,9 +334,30 @@ function StaffLoginPage() {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setRestaurants([]);
+                  setRestaurantId("");
+                }}
               />
             </label>
+            {restaurants.length > 0 && (
+              <label>
+                Restaurant
+                <select
+                  required
+                  value={restaurantId}
+                  onChange={(event) => setRestaurantId(event.target.value)}
+                >
+                  <option value="">Choose a restaurant</option>
+                  {restaurants.map((restaurant) => (
+                    <option key={restaurant.restaurantId} value={restaurant.restaurantId}>
+                      Restaurant #{restaurant.restaurantId} — {restaurant.role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {error && <p className="staff-notice error" role="alert">{error}</p>}
             <button type="submit" className="primary-button" disabled={submitting}>
               {submitting ? "Signing in..." : "Sign in"}
@@ -658,6 +730,9 @@ function StaffManagementPage() {
       return;
     }
     try {
+      if (account?.role === "PlatformAdmin") {
+        await selectRestaurantContext(id);
+      }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
       setStaffNotice({ type: "success", message: `Memberships refreshed from the server for restaurant #${id}.` });
     } catch {
@@ -668,6 +743,9 @@ function StaffManagementPage() {
   const onRestaurantCreated = async (id: number) => {
     setRestaurantIdInput(String(id));
     try {
+      if (account?.role === "PlatformAdmin") {
+        await selectRestaurantContext(id);
+      }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
     } catch {
       setStaffNotice({
@@ -785,6 +863,17 @@ function StaffManagementPage() {
     try {
       await setStaffMembershipStatus(restaurantId, member.id, !wasActive);
       const nextState = wasActive ? "revoked" : "active";
+      if (wasActive && member.userId === account?.id) {
+        const signOutWarning = await signOut({ sessionAlreadyRevoked: true });
+        setAuthNotice({
+          type: signOutWarning ? "error" : "warning",
+          message: signOutWarning
+            ? `Your restaurant membership was revoked. ${signOutWarning}`
+            : "Your restaurant membership was revoked. Sign in with an active membership to continue.",
+        });
+        return;
+      }
+
       try {
         await refreshAccount();
         await refreshStaff(restaurantId);
@@ -808,7 +897,7 @@ function StaffManagementPage() {
         </Link>
         <div className="admin-sidebar-label">WORKSPACE</div>
         <Link className="admin-sidebar-link" to="/">Overview</Link>
-        {account?.role === "Administrator" ? (
+        {account?.role === "Administrator" || account?.role === "PlatformAdmin" ? (
           <>
             <Link className="admin-sidebar-link" to="/admin/dishes">Menu management</Link>
             <Link className="admin-sidebar-link" to="/admin/staff#restaurant-configuration">Restaurant settings and tables</Link>
@@ -851,7 +940,7 @@ function StaffManagementPage() {
           checking={status === "loading"}
         />
 
-        {account?.role === "Administrator" && (
+        {(account?.role === "Administrator" || account?.role === "PlatformAdmin") && (
           <>
             <CreateRestaurantPanel onCreated={onRestaurantCreated} />
 
@@ -860,6 +949,7 @@ function StaffManagementPage() {
                 <div>
                   <p className="eyebrow">MEMBERSHIPS</p>
                   <h2 id="restaurant-select-title">Choose a restaurant</h2>
+                  <p className="staff-help">After signing in, enter a restaurant ID. The API only allows management of the restaurant selected for your session.</p>
                 </div>
               </div>
               <form className="staff-restaurant-form" onSubmit={(event) => void loadRestaurant(event)}>
@@ -868,10 +958,11 @@ function StaffManagementPage() {
                   <input
                     type="number"
                     min="1"
+                    step="1"
+                    placeholder="Enter an ID or create a restaurant above"
                     required
                     value={restaurantIdInput}
                     onChange={(event) => updateRestaurantIdInput(event.target.value)}
-                    placeholder="Enter an ID or create a restaurant above"
                   />
                 </label>
                 <button type="submit" className="primary-button" disabled={staffLoading}>
