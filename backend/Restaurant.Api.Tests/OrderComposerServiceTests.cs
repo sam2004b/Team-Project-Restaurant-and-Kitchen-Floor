@@ -279,6 +279,52 @@ public sealed class OrderComposerServiceTests
     }
 
     [Fact]
+    public async Task KitchenOrderDetails_ReturnSubmittedDishDetails_AndRespectRestaurantScope()
+    {
+        var f = await CreateFixtureAsync();
+        int orderId;
+
+        // Create an order, add a dish, and submit it to the kitchen.
+        await using (var db = new RestaurantDbContext(f.Options))
+        {
+            var composer = new OrderDraftPersistenceService(db);
+            orderId = (await composer.GetOrCreateOpenAsync(
+                f.RestaurantId, f.WaiterId, f.TableId)).OrderId!.Value;
+
+            await composer.AddItemAsync(
+                f.RestaurantId, f.WaiterId, orderId, f.DishId, 2, "No onions");
+
+            var sendResult = await composer.SendAsync(
+                f.RestaurantId, f.WaiterId, orderId);
+            Assert.Equal(OrderWriteStatus.Sent, sendResult.Status);
+        }
+
+        // Query through the same service used by the kitchen API.
+        await using (var db = new RestaurantDbContext(f.Options))
+        {
+            var queries = new OrderDetailsQueryService(db);
+            var order = await queries.GetKitchenOrderAsync(f.RestaurantId, orderId);
+
+            Assert.NotNull(order);
+            Assert.Equal(orderId, order.Id);
+            Assert.Equal(f.RestaurantId, order.RestaurantId);
+            Assert.Equal(f.TableId, order.DiningTableId);
+
+            var dish = Assert.Single(order.Items);
+            Assert.Equal(f.DishId, dish.DishId);
+            Assert.Equal("Soup", dish.DishName);
+            Assert.Equal(8.50m, dish.UnitPrice);
+            Assert.Equal(2, dish.Quantity);
+            Assert.Equal("No onions", dish.SpecialRequest);
+            Assert.NotNull(dish.KitchenSubmissionId);
+
+            // Unknown orders and orders belonging to another restaurant are hidden.
+            Assert.Null(await queries.GetKitchenOrderAsync(f.RestaurantId, 999999));
+            Assert.Null(await queries.GetKitchenOrderAsync(f.OtherRestaurantId, orderId));
+        }
+    }
+
+    [Fact]
     public async Task PaidClosedOrderCannotAcceptMoreItemsAndRemainsInKitchenFeed()
     {
         var f = await CreateFixtureAsync();
