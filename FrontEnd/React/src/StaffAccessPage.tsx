@@ -29,19 +29,27 @@ const staffRoles = [
   "Reception Manager",
 ] as const;
 
+
 export function getStaffRouteForRole(role?: string | null): string {
   switch (role?.trim().toLowerCase()) {
+    case "platformadmin":
+      return "/platform-admin";
+
     case "waiter":
       return "/waiter/orders";
+
     case "chef":
       return "/chef/orders";
+
     case "administrator":
     case "reception manager":
       return "/admin/staff";
+
     default:
       return "";
   }
 }
+
 
 type Notice = {
   type: "success" | "error" | "warning";
@@ -176,7 +184,7 @@ function AccountPanel({
 function StaffLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { account, status, sessionMessage, signIn, signOut } = useAuth();
+  const { account, status, sessionMessage, signIn,  } = useAuth();
   const locationState = location.state as { returnTo?: unknown; authMessage?: unknown } | null;
   const returnTo = typeof locationState?.returnTo === "string" &&
     locationState.returnTo.startsWith("/") && !locationState.returnTo.startsWith("//")
@@ -219,9 +227,10 @@ function StaffLoginPage() {
       });
       const route = getStaffRouteForRole(signedInAccount.role);
       if (!route) {
-        await signOut();
-        throw new Error("This account does not have a supported staff role.");
-      }
+  throw new Error(
+    `No dashboard is configured for role: ${signedInAccount.role}`
+  );
+}
 
       navigate(returnTo ?? route, { replace: true });
     } catch (caughtError) {
@@ -239,9 +248,10 @@ function StaffLoginPage() {
             });
             const route = getStaffRouteForRole(administrator.role);
             if (!route) {
-              await signOut();
-              throw new Error("This account does not have a supported staff role.");
-            }
+                      throw new Error(
+                        `No dashboard is configured for role: ${administrator.role}`
+                         );
+                     }
 
             navigate(returnTo ?? route, { replace: true });
           } catch (retryError) {
