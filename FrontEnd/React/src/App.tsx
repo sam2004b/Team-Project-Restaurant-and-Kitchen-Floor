@@ -445,8 +445,37 @@ function App() {
       </Route>
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="/platform-admin"element={protect(["PlatformAdmin"], <PlatformAdminPage />)}/>
     </Routes>
   );
 }
+function PlatformAdminPage() {
+  const { account, signOut } = useAuth();
 
+  return (
+    <main className="page admin-page">
+      <section className="staff-card">
+        <p className="eyebrow">PLATFORM MANAGEMENT</p>
+
+        <h1>Platform Admin Dashboard</h1>
+
+        <p>
+          Welcome, {account?.userName}.
+        </p>
+
+        <p>
+          You are signed in with PlatformAdmin permissions.
+        </p>
+
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => void signOut()}
+        >
+          Sign out
+        </button>
+      </section>
+    </main>
+  );
+}
 export default App;
