@@ -17,25 +17,36 @@ public sealed class RestaurantsController : ControllerBase
     private readonly RestaurantDbContext _db;
     private readonly UserManager<IdentityUser> _users;
 
-    public RestaurantsController(RestaurantDbContext db, UserManager<IdentityUser> users)
+    public RestaurantsController(
+        RestaurantDbContext db,
+        UserManager<IdentityUser> users)
     {
         _db = db;
         _users = users;
     }
 
-    // Bootstrap privilege is separate from restaurant-scoped Administrator membership.
     [HttpPost]
     [Authorize(Policy = "RestaurantCreator")]
     public async Task<IActionResult> Create(
-        [FromBody] CreateRestaurantRequest request, CancellationToken ct)
+        [FromBody] CreateRestaurantRequest request,
+        CancellationToken ct)
     {
         var name = request.Name?.Trim();
         var address = request.Address?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 150 ||
-            string.IsNullOrWhiteSpace(address) || address.Length > 300)
-            return BadRequest(new { error = "Valid name and address are required." });
+
+        if (string.IsNullOrWhiteSpace(name) ||
+            name.Length > 150 ||
+            string.IsNullOrWhiteSpace(address) ||
+            address.Length > 300)
+        {
+            return BadRequest(new
+            {
+                error = "Valid name and address are required."
+            });
+        }
 
         var userId = _users.GetUserId(User);
+
         if (userId is null)
             return Unauthorized();
 
@@ -44,7 +55,11 @@ public sealed class RestaurantsController : ControllerBase
             Name = name,
             Address = address
         };
+
         _db.Restaurants.Add(restaurant);
+
+        // Automatically create an Administrator
+        // membership for the Global Admin.
         _db.StaffMemberships.Add(new StaffMembership
         {
             Restaurant = restaurant,
@@ -62,7 +77,10 @@ public sealed class RestaurantsController : ControllerBase
             pg.SqlState == PostgresErrorCodes.UniqueViolation &&
             pg.ConstraintName == "IX_restaurants_NormalizedName")
         {
-            return Conflict(new { error = "Restaurant name already exists." });
+            return Conflict(new
+            {
+                error = "Restaurant name already exists."
+            });
         }
 
         return StatusCode(201, new
@@ -71,5 +89,24 @@ public sealed class RestaurantsController : ControllerBase
             restaurant.Name,
             restaurant.Address
         });
+    }
+
+    [HttpGet]
+    [Authorize(Policy = "RestaurantCreator")]
+    public async Task<IActionResult> GetAll(
+        CancellationToken ct)
+    {
+        var restaurants = await _db.Restaurants
+            .AsNoTracking()
+            .OrderBy(r => r.Name)
+            .Select(r => new
+            {
+                r.Id,
+                r.Name,
+                r.Address
+            })
+            .ToListAsync(ct);
+
+        return Ok(restaurants);
     }
 }

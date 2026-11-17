@@ -30,9 +30,6 @@ builder.Services.AddDbContext<RestaurantDbContext>(
     }
 );
 
-// ==========================================
-// 2. ASP.NET CORE IDENTITY
-// ==========================================
 
 builder.Services
     .AddIdentityCore<IdentityUser>(options =>
@@ -48,10 +45,6 @@ builder.Services
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<RestaurantDbContext>()
     .AddSignInManager();
-
-// ==========================================
-// 3. AUTHENTICATION
-// ==========================================
 
 builder.Services
     .AddAuthentication(IdentityConstants.BearerScheme)
@@ -75,19 +68,11 @@ builder.Services.AddAuthorization(options =>
     StaffRolePolicies.Configure(options);
 });
 
-// ==========================================
-// 5. RESTAURANT ADMINISTRATION SERVICES
-// ==========================================
-
 builder.Services.AddScoped<
     Restaurant.Api.Services.Administration.RestaurantAccessService>();
 
 builder.Services.AddScoped<
     Restaurant.Api.Services.Administration.InvitationDeliveryService>();
-
-// ==========================================
-// 6. CORS CONFIGURATION
-// ==========================================
 
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
@@ -100,10 +85,6 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod());
 });
-
-// ==========================================
-// 7. APPLICATION SERVICES
-// ==========================================
 
 builder.Services.AddScoped<
     IMenuReadService,
@@ -190,16 +171,10 @@ builder.Services.AddScoped<MenuAdminGuard>();
 builder.Services.AddScoped<OrderDishAvailabilityValidator>();
 
 builder.Services.AddScoped<StaffSessionValidator>();
-
-// ==========================================
-// 9. BUILD APPLICATION
-// ==========================================
+builder.Services.AddScoped<PlatformAdminSessionValidator>();
 
 var app = builder.Build();
 
-// ==========================================
-// 10. APPLY DATABASE MIGRATIONS
-// ==========================================
 
 if (app.Environment.IsDevelopment() &&
     app.Configuration.GetValue<bool>(

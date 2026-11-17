@@ -1,3 +1,4 @@
+
 namespace Restaurant.Api.Security;
 
 public static class StaffSessionClaims
@@ -6,4 +7,9 @@ public static class StaffSessionClaims
     public const string RestaurantId = "restaurant_id";
     public const string MembershipId = "staff_membership_id";
     public const string RestaurantRole = "restaurant_role";
+
+    // Global Admin claims
+    public const string PlatformAdmin = "platform_admin";
+    public const string PlatformAdminSessionId =
+        "platform_admin_session_id";
 }
