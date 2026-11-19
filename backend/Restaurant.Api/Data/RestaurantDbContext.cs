@@ -52,6 +52,9 @@ namespace Restaurant.Api.Data
         public DbSet<KitchenSubmission> KitchenSubmissions =>
             Set<KitchenSubmission>();
 
+        public DbSet<WaiterNotification> WaiterNotifications =>
+            Set<WaiterNotification>();
+
         protected override void OnModelCreating(
             ModelBuilder modelBuilder)
         {
@@ -559,6 +562,18 @@ namespace Restaurant.Api.Data
                     table.HasCheckConstraint("CK_order_items_sequence_positive",
                         "\"SequenceNumber\" > 0");
 
+                    table.HasCheckConstraint("CK_order_items_service_status",
+                        "\"ServiceStatus\" IN ('Unserved', 'Served')");
+
+                    // Only ready, submitted lines can be served.
+                    table.HasCheckConstraint("CK_order_items_service_consistency",
+                        "(\"ServiceStatus\" = 'Unserved' AND \"ServedAtUtc\" IS NULL) " +
+                        "OR (\"ServiceStatus\" = 'Served' AND \"ServedAtUtc\" IS NOT NULL " +
+                        "AND \"PreparationStatus\" = 'Ready' " +
+                        "AND \"KitchenSubmissionId\" IS NOT NULL " +
+                        "AND \"ReadyAtUtc\" IS NOT NULL " +
+                        "AND \"ServedAtUtc\" >= \"ReadyAtUtc\")");
+
                     table.HasCheckConstraint("CK_order_items_preparation_status",
                         "\"PreparationStatus\" IN ('Pending', 'Preparing', 'Ready')");
 
@@ -588,6 +603,11 @@ namespace Restaurant.Api.Data
                     .HasDefaultValue(DishPreparationStates.Pending);
                 entity.Property(i => i.PreparationStartedAtUtc);
                 entity.Property(i => i.ReadyAtUtc);
+                entity.Property(i => i.ServiceStatus)
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasDefaultValue(DishServiceStates.Unserved);
+                entity.Property(i => i.ServedAtUtc);
                 entity.Property(i => i.SpecialRequest).HasMaxLength(500);
 
                 entity.Property(i => i.DishNameSnapshot)
@@ -653,6 +673,69 @@ namespace Restaurant.Api.Data
                 entity.HasIndex(s => new { s.RestaurantId, s.SentAtUtc, s.Id })
                     .HasDatabaseName("IX_kitchen_submissions_restaurant_sent_id");
             });
+            // S3-US13-T01: persistent unread/read notifications per waiter + dish.
+            modelBuilder.Entity<WaiterNotification>(entity =>
+            {
+                entity.ToTable("waiter_notifications", table =>
+                {
+                    table.HasCheckConstraint("CK_waiter_notifications_read_after_created",
+                        "\"ReadAtUtc\" IS NULL OR \"ReadAtUtc\" >= \"CreatedAtUtc\"");
+                });
+
+                entity.HasKey(n => n.Id);
+                entity.Property(n => n.CreatedAtUtc).IsRequired();
+                entity.Property(n => n.ReadAtUtc);
+                entity.Ignore(n => n.IsRead);
+
+                // This composite FK guarantees both restaurant AND table match
+                // the parent order; using two independent FKs is insufficient.
+                entity.HasOne(n => n.Order)
+                    .WithMany()
+                    .HasForeignKey(n => new
+                    {
+                        n.RestaurantId, n.DiningTableId, n.OrderId
+                    })
+                    .HasPrincipalKey(o => new
+                    {
+                        o.RestaurantId, o.DiningTableId, o.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Every notification references a dish belonging to THAT order.
+                entity.HasOne(n => n.OrderItem)
+                    .WithMany()
+                    .HasForeignKey(n => new { n.OrderId, n.OrderItemId })
+                    .HasPrincipalKey(i => new { i.OrderId, i.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Recipient must be a membership in the SAME restaurant.
+                // Role/active assignment is validated by the later write API.
+                entity.HasOne(n => n.WaiterStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(n => new
+                    {
+                        n.RestaurantId, n.WaiterStaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Repeated readiness updates must not create duplicates.
+                // Reassignment may create one new entry for another waiter.
+                entity.HasIndex(n => new { n.OrderItemId, n.WaiterStaffMembershipId })
+                    .IsUnique()
+                    .HasDatabaseName("UX_waiter_notifications_item_waiter");
+
+                // Fast tenant-scoped unread inbox; historic/read rows remain
+                // available through the existing key FKs.
+                entity.HasIndex(n => new
+                {
+                    n.RestaurantId, n.WaiterStaffMembershipId,
+                    n.CreatedAtUtc, n.Id
+                })
+                    .HasFilter("\"ReadAtUtc\" IS NULL")
+                    .HasDatabaseName("IX_waiter_notifications_unread_inbox");
+            });
+
         }
     }
 }
