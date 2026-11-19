@@ -99,6 +99,10 @@ builder.Services.AddScoped<
     IMenuUpdateNotifier,
     SignalRMenuUpdateNotifier>();
 
+builder.Services.AddScoped<
+    IKitchenUpdateNotifier,
+    SignalRKitchenUpdateNotifier>();
+
 
 builder.Services.AddScoped<
     IDishAvailabilityService,
@@ -252,6 +256,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHub<MenuHub>("/hubs/menu");
+app.MapHub<KitchenHub>("/hubs/kitchen");
 
 
 app.MapGet("/health", () => Results.Ok(new

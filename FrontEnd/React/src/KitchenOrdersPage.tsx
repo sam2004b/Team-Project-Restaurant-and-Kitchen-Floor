@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { getCurrentAccount, getKitchenOrders } from "./services/api";
+import {
+  getCurrentAccount,
+  getKitchenOrders,
+  updateKitchenItemStatus,
+} from "./services/api";
 import type { KitchenSubmissionResponse } from "./services/api";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
+import { useKitchenUpdates } from "./services/useKitchenUpdates";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Could not load kitchen orders.";
@@ -47,6 +52,7 @@ function KitchenOrdersPage() {
   const [orders, setOrders] = useState<KitchenSubmissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const requestVersion = useRef(0);
   const tableQueues = useMemo(() => groupOrdersByTable(orders), [orders]);
 
@@ -92,6 +98,26 @@ function KitchenOrdersPage() {
   useEffect(() => {
     if (authorized) void refresh(true);
   }, [authorized, refresh]);
+
+  useKitchenUpdates(() => {
+    if (authorized) void refresh();
+  });
+
+  const advanceItem = async (
+    itemId: number,
+    status: "Preparing" | "Ready",
+  ) => {
+    setUpdatingItemId(itemId);
+    setError(null);
+    try {
+      await updateKitchenItemStatus(itemId, status);
+      await refresh();
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
 
   useEffect(() => {
     if (!authorized) return;
@@ -200,33 +226,79 @@ function KitchenOrdersPage() {
                   </div>
 
                   {table.submissions.map((submission) => (
-                    <section className="kitchen-ticket" key={submission.id} aria-label={`Ticket ${submission.id}`}>
+                    <section
+                      className="kitchen-ticket"
+                      key={submission.id}
+                      aria-label={`Ticket ${submission.id}`}
+                    >
                       <header className="kitchen-ticket-heading">
                         <div>
                           <strong>Ticket #{submission.id}</strong>
-                          {submission.seatNumber !== null && <span>Seat {submission.seatNumber}</span>}
+                          {submission.seatNumber !== null && (
+                            <span>Seat {submission.seatNumber}</span>
+                          )}
                         </div>
-                        <time dateTime={submission.sentAtUtc}>{new Date(submission.sentAtUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                        <time dateTime={submission.sentAtUtc}>
+                          {new Date(submission.sentAtUtc).toLocaleTimeString()}
+                        </time>
                       </header>
-                      <ol className="kitchen-preparation-list">
+                      <ul className="kitchen-preparation-list">
                         {submission.items.map((item) => {
                           preparationNumber += 1;
                           return (
                             <li className="kitchen-preparation-item" key={item.id}>
-                              <span className="kitchen-sequence-number">{String(preparationNumber).padStart(2, "0")}</span>
+                              <span className="kitchen-sequence-number">
+                                {preparationNumber}
+                              </span>
                               <div className="kitchen-dish-details">
                                 <div className="kitchen-dish-name-row">
                                   <strong>{item.dishName}</strong>
-                                  <span className="kitchen-dish-quantity">× {item.quantity}</span>
+                                  <span className="kitchen-dish-quantity">
+                                    × {item.quantity}
+                                  </span>
                                 </div>
                                 {item.specialRequest && (
-                                  <div className="kitchen-special-request"><span>Special request</span><p>{item.specialRequest}</p></div>
+                                  <div className="kitchen-special-request">
+                                    <span>Special request</span>
+                                    <p>{item.specialRequest}</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="kitchen-item-actions">
+                                <span
+                                  className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                                >
+                                  {item.preparationStatus}
+                                </span>
+                                {item.preparationStatus === "New" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Preparing")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Starting..."
+                                      : "Start preparing"}
+                                  </button>
+                                )}
+                                {item.preparationStatus === "Preparing" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button ready"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Ready")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Updating..."
+                                      : "Mark ready"}
+                                  </button>
                                 )}
                               </div>
                             </li>
                           );
                         })}
-                      </ol>
+                      </ul>
                     </section>
                   ))}
                 </article>

@@ -26,15 +26,18 @@ public sealed class KitchenOrdersController : ControllerBase
     private readonly RestaurantAccessService _access;
     private readonly OrderDetailsQueryService _orders;
     private readonly RestaurantDbContext _db;
+    private readonly IKitchenUpdateNotifier _kitchenUpdates;
 
     public KitchenOrdersController(
         RestaurantAccessService access,
         OrderDetailsQueryService orders,
-        RestaurantDbContext db)
+        RestaurantDbContext db,
+        IKitchenUpdateNotifier kitchenUpdates)
     {
         _access = access;
         _orders = orders;
         _db = db;
+        _kitchenUpdates = kitchenUpdates;
     }
 
     [HttpGet]
@@ -115,6 +118,7 @@ public sealed class KitchenOrdersController : ControllerBase
         }
 
         await _db.SaveChangesAsync(ct);
+        await _kitchenUpdates.NotifyKitchenChangedAsync(ct);
 
         return Ok(new
         {
