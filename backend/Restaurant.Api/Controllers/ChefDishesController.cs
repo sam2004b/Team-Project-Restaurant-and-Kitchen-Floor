@@ -9,7 +9,7 @@ namespace Restaurant.Api.Controllers;
 
 /// <summary>
 /// Chef-only view of current kitchen dish availability.
-/// Order tickets are not implemented in this project yet.
+/// Kitchen order tickets are provided by KitchenOrdersController.
 /// </summary>
 [ApiController]
 [Authorize(Policy = StaffRolePolicies.ChefOnly)]

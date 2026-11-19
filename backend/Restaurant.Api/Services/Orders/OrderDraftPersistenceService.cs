@@ -179,9 +179,17 @@ public sealed class OrderDraftPersistenceService
         if (dish is null || !dish.IsAvailable)
             return new(OrderWriteStatus.DishUnavailable, order.Id);
 
+        // Serialized by the existing restaurant lock in PostgreSQL.
+        // Gaps are allowed after deleting drafts: never renumber sent lines.
+        var nextSequence = (await _db.OrderItems.AsNoTracking()
+            .Where(i => i.OrderId == order.Id)
+            .Select(i => (int?)i.SequenceNumber)
+            .MaxAsync(ct) ?? 0) + 1;
+
         var item = new RestaurantOrderItem
         {
             OrderId = order.Id,
+            SequenceNumber = nextSequence,
             DishId = dish.Id,
             Quantity = quantity,
             SpecialRequest = string.IsNullOrWhiteSpace(specialRequest)
@@ -290,7 +298,8 @@ public sealed class OrderDraftPersistenceService
 
         var pending = await _db.OrderItems
             .Where(i => i.OrderId == orderId && i.KitchenSubmissionId == null)
-            .OrderBy(i => i.Id).ToListAsync(ct);
+            .OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id)
+            .ToListAsync(ct);
 
         if (pending.Count == 0)
         {
@@ -315,10 +324,17 @@ public sealed class OrderDraftPersistenceService
                 return new(OrderWriteStatus.DishUnavailable, order.Id);
         }
 
+        var nextBatchSequence = (await _db.KitchenSubmissions.AsNoTracking()
+            .Where(s => s.OrderId == order.Id)
+            .Select(s => (int?)s.SequenceNumber)
+            .MaxAsync(ct) ?? 0) + 1;
+
         var now = DateTime.UtcNow;
         var submission = new KitchenSubmission
         {
+            RestaurantId = restaurantId,
             OrderId = order.Id,
+            SequenceNumber = nextBatchSequence,
             SentAtUtc = now
         };
         _db.KitchenSubmissions.Add(submission);

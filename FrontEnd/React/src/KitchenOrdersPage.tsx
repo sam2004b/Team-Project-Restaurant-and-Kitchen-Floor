@@ -1,12 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { getCurrentAccount, getKitchenOrders } from "./services/api";
+import {
+  getCurrentAccount,
+  getKitchenOrders,
+  updateKitchenItemStatus,
+} from "./services/api";
 import type { KitchenSubmissionResponse } from "./services/api";
-import { formatPrice } from "./services/currency";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
+import { useKitchenUpdates } from "./services/useKitchenUpdates";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Could not load kitchen orders.";
+}
+
+type TableQueue = {
+  tableId: number;
+  submissions: KitchenSubmissionResponse[];
+  itemCount: number;
+  dishCount: number;
+  latestSentAt: string;
+};
+
+
+function groupOrdersByTable(orders: KitchenSubmissionResponse[]): TableQueue[] {
+  const groups = new Map<number, KitchenSubmissionResponse[]>();
+
+  for (const order of orders) {
+    const current = groups.get(order.diningTableId) ?? [];
+    current.push(order);
+    groups.set(order.diningTableId, current);
+  }
+
+  return Array.from(groups.entries())
+    .map(([tableId, submissions]) => {
+      const sorted = [...submissions].sort(
+        (a, b) => new Date(a.sentAtUtc).getTime() - new Date(b.sentAtUtc).getTime(),
+      );
+      return {
+        tableId,
+        submissions: sorted,
+        itemCount: sorted.reduce((total, submission) => total + submission.items.reduce((sum, item) => sum + item.quantity, 0), 0),
+        dishCount: sorted.reduce((total, submission) => total + submission.items.length, 0),
+        latestSentAt: sorted[sorted.length - 1]?.sentAtUtc ?? "",
+      };
+    })
+    .sort((a, b) => new Date(a.latestSentAt).getTime() - new Date(b.latestSentAt).getTime());
 }
 
 function KitchenOrdersPage() {
@@ -14,7 +52,9 @@ function KitchenOrdersPage() {
   const [orders, setOrders] = useState<KitchenSubmissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const requestVersion = useRef(0);
+  const tableQueues = useMemo(() => groupOrdersByTable(orders), [orders]);
 
   const refresh = useCallback(async (showLoading = false) => {
     const version = ++requestVersion.current;
@@ -22,13 +62,9 @@ function KitchenOrdersPage() {
     setError(null);
     try {
       const currentOrders = await getKitchenOrders();
-      if (version === requestVersion.current) {
-        setOrders(currentOrders);
-      }
+      if (version === requestVersion.current) setOrders(currentOrders);
     } catch (caughtError) {
-      if (version === requestVersion.current) {
-        setError(getErrorMessage(caughtError));
-      }
+      if (version === requestVersion.current) setError(getErrorMessage(caughtError));
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
@@ -63,9 +99,28 @@ function KitchenOrdersPage() {
     if (authorized) void refresh(true);
   }, [authorized, refresh]);
 
+  useKitchenUpdates(() => {
+    if (authorized) void refresh();
+  });
+
+  const advanceItem = async (
+    itemId: number,
+    status: "Preparing" | "Ready",
+  ) => {
+    setUpdatingItemId(itemId);
+    setError(null);
+    try {
+      await updateKitchenItemStatus(itemId, status);
+      await refresh();
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
   useEffect(() => {
     if (!authorized) return;
-
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 5000);
@@ -73,7 +128,6 @@ function KitchenOrdersPage() {
       if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
-
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
@@ -90,27 +144,32 @@ function KitchenOrdersPage() {
         <div className="admin-sidebar-label">WORKSPACE</div>
         <Link className="admin-sidebar-link" to="/admin/staff">Account and workspaces</Link>
         <Link className="admin-sidebar-link" to="/chef/availability">Dish availability</Link>
+        <span className="admin-sidebar-link active" aria-current="page">Kitchen queue</span>
       </aside>
 
-      <main className="page admin-page staff-page order-workspace">
+      <main className="page admin-page staff-page order-workspace kitchen-workspace">
         <header className="admin-header">
           <div>
             <p className="eyebrow">KITCHEN / CHEF</p>
-            <h1>Incoming orders</h1>
-            <p className="subtitle">New tickets appear after a waiter sends an order. Reconnecting reloads the durable kitchen feed.</p>
+            <h1>Kitchen queue</h1>
+            <p className="subtitle">Incoming orders grouped by table. Prepare dishes in the sequence shown.</p>
           </div>
           <div className="workspace-session-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={loading || !authorized}
-              onClick={() => void refresh(true)}
-            >
-              {loading ? "Refreshing..." : "Refresh"}
+            <button type="button" className="secondary-button" disabled={loading || !authorized} onClick={() => void refresh(true)}>
+              {loading ? "Refreshing..." : "Refresh queue"}
             </button>
             <WorkspaceSessionActions />
           </div>
         </header>
+
+        {authorized && !loading && !error && (
+          <div className="kitchen-queue-summary" aria-live="polite">
+            <div><strong>{tableQueues.length}</strong><span>Active tables</span></div>
+            <div><strong>{orders.reduce((sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0)}</strong><span>Dishes to prepare</span></div>
+            <div><strong>{orders.length}</strong><span>Incoming tickets</span></div>
+            <span className="kitchen-live-indicator"><i /> Live · updates every 5 seconds</span>
+          </div>
+        )}
 
         {error && (
           <div className="admin-error" role="alert">
@@ -118,54 +177,130 @@ function KitchenOrdersPage() {
             {authorized && <button type="button" onClick={() => void refresh(true)}>Try again</button>}
           </div>
         )}
+
         {authorized === false && !loading && (
-          <section className="staff-card">
+          <section className="staff-card order-state-card">
+            <div className="order-state-icon">!</div>
             <h2>Chef sign-in required</h2>
             <p className="staff-help">Sign in with an active chef account to view kitchen orders.</p>
             <Link className="primary-button" to="/admin/staff">Sign in or switch account</Link>
           </section>
         )}
-        {loading && <div className="admin-loading" role="status" aria-busy="true">Loading kitchen orders...</div>}
-        {authorized && !loading && !error && orders.length === 0 && (
-          <section className="staff-card order-empty" role="status">
-            <h2>No incoming orders</h2>
-            <p className="staff-help">Sent orders will appear here.</p>
+
+        {loading && (
+          <section className="staff-card kitchen-loading-card" role="status" aria-busy="true">
+            <span className="admin-spinner" />
+            <strong>Loading kitchen queue</strong>
+            <span>Fetching the latest incoming orders...</span>
           </section>
         )}
-        {authorized && orders.length > 0 && (
-          <section className="kitchen-order-list" aria-label="Incoming kitchen orders" aria-live="polite">
-            {orders.map((submission) => {
-              const subtotal = submission.items.reduce(
-                (sum, item) => sum + item.unitPrice * item.quantity,
-                0,
-              );
+
+        {authorized && !loading && !error && orders.length === 0 && (
+          <section className="staff-card order-state-card" role="status">
+            <div className="order-state-icon order-state-icon-success">✓</div>
+            <h2>Kitchen is all caught up</h2>
+            <p className="staff-help">There are no incoming orders right now. New tickets will appear here when waiters send them.</p>
+          </section>
+        )}
+
+        {authorized && !loading && !error && tableQueues.length > 0 && (
+          <section className="kitchen-table-grid" aria-label="Kitchen orders grouped by table" aria-live="polite">
+            {tableQueues.map((table) => {
+              let preparationNumber = 0;
               return (
-                <article className="staff-card kitchen-order-card" key={submission.id}>
-                  <header className="kitchen-order-heading">
-                    <div>
-                      <p className="eyebrow">TABLE {submission.diningTableId}{submission.seatNumber !== null ? ` / SEAT ${submission.seatNumber}` : ""}</p>
-                      <h2>Kitchen ticket #{submission.id}</h2>
+                <article className="staff-card kitchen-table-card" key={table.tableId}>
+                  <header className="kitchen-table-heading">
+                    <div className="kitchen-table-title">
+                      <span className="kitchen-table-icon">T</span>
+                      <div>
+                        <p className="eyebrow">DINING TABLE</p>
+                        <h2>Table {table.tableId}</h2>
+                      </div>
                     </div>
-                    <span className="kitchen-order-status">Order #{submission.orderId}</span>
+                    <span className="kitchen-table-count">{table.itemCount} {table.itemCount === 1 ? "item" : "items"}</span>
                   </header>
-                  <p className="kitchen-order-time">
-                    Sent {new Date(submission.sentAtUtc).toLocaleString()}
-                  </p>
-                  <ul className="kitchen-order-items">
-                    {submission.items.map((item) => (
-                      <li key={item.id}>
+
+                  <div className="kitchen-table-meta">
+                    <span>{table.submissions.length} {table.submissions.length === 1 ? "ticket" : "tickets"}</span>
+                    <span>{table.dishCount} dish {table.dishCount === 1 ? "type" : "types"}</span>
+                  </div>
+
+                  {table.submissions.map((submission) => (
+                    <section
+                      className="kitchen-ticket"
+                      key={submission.id}
+                      aria-label={`Ticket ${submission.id}`}
+                    >
+                      <header className="kitchen-ticket-heading">
                         <div>
-                          <strong>{item.quantity} × {item.dishName}</strong>
-                          {item.specialRequest && <p>Request: {item.specialRequest}</p>}
+                          <strong>Ticket #{submission.id}</strong>
+                          {submission.seatNumber !== null && (
+                            <span>Seat {submission.seatNumber}</span>
+                          )}
                         </div>
-                        <span>{formatPrice(item.unitPrice * item.quantity)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <footer className="kitchen-order-total">
-                    <span>Subtotal</span>
-                    <strong>{formatPrice(subtotal)}</strong>
-                  </footer>
+                        <time dateTime={submission.sentAtUtc}>
+                          {new Date(submission.sentAtUtc).toLocaleTimeString()}
+                        </time>
+                      </header>
+                      <ul className="kitchen-preparation-list">
+                        {submission.items.map((item) => {
+                          preparationNumber += 1;
+                          return (
+                            <li className="kitchen-preparation-item" key={item.id}>
+                              <span className="kitchen-sequence-number">
+                                {preparationNumber}
+                              </span>
+                              <div className="kitchen-dish-details">
+                                <div className="kitchen-dish-name-row">
+                                  <strong>{item.dishName}</strong>
+                                  <span className="kitchen-dish-quantity">
+                                    × {item.quantity}
+                                  </span>
+                                </div>
+                                {item.specialRequest && (
+                                  <div className="kitchen-special-request">
+                                    <span>Special request</span>
+                                    <p>{item.specialRequest}</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="kitchen-item-actions">
+                                <span
+                                  className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                                >
+                                  {item.preparationStatus}
+                                </span>
+                                {item.preparationStatus === "New" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Preparing")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Starting..."
+                                      : "Start preparing"}
+                                  </button>
+                                )}
+                                {item.preparationStatus === "Preparing" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button ready"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Ready")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Updating..."
+                                      : "Mark ready"}
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
                 </article>
               );
             })}

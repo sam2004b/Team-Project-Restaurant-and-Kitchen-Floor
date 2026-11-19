@@ -331,14 +331,32 @@ namespace Restaurant.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("SentAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OrderId", "SentAtUtc");
+                    b.HasAlternateKey("OrderId", "Id");
 
-                    b.ToTable("kitchen_submissions", (string)null);
+                    b.HasIndex("OrderId", "SequenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_kitchen_submissions_order_sequence");
+
+                    b.HasIndex("RestaurantId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "SentAtUtc", "Id")
+                        .HasDatabaseName("IX_kitchen_submissions_restaurant_sent_id");
+
+                    b.ToTable("kitchen_submissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_kitchen_submissions_sequence_positive", "\"SequenceNumber\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.PlatformAdminSession", b =>
@@ -414,6 +432,57 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.WaiterNotification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WaiterStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId", "OrderItemId");
+
+                    b.HasIndex("OrderItemId", "WaiterStaffMembershipId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_waiter_notifications_item_waiter");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "WaiterStaffMembershipId");
+
+                    b.HasIndex("RestaurantId", "WaiterStaffMembershipId", "CreatedAtUtc", "Id")
+                        .HasDatabaseName("IX_waiter_notifications_unread_inbox")
+                        .HasFilter("\"ReadAtUtc\" IS NULL");
+
+                    b.ToTable("waiter_notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_waiter_notifications_read_after_created", "\"ReadAtUtc\" IS NULL OR \"ReadAtUtc\" >= \"CreatedAtUtc\"");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
                 {
                     b.Property<int>("Id")
@@ -452,6 +521,10 @@ namespace Restaurant.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("RestaurantId", "Id");
+
+                    b.HasAlternateKey("RestaurantId", "DiningTableId", "Id");
+
                     b.HasIndex("RestaurantId", "CreatedByStaffMembershipId");
 
                     b.HasIndex("RestaurantId", "DiningTableId")
@@ -464,6 +537,10 @@ namespace Restaurant.Api.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_orders_one_active_per_seat")
                         .HasFilter("\"SeatNumber\" IS NOT NULL AND \"Status\" IN ('Open', 'Sent')");
+
+                    b.HasIndex("RestaurantId", "SentAtUtc", "Id")
+                        .HasDatabaseName("IX_orders_restaurant_sent_id")
+                        .HasFilter("\"SentAtUtc\" IS NOT NULL");
 
                     b.ToTable("orders", null, t =>
                         {
@@ -504,8 +581,32 @@ namespace Restaurant.Api.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PreparationStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<DateTime?>("PreparationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReadyAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ServiceStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Unserved");
+
+                    b.Property<DateTime?>("ServedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SpecialRequest")
                         .HasMaxLength(500)
@@ -517,17 +618,35 @@ namespace Restaurant.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DishId");
+                    b.HasAlternateKey("OrderId", "Id");
 
-                    b.HasIndex("KitchenSubmissionId");
+                    b.HasIndex("DishId");
 
                     b.HasIndex("OrderId");
 
+                    b.HasIndex("OrderId", "KitchenSubmissionId");
+
+                    b.HasIndex("OrderId", "SequenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_order_items_order_sequence");
+
                     b.ToTable("order_items", null, t =>
                         {
+                            t.HasCheckConstraint("CK_order_items_preparation_requires_submission", "\"KitchenSubmissionId\" IS NOT NULL OR \"PreparationStatus\" = 'Pending'");
+
+                            t.HasCheckConstraint("CK_order_items_preparation_status", "\"PreparationStatus\" IN ('Pending', 'Preparing', 'Ready')");
+
+                            t.HasCheckConstraint("CK_order_items_preparation_timestamps", "(\"PreparationStatus\" = 'Pending' AND \"PreparationStartedAtUtc\" IS NULL AND \"ReadyAtUtc\" IS NULL) OR (\"PreparationStatus\" = 'Preparing' AND \"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NULL) OR (\"PreparationStatus\" = 'Ready' AND \"PreparationStartedAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" IS NOT NULL AND \"ReadyAtUtc\" >= \"PreparationStartedAtUtc\")");
+
                             t.HasCheckConstraint("CK_order_items_price_positive", "\"UnitPriceSnapshot\" > 0");
 
                             t.HasCheckConstraint("CK_order_items_quantity_positive", "\"Quantity\" > 0");
+
+                            t.HasCheckConstraint("CK_order_items_sequence_positive", "\"SequenceNumber\" > 0");
+
+                            t.HasCheckConstraint("CK_order_items_service_status", "\"ServiceStatus\" IN ('Unserved', 'Served')");
+
+                            t.HasCheckConstraint("CK_order_items_service_consistency", "(\"ServiceStatus\" = 'Unserved' AND \"ServedAtUtc\" IS NULL) OR (\"ServiceStatus\" = 'Served' AND \"ServedAtUtc\" IS NOT NULL AND \"PreparationStatus\" = 'Ready' AND \"KitchenSubmissionId\" IS NOT NULL AND \"ReadyAtUtc\" IS NOT NULL AND \"ServedAtUtc\" >= \"ReadyAtUtc\")");
                         });
                 });
 
@@ -809,7 +928,8 @@ namespace Restaurant.Api.Migrations
                 {
                     b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
                         .WithMany("KitchenSubmissions")
-                        .HasForeignKey("OrderId")
+                        .HasForeignKey("RestaurantId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -825,6 +945,36 @@ namespace Restaurant.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.WaiterNotification", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "DiningTableId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderId", "OrderItemId")
+                        .HasPrincipalKey("OrderId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "WaiterStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "WaiterStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OrderItem");
+
+                    b.Navigation("WaiterStaffMembership");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.RestaurantOrder", b =>
@@ -858,7 +1008,8 @@ namespace Restaurant.Api.Migrations
 
                     b.HasOne("Restaurant.Api.Models.KitchenSubmission", "KitchenSubmission")
                         .WithMany("Items")
-                        .HasForeignKey("KitchenSubmissionId")
+                        .HasForeignKey("OrderId", "KitchenSubmissionId")
+                        .HasPrincipalKey("OrderId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
