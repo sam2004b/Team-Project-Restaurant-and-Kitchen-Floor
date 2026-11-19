@@ -108,6 +108,41 @@ public sealed class KitchenOrdersController : ControllerBase
         {
             item.PreparationStatus = DishPreparationStates.Ready;
             item.ReadyAtUtc = now;
+
+            // Create one durable notification for the waiter currently
+            // assigned to this table. The unique database index on
+            // (OrderItemId, WaiterStaffMembershipId) prevents duplicates.
+            var assignedWaiterId = await _db.TableStaffAssignments
+                .Where(a =>
+                    a.RestaurantId == restaurantId &&
+                    a.DiningTableId == item.Order.DiningTableId &&
+                    a.StaffMembership.RestaurantId == restaurantId &&
+                    a.StaffMembership.Status == MembershipStatus.Active &&
+                    a.StaffMembership.Role == StaffRoleNames.Waiter &&
+                    a.DiningTable.RestaurantId == restaurantId &&
+                    a.DiningTable.IsActive)
+                .Select(a => (int?)a.StaffMembershipId)
+                .SingleOrDefaultAsync(ct);
+
+            if (assignedWaiterId.HasValue)
+            {
+                bool alreadyNotified = await _db.WaiterNotifications.AnyAsync(n =>
+                    n.OrderItemId == item.Id &&
+                    n.WaiterStaffMembershipId == assignedWaiterId.Value, ct);
+
+                if (!alreadyNotified)
+                {
+                    _db.WaiterNotifications.Add(new WaiterNotification
+                    {
+                        RestaurantId = restaurantId,
+                        DiningTableId = item.Order.DiningTableId,
+                        OrderId = item.OrderId,
+                        OrderItemId = item.Id,
+                        WaiterStaffMembershipId = assignedWaiterId.Value,
+                        CreatedAtUtc = now
+                    });
+                }
+            }
         }
         else
         {
