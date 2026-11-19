@@ -194,6 +194,9 @@ export interface OrderItemDetailsResponse {
     quantity: number;
     specialRequest: string | null;
     kitchenSubmissionId: number | null;
+    preparationStatus: "New" | "Preparing" | "Ready";
+    preparationStartedAtUtc: string | null;
+    readyAtUtc: string | null;
 }
 
 export interface OrderDetailsResponse {
@@ -306,6 +309,16 @@ export function sendOrder(orderId: number): Promise<SendOrderResponse> {
 export function getKitchenOrders(): Promise<KitchenSubmissionResponse[]> {
     return apiRequest<KitchenSubmissionResponse[]>("/chef/orders/submissions", {
         cache: "no-store",
+    });
+}
+
+export function updateKitchenItemStatus(
+    orderItemId: number,
+    status: "Preparing" | "Ready",
+): Promise<unknown> {
+    return apiRequest<unknown>(`/chef/orders/items/${orderItemId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
     });
 }
 

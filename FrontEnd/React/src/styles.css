@@ -1212,6 +1212,7 @@ button {
 
 .kitchen-order-items li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
 }
@@ -1219,6 +1220,57 @@ button {
 .kitchen-order-items p {
   margin: 5px 0 0;
   color: var(--text-soft);
+}
+
+.kitchen-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kitchen-preparation-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #edf0e9;
+  color: #5d6f64;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.kitchen-preparation-status.status-preparing {
+  background: #fff0cf;
+  color: #9a6415;
+}
+
+.kitchen-preparation-status.status-ready {
+  background: #dfeade;
+  color: #26734f;
+}
+
+.kitchen-status-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #234d42;
+  border-radius: 8px;
+  background: #234d42;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.kitchen-status-button.ready {
+  border-color: #26734f;
+  background: #26734f;
+}
+
+.kitchen-status-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .kitchen-order-total {

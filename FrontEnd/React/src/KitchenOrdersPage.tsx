@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { getCurrentAccount, getKitchenOrders } from "./services/api";
+import {
+  getCurrentAccount,
+  getKitchenOrders,
+  updateKitchenItemStatus,
+} from "./services/api";
 import type { KitchenSubmissionResponse } from "./services/api";
 import { formatPrice } from "./services/currency";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
+import { useKitchenUpdates } from "./services/useKitchenUpdates";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Could not load kitchen orders.";
@@ -14,6 +19,7 @@ function KitchenOrdersPage() {
   const [orders, setOrders] = useState<KitchenSubmissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const requestVersion = useRef(0);
 
   const refresh = useCallback(async (showLoading = false) => {
@@ -62,6 +68,26 @@ function KitchenOrdersPage() {
   useEffect(() => {
     if (authorized) void refresh(true);
   }, [authorized, refresh]);
+
+  useKitchenUpdates(() => {
+    if (authorized) void refresh();
+  });
+
+  const advanceItem = async (
+    itemId: number,
+    status: "Preparing" | "Ready",
+  ) => {
+    setUpdatingItemId(itemId);
+    setError(null);
+    try {
+      await updateKitchenItemStatus(itemId, status);
+      await refresh();
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
 
   useEffect(() => {
     if (!authorized) return;
@@ -158,7 +184,33 @@ function KitchenOrdersPage() {
                           <strong>{item.quantity} × {item.dishName}</strong>
                           {item.specialRequest && <p>Request: {item.specialRequest}</p>}
                         </div>
-                        <span>{formatPrice(item.unitPrice * item.quantity)}</span>
+                        <div className="kitchen-item-actions">
+                          <span
+                            className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                          >
+                            {item.preparationStatus}
+                          </span>
+                          {item.preparationStatus === "New" && (
+                            <button
+                              type="button"
+                              className="kitchen-status-button"
+                              disabled={updatingItemId === item.id}
+                              onClick={() => void advanceItem(item.id, "Preparing")}
+                            >
+                              {updatingItemId === item.id ? "Starting..." : "Start preparing"}
+                            </button>
+                          )}
+                          {item.preparationStatus === "Preparing" && (
+                            <button
+                              type="button"
+                              className="kitchen-status-button ready"
+                              disabled={updatingItemId === item.id}
+                              onClick={() => void advanceItem(item.id, "Ready")}
+                            >
+                              {updatingItemId === item.id ? "Updating..." : "Mark ready"}
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>

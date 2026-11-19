@@ -17,15 +17,18 @@ public sealed class OrderComposerController : ControllerBase
     private readonly RestaurantAccessService _access;
     private readonly OrderDraftPersistenceService _drafts;
     private readonly OrderDetailsQueryService _queries;
+    private readonly IKitchenUpdateNotifier _kitchenUpdates;
 
     public OrderComposerController(
         RestaurantAccessService access,
         OrderDraftPersistenceService drafts,
-        OrderDetailsQueryService queries)
+        OrderDetailsQueryService queries,
+        IKitchenUpdateNotifier kitchenUpdates)
     {
         _access = access;
         _drafts = drafts;
         _queries = queries;
+        _kitchenUpdates = kitchenUpdates;
     }
 
     // Legacy route kept for clients that have not added per-seat selection yet.
@@ -154,6 +157,10 @@ public sealed class OrderComposerController : ControllerBase
         // submissionId identifies the newly created (or most recent) batch.
         var kitchenOrder = await _queries.GetKitchenOrderAsync(
             context.RestaurantId, orderId, ct);
+        if (result.Status == OrderWriteStatus.Sent)
+        {
+            await _kitchenUpdates.NotifyKitchenChangedAsync(ct);
+        }
         return Ok(new
         {
             orderId,
