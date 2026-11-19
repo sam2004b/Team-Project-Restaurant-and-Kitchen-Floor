@@ -226,46 +226,81 @@ function KitchenOrdersPage() {
                   </div>
 
                   {table.submissions.map((submission) => (
-                    <section className="kitchen-ticket" key={submission.id} aria-label={`Ticket ${submission.id}`}>
+                    <section
+                      className="kitchen-ticket"
+                      key={submission.id}
+                      aria-label={`Ticket ${submission.id}`}
+                    >
                       <header className="kitchen-ticket-heading">
                         <div>
                           <strong>Ticket #{submission.id}</strong>
-                          {submission.seatNumber !== null && <span>Seat {submission.seatNumber}</span>}
-                        </div>
-                        <div className="kitchen-item-actions">
-                          <span
-                            className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
-                          >
-                            {item.preparationStatus}
-                          </span>
-                          {item.preparationStatus === "New" && (
-                            <button
-                              type="button"
-                              className="kitchen-status-button"
-                              disabled={updatingItemId === item.id}
-                              onClick={() => void advanceItem(item.id, "Preparing")}
-                            >
-                              {updatingItemId === item.id ? "Starting..." : "Start preparing"}
-                            </button>
-                          )}
-                          {item.preparationStatus === "Preparing" && (
-                            <button
-                              type="button"
-                              className="kitchen-status-button ready"
-                              disabled={updatingItemId === item.id}
-                              onClick={() => void advanceItem(item.id, "Ready")}
-                            >
-                              {updatingItemId === item.id ? "Updating..." : "Mark ready"}
-                            </button>
+                          {submission.seatNumber !== null && (
+                            <span>Seat {submission.seatNumber}</span>
                           )}
                         </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <footer className="kitchen-order-total">
-                    <span>Subtotal</span>
-                    <strong>{formatPrice(subtotal)}</strong>
-                  </footer>
+                        <time dateTime={submission.sentAtUtc}>
+                          {new Date(submission.sentAtUtc).toLocaleTimeString()}
+                        </time>
+                      </header>
+                      <ul className="kitchen-preparation-list">
+                        {submission.items.map((item) => {
+                          preparationNumber += 1;
+                          return (
+                            <li className="kitchen-preparation-item" key={item.id}>
+                              <span className="kitchen-sequence-number">
+                                {preparationNumber}
+                              </span>
+                              <div className="kitchen-dish-details">
+                                <div className="kitchen-dish-name-row">
+                                  <strong>{item.dishName}</strong>
+                                  <span className="kitchen-dish-quantity">
+                                    × {item.quantity}
+                                  </span>
+                                </div>
+                                {item.specialRequest && (
+                                  <div className="kitchen-special-request">
+                                    <span>Special request</span>
+                                    <p>{item.specialRequest}</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="kitchen-item-actions">
+                                <span
+                                  className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                                >
+                                  {item.preparationStatus}
+                                </span>
+                                {item.preparationStatus === "New" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Preparing")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Starting..."
+                                      : "Start preparing"}
+                                  </button>
+                                )}
+                                {item.preparationStatus === "Preparing" && (
+                                  <button
+                                    type="button"
+                                    className="kitchen-status-button ready"
+                                    disabled={updatingItemId === item.id}
+                                    onClick={() => void advanceItem(item.id, "Ready")}
+                                  >
+                                    {updatingItemId === item.id
+                                      ? "Updating..."
+                                      : "Mark ready"}
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
                 </article>
               );
             })}
