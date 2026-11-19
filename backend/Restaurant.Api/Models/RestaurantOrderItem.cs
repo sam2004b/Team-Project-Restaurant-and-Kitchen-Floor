@@ -27,6 +27,11 @@ public sealed class RestaurantOrderItem
     public DateTime? PreparationStartedAtUtc { get; set; }
     public DateTime? ReadyAtUtc { get; set; }
 
+    // Service progress is distinct from kitchen preparation progress.
+    // Each order line is served independently; unserved lines have no time.
+    public string ServiceStatus { get; set; } = DishServiceStates.Unserved;
+    public DateTime? ServedAtUtc { get; set; }
+
     // Snapshots preserve preparation and pricing details if the menu changes.
     public string DishNameSnapshot { get; set; } = string.Empty;
     public decimal UnitPriceSnapshot { get; set; }
