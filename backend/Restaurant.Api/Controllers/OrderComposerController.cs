@@ -102,7 +102,7 @@ public sealed class OrderComposerController : ControllerBase
 
         var result = await _drafts.AddItemAsync(
             context.RestaurantId, context.MembershipId,
-            orderId, request.DishId, request.Quantity, request.SpecialRequest, ct);
+            orderId, request.DishId, request.Quantity, request.SpecialRequest, ct, request.Reason);
         if (result.Status != OrderWriteStatus.ItemAdded)
             return WriteError(result);
 
@@ -120,7 +120,7 @@ public sealed class OrderComposerController : ControllerBase
 
         var result = await _drafts.UpdateItemAsync(
             context.RestaurantId, context.MembershipId,
-            orderId, itemId, request.Quantity, request.SpecialRequest, ct);
+            orderId, itemId, request.Quantity, request.SpecialRequest, ct, request.Reason);
         return result.Status == OrderWriteStatus.ItemUpdated
             ? Ok(new { orderId, itemId, updated = true })
             : WriteError(result);
@@ -128,16 +128,32 @@ public sealed class OrderComposerController : ControllerBase
 
     [HttpDelete("orders/{orderId:int}/items/{itemId:int}")]
     public async Task<IActionResult> RemoveItem(
-        int orderId, int itemId, CancellationToken ct)
+        int orderId, int itemId, [FromBody] RemoveOrderItemRequest request, CancellationToken ct)
     {
         var context = await GetContextAsync(ct);
         if (context.Error is not null) return context.Error;
 
         var result = await _drafts.RemoveItemAsync(
             context.RestaurantId, context.MembershipId,
-            orderId, itemId, ct);
+            orderId, itemId, ct, request.Reason);
         return result.Status == OrderWriteStatus.ItemRemoved
             ? NoContent()
+            : WriteError(result);
+    }
+
+    [HttpPost("orders/{orderId:int}/cancel")]
+    public async Task<IActionResult> Cancel(
+        int orderId, [FromBody] CancelOrderRequest request, CancellationToken ct)
+    {
+        if (orderId <= 0) return BadRequest(new { error = "Invalid order ID." });
+        var context = await GetContextAsync(ct);
+        if (context.Error is not null) return context.Error;
+
+        var result = await _drafts.CancelAsync(
+            context.RestaurantId, context.MembershipId, orderId,
+            request.Confirm, request.Reason, ct);
+        return result.Status == OrderWriteStatus.OrderCancelled
+            ? Ok(new { orderId, status = "Cancelled" })
             : WriteError(result);
     }
 
@@ -197,7 +213,10 @@ public sealed class OrderComposerController : ControllerBase
         OrderWriteStatus.AmbiguousActiveOrders => Conflict(new { error = result.Error }),
         OrderWriteStatus.DishUnavailable => Conflict(new { error = "Dish unavailable or missing." }),
         OrderWriteStatus.EmptyOrder => Conflict(new { error = "Cannot send an empty order." }),
-        OrderWriteStatus.OrderNotOpen => Conflict(new { error = "Order is not active (it may be closed)." }),
+        OrderWriteStatus.OrderNotOpen => Conflict(new { error = "Order is not active, paid, or already closed." }),
+        OrderWriteStatus.OrderHasKitchenItems => Conflict(new { error = result.Error }),
+        OrderWriteStatus.CancellationNotConfirmed => BadRequest(new { error = "Cancellation must be explicitly confirmed." }),
+        OrderWriteStatus.InvalidReason => BadRequest(new { error = result.Error ?? "A reason is required." }),
         _ => StatusCode(500, new { error = "Unexpected order operation result." })
     };
 }

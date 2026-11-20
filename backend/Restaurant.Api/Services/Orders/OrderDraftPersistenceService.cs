@@ -24,7 +24,11 @@ public enum OrderWriteStatus
     InvalidItem,
     DishUnavailable,
     OrderNotOpen,
-    EmptyOrder
+    EmptyOrder,
+    OrderHasKitchenItems,
+    CancellationNotConfirmed,
+    InvalidReason,
+    OrderCancelled
 }
 
 public sealed record OrderWriteResult(
@@ -159,7 +163,8 @@ public sealed class OrderDraftPersistenceService
         int dishId,
         int quantity,
         string? specialRequest,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? reason = null)
     {
         if (orderId <= 0 || dishId <= 0 || quantity <= 0 ||
             specialRequest?.Length > 500)
@@ -174,7 +179,10 @@ public sealed class OrderDraftPersistenceService
             return new(OrderWriteStatus.NotAccessible);
         if (!RestaurantOrderStates.IsActive(order.Status))
             return new(OrderWriteStatus.OrderNotOpen, order.Id);
+        if (reason is not null && !IsValidReason(reason))
+            return new(OrderWriteStatus.InvalidReason, order.Id, Error: "A reason of 1 to 500 characters is required.");
 
+        var beforeSnapshot = reason is null ? null : await CaptureOrderSnapshotAsync(order, ct);
         var dish = await GetDishWithReadLockAsync(dishId, ct);
         if (dish is null || !dish.IsAvailable)
             return new(OrderWriteStatus.DishUnavailable, order.Id);
@@ -201,6 +209,12 @@ public sealed class OrderDraftPersistenceService
 
         _db.Set<RestaurantOrderItem>().Add(item);
         await _db.SaveChangesAsync(ct);
+        if (beforeSnapshot is not null)
+        {
+            var afterSnapshot = await CaptureOrderSnapshotAsync(order, ct);
+            AddAudit(order, waiterMembershipId, item.Id, reason!, beforeSnapshot, afterSnapshot);
+            await _db.SaveChangesAsync(ct);
+        }
         await CommitAsync(tx, ct);
         return new(OrderWriteStatus.ItemAdded, order.Id, item.Id);
     }
@@ -212,7 +226,7 @@ public sealed class OrderDraftPersistenceService
     public async Task<OrderWriteResult> UpdateItemAsync(
         int restaurantId, int waiterMembershipId, int orderId,
         int itemId, int quantity, string? specialRequest,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string? reason = null)
     {
         if (orderId <= 0 || itemId <= 0 || quantity <= 0 ||
             specialRequest?.Length > 500)
@@ -233,6 +247,9 @@ public sealed class OrderDraftPersistenceService
             return new(OrderWriteStatus.ItemNotFound, order.Id);
         if (item.KitchenSubmissionId is not null)
             return new(OrderWriteStatus.ItemAlreadySubmitted, order.Id, item.Id);
+        if (reason is not null && !IsValidReason(reason))
+            return new(OrderWriteStatus.InvalidReason, order.Id, Error: "A reason of 1 to 500 characters is required.");
+        var beforeSnapshot = reason is null ? null : await CaptureOrderSnapshotAsync(order, ct);
 
         var dish = await GetDishWithReadLockAsync(item.DishId, ct);
         if (dish is null || !dish.IsAvailable)
@@ -242,6 +259,12 @@ public sealed class OrderDraftPersistenceService
         item.SpecialRequest = string.IsNullOrWhiteSpace(specialRequest)
             ? null : specialRequest.Trim();
         await _db.SaveChangesAsync(ct);
+        if (beforeSnapshot is not null)
+        {
+            var afterSnapshot = await CaptureOrderSnapshotAsync(order, ct);
+            AddAudit(order, waiterMembershipId, item.Id, reason!, beforeSnapshot, afterSnapshot);
+            await _db.SaveChangesAsync(ct);
+        }
         await CommitAsync(tx, ct);
         return new(OrderWriteStatus.ItemUpdated, order.Id, item.Id);
     }
@@ -249,7 +272,7 @@ public sealed class OrderDraftPersistenceService
     /// <summary>Remove only a pending line from an active order.</summary>
     public async Task<OrderWriteResult> RemoveItemAsync(
         int restaurantId, int waiterMembershipId, int orderId,
-        int itemId, CancellationToken ct = default)
+        int itemId, CancellationToken ct = default, string? reason = null)
     {
         if (orderId <= 0 || itemId <= 0)
             return new(OrderWriteStatus.InvalidItem,
@@ -269,12 +292,103 @@ public sealed class OrderDraftPersistenceService
             return new(OrderWriteStatus.ItemNotFound, order.Id);
         if (item.KitchenSubmissionId is not null)
             return new(OrderWriteStatus.ItemAlreadySubmitted, order.Id, item.Id);
+        if (reason is not null && !IsValidReason(reason))
+            return new(OrderWriteStatus.InvalidReason, order.Id, Error: "A reason of 1 to 500 characters is required.");
+        var beforeSnapshot = reason is null ? null : await CaptureOrderSnapshotAsync(order, ct);
 
         _db.OrderItems.Remove(item);
         await _db.SaveChangesAsync(ct);
+        if (beforeSnapshot is not null)
+        {
+            var afterSnapshot = await CaptureOrderSnapshotAsync(order, ct);
+            AddAudit(order, waiterMembershipId, item.Id, reason!, beforeSnapshot, afterSnapshot);
+            await _db.SaveChangesAsync(ct);
+        }
         await CommitAsync(tx, ct);
         return new(OrderWriteStatus.ItemRemoved, order.Id, item.Id);
     }
+
+    /// <summary>Cancel an unpaid order after explicit waiter confirmation.</summary>
+    public async Task<OrderWriteResult> CancelAsync(
+        int restaurantId, int waiterMembershipId, int orderId,
+        bool confirmed, string? reason, CancellationToken ct = default)
+    {
+        if (!confirmed)
+            return new(OrderWriteStatus.CancellationNotConfirmed, orderId);
+        if (!IsValidReason(reason))
+            return new(OrderWriteStatus.InvalidReason, orderId,
+                Error: "A cancellation reason of 1 to 500 characters is required.");
+
+        await using var tx = await LockRestaurantAsync(restaurantId, ct);
+        var order = await GetAccessibleOrderAsync(
+            restaurantId, waiterMembershipId, orderId, ct);
+        if (order is null)
+            return new(OrderWriteStatus.NotAccessible);
+        if (order.PaidAtUtc is not null || order.Status == RestaurantOrderStates.Closed)
+            return new(OrderWriteStatus.OrderNotOpen, order.Id);
+        if (!RestaurantOrderStates.IsActive(order.Status))
+            return new(OrderWriteStatus.OrderNotOpen, order.Id);
+
+        var items = await _db.OrderItems.Where(i => i.OrderId == orderId)
+            .OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id).ToListAsync(ct);
+        // Submitted/preparing/ready items already belong to the kitchen workflow.
+        // They cannot be silently withdrawn by the waiter cancellation endpoint.
+        if (items.Any(i => i.KitchenSubmissionId is not null ||
+            i.PreparationStatus != DishPreparationStates.Pending))
+            return new(OrderWriteStatus.OrderHasKitchenItems, order.Id,
+                Error: "An order with kitchen-submitted items cannot be cancelled through this endpoint.");
+
+        var before = OrderAuditSnapshot.Capture(order, items).ToJson();
+        order.Status = RestaurantOrderStates.Closed;
+        _db.OrderChangeAudits.Add(new OrderChangeAudit
+        {
+            RestaurantId = restaurantId,
+            DiningTableId = order.DiningTableId,
+            OrderId = order.Id,
+            OrderItemId = null,
+            ChangedByStaffMembershipId = waiterMembershipId,
+            ChangeType = OrderChangeTypes.Cancelled,
+            Reason = reason!.Trim(),
+            ChangedAtUtc = DateTime.UtcNow,
+            BeforeSnapshotJson = before,
+            AfterSnapshotJson = null
+        });
+        await _db.SaveChangesAsync(ct);
+        await CommitAsync(tx, ct);
+        return new(OrderWriteStatus.OrderCancelled, order.Id);
+    }
+
+    private async Task<OrderAuditSnapshot> CaptureOrderSnapshotAsync(
+        RestaurantOrder order, CancellationToken ct)
+    {
+        var items = await _db.OrderItems.AsNoTracking()
+            .Where(i => i.OrderId == order.Id)
+            .OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id)
+            .ToListAsync(ct);
+        return OrderAuditSnapshot.Capture(order, items);
+    }
+
+    private void AddAudit(RestaurantOrder order, int actorMembershipId,
+        int? itemId, string reason, OrderAuditSnapshot before,
+        OrderAuditSnapshot after)
+    {
+        _db.OrderChangeAudits.Add(new OrderChangeAudit
+        {
+            RestaurantId = order.RestaurantId,
+            DiningTableId = order.DiningTableId,
+            OrderId = order.Id,
+            OrderItemId = itemId,
+            ChangedByStaffMembershipId = actorMembershipId,
+            ChangeType = OrderChangeTypes.Amended,
+            Reason = reason.Trim(),
+            ChangedAtUtc = DateTime.UtcNow,
+            BeforeSnapshotJson = before.ToJson(),
+            AfterSnapshotJson = after.ToJson()
+        });
+    }
+
+    private static bool IsValidReason(string? reason) =>
+        !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length <= 500;
 
     /// <summary>
     /// Atomically submit ONLY the still-pending lines as a new kitchen batch.
