@@ -318,6 +318,9 @@ export function updateKitchenItemStatus(
 ): Promise<unknown> {
     return apiRequest<unknown>(`/chef/orders/items/${orderItemId}/status`, {
         method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+        },
         body: JSON.stringify({ status }),
     });
 }
