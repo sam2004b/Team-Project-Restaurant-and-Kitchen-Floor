@@ -13,6 +13,9 @@ public sealed class AddOrderItemRequest
 
     [MaxLength(500)]
     public string? SpecialRequest { get; set; }
+
+    [Required, StringLength(500, MinimumLength = 1)]
+    public string Reason { get; set; } = string.Empty;
 }
 
 public sealed class UpdateOrderItemRequest
@@ -22,6 +25,23 @@ public sealed class UpdateOrderItemRequest
 
     [MaxLength(500)]
     public string? SpecialRequest { get; set; }
+
+    [Required, StringLength(500, MinimumLength = 1)]
+    public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class RemoveOrderItemRequest
+{
+    [Required, StringLength(500, MinimumLength = 1)]
+    public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class CancelOrderRequest
+{
+    public bool Confirm { get; set; }
+
+    [Required, StringLength(500, MinimumLength = 1)]
+    public string Reason { get; set; } = string.Empty;
 }
 
 public sealed record OrderItemDetailsDto(
