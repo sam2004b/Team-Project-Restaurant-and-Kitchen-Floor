@@ -4811,3 +4811,212 @@ select:focus-visible {
   }
 }
 }
+
+/* Chef Kitchen Queue: use the shared StaffWorkspaceLayout sidebar only. */
+.staff-workspace-content > .kitchen-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  margin: 0;
+  padding: 26px 32px 40px;
+  box-sizing: border-box;
+  background: #f8f7f3;
+}
+
+.staff-workspace-content > .kitchen-workspace .admin-header {
+  align-items: flex-start;
+  margin: 0;
+  gap: 20px;
+}
+
+.staff-workspace-content > .kitchen-workspace .admin-header h1 {
+  margin: 4px 0 5px;
+  font-size: clamp(1.8rem, 2.3vw, 2.2rem);
+  line-height: 1.12;
+}
+
+.staff-workspace-content > .kitchen-workspace .admin-header .subtitle {
+  margin-top: 6px;
+  font-size: 0.88rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-queue-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(190px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e6e9e3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-queue-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border-right: 1px solid #edf0eb;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-queue-summary > div strong {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-queue-summary > div span {
+  font-size: 0.73rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-live-indicator {
+  justify-self: end;
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-card {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid #e4e8e2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(24, 55, 41, 0.035);
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 13px 9px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-title {
+  gap: 0;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-title h2 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-table-meta {
+  gap: 12px;
+  padding: 0 13px 10px;
+  font-size: 0.69rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-ticket {
+  margin: 0 9px 9px;
+  border-radius: 8px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-ticket-heading {
+  padding: 8px 9px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-ticket-heading strong,
+.staff-workspace-content > .kitchen-workspace .kitchen-ticket-heading span,
+.staff-workspace-content > .kitchen-workspace .kitchen-ticket-heading time {
+  font-size: 0.69rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-preparation-list {
+  gap: 6px;
+  padding: 8px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-preparation-item {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 7px;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-sequence-number {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+  font-size: 0.65rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-dish-name-row strong {
+  font-size: 0.76rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-dish-quantity {
+  font-size: 0.7rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-preparation-status {
+  padding: 4px 8px;
+  font-size: 0.64rem;
+}
+
+.staff-workspace-content > .kitchen-workspace .kitchen-status-button {
+  min-height: 29px;
+  padding: 0 9px;
+  font-size: 0.66rem;
+}
+
+@media (max-width: 1100px) {
+  .staff-workspace-content > .kitchen-workspace .kitchen-table-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .staff-workspace-content > .kitchen-workspace .kitchen-queue-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .staff-workspace-content > .kitchen-workspace .kitchen-live-indicator {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .staff-workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .staff-workspace-content {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .staff-workspace-content > .kitchen-workspace {
+    padding: 20px 14px 30px;
+  }
+
+  .staff-workspace-content > .kitchen-workspace .admin-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .staff-workspace-content > .kitchen-workspace .workspace-session-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .staff-workspace-content > .kitchen-workspace .kitchen-queue-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .staff-workspace-content > .kitchen-workspace .kitchen-queue-summary > div {
+    border-right: 0;
+  }
+
+  .staff-workspace-content > .kitchen-workspace .kitchen-table-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

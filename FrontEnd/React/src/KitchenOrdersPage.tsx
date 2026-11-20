@@ -135,19 +135,7 @@ function KitchenOrdersPage() {
   }, [authorized, refresh]);
 
   return (
-    <div className="app-shell admin-shell">
-      <aside className="admin-sidebar">
-        <Link className="admin-brand" to="/" aria-label="Plate restaurant customer menu">
-          <strong>PLATE</strong>
-          <span>RESTAURANT OPERATIONS</span>
-        </Link>
-        <div className="admin-sidebar-label">WORKSPACE</div>
-        <Link className="admin-sidebar-link" to="/admin/staff">Account and workspaces</Link>
-        <Link className="admin-sidebar-link" to="/chef/availability">Dish availability</Link>
-        <span className="admin-sidebar-link active" aria-current="page">Kitchen queue</span>
-      </aside>
-
-      <main className="page admin-page staff-page order-workspace kitchen-workspace">
+    <main className="page admin-page staff-page order-workspace kitchen-workspace">
         <header className="admin-header">
           <div>
             <p className="eyebrow">KITCHEN / CHEF</p>
@@ -188,10 +176,25 @@ function KitchenOrdersPage() {
         )}
 
         {loading && (
-          <section className="staff-card kitchen-loading-card" role="status" aria-busy="true">
-            <span className="admin-spinner" />
-            <strong>Loading kitchen queue</strong>
-            <span>Fetching the latest incoming orders...</span>
+          <section className="kitchen-loading-state" role="status" aria-busy="true">
+            <div className="kitchen-loading-heading">
+              <span className="admin-spinner" />
+              <div>
+                <strong>Loading kitchen queue</strong>
+                <span>Fetching the latest incoming orders...</span>
+              </div>
+            </div>
+            <div className="kitchen-loading-grid" aria-hidden="true">
+              {[1, 2, 3].map((placeholder) => (
+                <div className="kitchen-loading-placeholder staff-card" key={placeholder}>
+                  <span className="kitchen-skeleton kitchen-skeleton-title" />
+                  <span className="kitchen-skeleton kitchen-skeleton-meta" />
+                  <span className="kitchen-skeleton kitchen-skeleton-row" />
+                  <span className="kitchen-skeleton kitchen-skeleton-row" />
+                  <span className="kitchen-skeleton kitchen-skeleton-row short" />
+                </div>
+              ))}
+            </div>
           </section>
         )}
 
@@ -211,7 +214,6 @@ function KitchenOrdersPage() {
                 <article className="staff-card kitchen-table-card" key={table.tableId}>
                   <header className="kitchen-table-heading">
                     <div className="kitchen-table-title">
-                      <span className="kitchen-table-icon">T</span>
                       <div>
                         <p className="eyebrow">DINING TABLE</p>
                         <h2>Table {table.tableId}</h2>
@@ -246,7 +248,11 @@ function KitchenOrdersPage() {
                         {submission.items.map((item) => {
                           preparationNumber += 1;
                           return (
-                            <li className="kitchen-preparation-item" key={item.id}>
+                            <li
+                              className={`kitchen-preparation-item kitchen-dish-card status-${item.preparationStatus.toLowerCase()}`}
+                              key={item.id}
+                              aria-label={`${item.dishName}, quantity ${item.quantity}, status ${item.preparationStatus}`}
+                            >
                               <span className="kitchen-sequence-number">
                                 {preparationNumber}
                               </span>
@@ -267,8 +273,9 @@ function KitchenOrdersPage() {
                               <div className="kitchen-item-actions">
                                 <span
                                   className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                                  aria-label={`Dish status: ${item.preparationStatus}`}
                                 >
-                                  {item.preparationStatus}
+                                  {item.preparationStatus === "Ready" ? "✓ Ready" : item.preparationStatus}
                                 </span>
                                 {item.preparationStatus === "New" && (
                                   <button
@@ -306,8 +313,7 @@ function KitchenOrdersPage() {
             })}
           </section>
         )}
-      </main>
-    </div>
+    </main>
   );
 }
 
