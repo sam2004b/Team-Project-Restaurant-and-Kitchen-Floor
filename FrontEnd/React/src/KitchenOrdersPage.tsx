@@ -54,6 +54,7 @@ function KitchenOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const requestVersion = useRef(0);
+  const statusUpdateInFlight = useRef(false);
   const tableQueues = useMemo(() => groupOrdersByTable(orders), [orders]);
 
   const refresh = useCallback(async (showLoading = false) => {
@@ -107,14 +108,28 @@ function KitchenOrdersPage() {
     itemId: number,
     status: "Preparing" | "Ready",
   ) => {
+    if (statusUpdateInFlight.current) return;
+    statusUpdateInFlight.current = true;
     setUpdatingItemId(itemId);
     setError(null);
     try {
-      await updateKitchenItemStatus(itemId, status);
+      const updatedItem = await updateKitchenItemStatus(itemId, status);
+      setOrders((currentOrders) => currentOrders.map((submission) => ({
+        ...submission,
+        items: submission.items.map((item) => item.id === updatedItem.id
+          ? {
+            ...item,
+            preparationStatus: updatedItem.status,
+            preparationStartedAtUtc: updatedItem.preparationStartedAtUtc,
+            readyAtUtc: updatedItem.readyAtUtc,
+          }
+          : item),
+      })));
       await refresh();
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
     } finally {
+      statusUpdateInFlight.current = false;
       setUpdatingItemId(null);
     }
   };
@@ -281,7 +296,7 @@ function KitchenOrdersPage() {
                                   <button
                                     type="button"
                                     className="kitchen-status-button"
-                                    disabled={updatingItemId === item.id}
+                                    disabled={updatingItemId !== null}
                                     onClick={() => void advanceItem(item.id, "Preparing")}
                                   >
                                     {updatingItemId === item.id
@@ -293,7 +308,7 @@ function KitchenOrdersPage() {
                                   <button
                                     type="button"
                                     className="kitchen-status-button ready"
-                                    disabled={updatingItemId === item.id}
+                                    disabled={updatingItemId !== null}
                                     onClick={() => void advanceItem(item.id, "Ready")}
                                   >
                                     {updatingItemId === item.id

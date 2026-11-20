@@ -22,6 +22,7 @@ import type {
   WaiterTableResponse,
 } from "./services/api";
 import { formatPrice } from "./services/currency";
+import { useKitchenUpdates } from "./services/useKitchenUpdates";
 import { useMenuUpdates } from "./services/useMenuUpdates";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
 
@@ -33,6 +34,12 @@ type ItemDraft = {
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
+
+const preparationStatusRank = {
+  New: 0,
+  Preparing: 1,
+  Ready: 2,
+} as const;
 
 function WaiterOrderPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -56,10 +63,13 @@ function WaiterOrderPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [statusRefreshError, setStatusRefreshError] = useState<string | null>(null);
   const operationLock = useRef(false);
+  const statusRefreshInFlight = useRef(false);
   const addDishFormRef = useRef<HTMLFormElement>(null);
   const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
   const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
+  const hasSubmittedItems = order?.items.some((item) => item.kitchenSubmissionId !== null) ?? false;
   const total = useMemo(
     () => order?.items.reduce((sum, item) => {
       const currentQuantity = itemDrafts[item.id]
@@ -182,12 +192,91 @@ function WaiterOrderPage() {
     }
 
     setOrder(updatedOrder);
+    setStatusRefreshError(null);
     setItemDrafts(Object.fromEntries(updatedOrder.items.map((item) => [
       item.id,
       { quantity: String(item.quantity), specialRequest: item.specialRequest ?? "" },
     ])));
     return updatedOrder;
   }, []);
+
+  const refreshSubmittedStatuses = useCallback(async (
+    orderId: number,
+    expectedTableId: number,
+  ) => {
+    if (statusRefreshInFlight.current || operationLock.current) return;
+    statusRefreshInFlight.current = true;
+    try {
+      const latestOrder = await getOrderDetails(orderId);
+      if (latestOrder.id !== orderId || latestOrder.diningTableId !== expectedTableId) {
+        throw new Error("The refreshed status does not match the selected order.");
+      }
+
+      const latestItems = new Map(latestOrder.items.map((item) => [item.id, item]));
+      setOrder((current) => {
+        if (!current || current.id !== orderId ||
+            current.diningTableId !== expectedTableId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          items: current.items.map((item) => {
+            const latestItem = latestItems.get(item.id);
+            if (!latestItem) return item;
+
+            const latestStatusIsCurrentOrNewer =
+              preparationStatusRank[latestItem.preparationStatus] >=
+              preparationStatusRank[item.preparationStatus];
+
+            return {
+              ...item,
+              kitchenSubmissionId: item.kitchenSubmissionId ?? latestItem.kitchenSubmissionId,
+              preparationStatus: latestStatusIsCurrentOrNewer
+                ? latestItem.preparationStatus
+                : item.preparationStatus,
+              preparationStartedAtUtc: latestStatusIsCurrentOrNewer
+                ? latestItem.preparationStartedAtUtc ?? item.preparationStartedAtUtc
+                : item.preparationStartedAtUtc,
+              readyAtUtc: latestStatusIsCurrentOrNewer
+                ? latestItem.readyAtUtc ?? item.readyAtUtc
+                : item.readyAtUtc,
+            };
+          }),
+        };
+      });
+      setStatusRefreshError(null);
+    } catch (caughtError) {
+      setStatusRefreshError(
+        getErrorMessage(caughtError, "Could not refresh kitchen preparation status."),
+      );
+    } finally {
+      statusRefreshInFlight.current = false;
+    }
+  }, []);
+
+  useKitchenUpdates(() => {
+    if (authorized && order && hasSubmittedItems) {
+      void refreshSubmittedStatuses(order.id, order.diningTableId);
+    }
+  });
+
+  useEffect(() => {
+    if (!authorized || !order || !hasSubmittedItems) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshSubmittedStatuses(order.id, order.diningTableId);
+      }
+    };
+    const timer = window.setInterval(refreshWhenVisible, 5000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [authorized, hasSubmittedItems, order?.diningTableId, order?.id, refreshSubmittedStatuses]);
 
   const refreshAssignments = async () => {
     if (operationLock.current) return;
@@ -723,6 +812,19 @@ function WaiterOrderPage() {
                   </div>
                 </div>
 
+                {statusRefreshError && (
+                  <p className="staff-notice error kitchen-status-refresh-error" role="alert">
+                    Could not refresh kitchen status: {statusRefreshError}
+                    <button
+                      type="button"
+                      className="staff-text-button"
+                      onClick={() => void refreshSubmittedStatuses(order.id, order.diningTableId)}
+                    >
+                      Try again
+                    </button>
+                  </p>
+                )}
+
                 {orderIsActive && (
                   <div className="order-review-heading">
                     <h3>{order.status === "Sent" ? "Continue this order" : "Review order before sending"}</h3>
@@ -759,7 +861,14 @@ function WaiterOrderPage() {
                             <strong>{item.dishName}</strong>
                             <span>{formatPrice(item.unitPrice)} each</span>
                             {item.kitchenSubmissionId !== null && (
-                              <em className="order-submitted-tag">Submitted</em>
+                              <span
+                                className={`kitchen-preparation-status status-${item.preparationStatus.toLowerCase()}`}
+                                aria-label={`Kitchen status: ${item.preparationStatus}`}
+                              >
+                                {item.preparationStatus === "New"
+                                  ? "Submitted · New"
+                                  : `Kitchen · ${item.preparationStatus}`}
+                              </span>
                             )}
                           </div>
                           <label>

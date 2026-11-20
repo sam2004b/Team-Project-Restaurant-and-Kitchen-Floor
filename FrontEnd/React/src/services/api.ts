@@ -312,17 +312,29 @@ export function getKitchenOrders(): Promise<KitchenSubmissionResponse[]> {
     });
 }
 
+export interface KitchenItemStatusUpdateResponse {
+    id: number;
+    orderId: number;
+    dishId: number;
+    status: "Preparing" | "Ready";
+    preparationStartedAtUtc: string | null;
+    readyAtUtc: string | null;
+}
+
 export function updateKitchenItemStatus(
     orderItemId: number,
     status: "Preparing" | "Ready",
-): Promise<unknown> {
-    return apiRequest<unknown>(`/chef/orders/items/${orderItemId}/status`, {
-        method: "PATCH",
-        headers: {
-            "Content-Type": "application/json",
+): Promise<KitchenItemStatusUpdateResponse> {
+    return apiRequest<KitchenItemStatusUpdateResponse>(
+        `/chef/orders/items/${orderItemId}/status`,
+        {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ status }),
         },
-        body: JSON.stringify({ status }),
-    });
+    );
 }
 
 export function getWaiterOrderSubmissions(orderId: number): Promise<KitchenSubmissionResponse[]> {
