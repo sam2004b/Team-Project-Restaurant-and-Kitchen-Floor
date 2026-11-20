@@ -55,6 +55,9 @@ namespace Restaurant.Api.Data
         public DbSet<WaiterNotification> WaiterNotifications =>
             Set<WaiterNotification>();
 
+        public DbSet<OrderChangeAudit> OrderChangeAudits =>
+            Set<OrderChangeAudit>();
+
         protected override void OnModelCreating(
             ModelBuilder modelBuilder)
         {
@@ -547,6 +550,70 @@ namespace Restaurant.Api.Data
                 })
                     .HasDatabaseName("IX_orders_restaurant_sent_id")
                     .HasFilter("\"SentAtUtc\" IS NOT NULL");
+            });
+
+            // S3-US14-T01: audit is separate from mutable order lines.
+            // A line can be removed later without erasing its original details.
+            modelBuilder.Entity<OrderChangeAudit>(entity =>
+            {
+                entity.ToTable("order_change_audits", table =>
+                {
+                    table.HasCheckConstraint("CK_order_change_audits_type",
+                        "\"ChangeType\" IN ('Amended', 'Cancelled')");
+                    table.HasCheckConstraint("CK_order_change_audits_reason",
+                        "length(btrim(\"Reason\")) > 0");
+                    table.HasCheckConstraint("CK_order_change_audits_item",
+                        "\"OrderItemId\" IS NULL OR \"OrderItemId\" > 0");
+                    table.HasCheckConstraint("CK_order_change_audits_snapshots",
+                        "jsonb_typeof(\"BeforeSnapshotJson\") = 'object' " +
+                        "AND ((\"ChangeType\" = 'Amended' AND " +
+                        "\"AfterSnapshotJson\" IS NOT NULL AND " +
+                        "jsonb_typeof(\"AfterSnapshotJson\") = 'object') " +
+                        "OR (\"ChangeType\" = 'Cancelled' AND " +
+                        "\"AfterSnapshotJson\" IS NULL))");
+                });
+
+                entity.HasKey(a => a.Id);
+                entity.Property(a => a.ChangeType).IsRequired().HasMaxLength(16);
+                entity.Property(a => a.Reason).IsRequired().HasMaxLength(500);
+                entity.Property(a => a.ChangedAtUtc).IsRequired();
+                entity.Property(a => a.BeforeSnapshotJson)
+                    .IsRequired().HasColumnType("jsonb");
+                entity.Property(a => a.AfterSnapshotJson).HasColumnType("jsonb");
+
+                // Existing composite alternate key on orders verifies both
+                // restaurant and historical dining table.
+                entity.HasOne(a => a.Order)
+                    .WithMany()
+                    .HasForeignKey(a => new
+                    {
+                        a.RestaurantId, a.DiningTableId, a.OrderId
+                    })
+                    .HasPrincipalKey(o => new
+                    {
+                        o.RestaurantId, o.DiningTableId, o.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // The actor must be a membership of the same restaurant.
+                entity.HasOne(a => a.ChangedByStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(a => new
+                    {
+                        a.RestaurantId, a.ChangedByStaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(a => new
+                {
+                    a.RestaurantId, a.OrderId, a.ChangedAtUtc, a.Id
+                }).HasDatabaseName("IX_order_change_audits_order_history");
+
+                entity.HasIndex(a => new
+                {
+                    a.RestaurantId, a.ChangedByStaffMembershipId, a.ChangedAtUtc
+                }).HasDatabaseName("IX_order_change_audits_actor_history");
             });
 
             modelBuilder.Entity<RestaurantOrderItem>(entity =>
