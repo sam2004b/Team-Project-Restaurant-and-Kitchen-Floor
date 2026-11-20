@@ -359,6 +359,73 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.OrderChangeAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AfterSnapshotJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ChangedByStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChangeType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BeforeSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OrderItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "ChangedByStaffMembershipId", "ChangedAtUtc")
+                        .HasDatabaseName("IX_order_change_audits_actor_history");
+
+                    b.HasIndex("RestaurantId", "OrderId", "ChangedAtUtc", "Id")
+                        .HasDatabaseName("IX_order_change_audits_order_history");
+
+                    b.ToTable("order_change_audits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_order_change_audits_type", "\"ChangeType\" IN ('Amended', 'Cancelled')");
+                            t.HasCheckConstraint("CK_order_change_audits_reason", "length(btrim(\"Reason\")) > 0");
+                            t.HasCheckConstraint("CK_order_change_audits_item", "\"OrderItemId\" IS NULL OR \"OrderItemId\" > 0");
+                            t.HasCheckConstraint("CK_order_change_audits_snapshots", "jsonb_typeof(\"BeforeSnapshotJson\") = 'object' " +
+                                "AND ((\"ChangeType\" = 'Amended' AND " +
+                                "\"AfterSnapshotJson\" IS NOT NULL AND " +
+                                "jsonb_typeof(\"AfterSnapshotJson\") = 'object') " +
+                                "OR (\"ChangeType\" = 'Cancelled' AND " +
+                                "\"AfterSnapshotJson\" IS NULL))");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.PlatformAdminSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -934,6 +1001,27 @@ namespace Restaurant.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.OrderChangeAudit", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "DiningTableId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "ChangedByStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "ChangedByStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("ChangedByStaffMembership");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.PlatformAdminSession", b =>
