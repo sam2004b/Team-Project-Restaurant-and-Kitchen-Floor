@@ -58,6 +58,10 @@ namespace Restaurant.Api.Data
         public DbSet<OrderChangeAudit> OrderChangeAudits =>
             Set<OrderChangeAudit>();
 
+        public DbSet<Bill> Bills => Set<Bill>();
+
+        public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+
         protected override void OnModelCreating(
             ModelBuilder modelBuilder)
         {
@@ -614,6 +618,87 @@ namespace Restaurant.Api.Data
                 {
                     a.RestaurantId, a.ChangedByStaffMembershipId, a.ChangedAtUtc
                 }).HasDatabaseName("IX_order_change_audits_actor_history");
+            });
+
+            // S3-US15-T01: one durable bill per order (NOT per table).
+            modelBuilder.Entity<Bill>(entity =>
+            {
+                entity.ToTable("bills", table =>
+                {
+                    table.HasCheckConstraint("CK_bills_amounts_nonnegative",
+                        "\"SubtotalAmount\" >= 0 AND \"TaxAmount\" >= 0 AND " +
+                        "\"DiscountAmount\" >= 0 AND \"TotalAmount\" >= 0");
+                    table.HasCheckConstraint("CK_bills_total_consistency",
+                        "\"TotalAmount\" = \"SubtotalAmount\" + \"TaxAmount\" - \"DiscountAmount\" " +
+                        "AND \"DiscountAmount\" <= \"SubtotalAmount\" + \"TaxAmount\"");
+                    table.HasCheckConstraint("CK_bills_currency_code",
+                        "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+                });
+
+                entity.HasKey(b => b.Id);
+                entity.Property(b => b.CurrencyCode).IsRequired().HasMaxLength(3);
+                entity.Property(b => b.SubtotalAmount).HasPrecision(12, 2);
+                entity.Property(b => b.TaxAmount).HasPrecision(12, 2).HasDefaultValue(0m);
+                entity.Property(b => b.DiscountAmount).HasPrecision(12, 2).HasDefaultValue(0m);
+                entity.Property(b => b.TotalAmount).HasPrecision(12, 2);
+                entity.Property(b => b.CreatedAtUtc).IsRequired();
+
+                // Tenant AND table must match the parent order.
+                entity.HasOne(b => b.Order)
+                    .WithMany()
+                    .HasForeignKey(b => new { b.RestaurantId, b.DiningTableId, b.OrderId })
+                    .HasPrincipalKey(o => new { o.RestaurantId, o.DiningTableId, o.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(b => new { b.RestaurantId, b.OrderId })
+                    .IsUnique()
+                    .HasDatabaseName("UX_bills_restaurant_order");
+                entity.HasIndex(b => new { b.RestaurantId, b.DiningTableId, b.CreatedAtUtc })
+                    .HasDatabaseName("IX_bills_restaurant_table_created");
+            });
+
+            // Payments are append-only events, including any refund entries.
+            modelBuilder.Entity<PaymentRecord>(entity =>
+            {
+                entity.ToTable("payment_records", table =>
+                {
+                    table.HasCheckConstraint("CK_payment_records_amount_positive",
+                        "\"Amount\" > 0");
+                    table.HasCheckConstraint("CK_payment_records_kind",
+                        "\"Kind\" IN ('Payment', 'Refund')");
+                    table.HasCheckConstraint("CK_payment_records_method",
+                        "\"Method\" IN ('Cash', 'Card', 'Other')");
+                    table.HasCheckConstraint("CK_payment_records_reference",
+                        "\"ExternalReference\" IS NULL OR length(btrim(\"ExternalReference\")) > 0");
+                });
+
+                entity.HasKey(p => p.Id);
+                entity.Property(p => p.Kind).IsRequired().HasMaxLength(16);
+                entity.Property(p => p.Method).IsRequired().HasMaxLength(16);
+                entity.Property(p => p.Amount).HasPrecision(12, 2);
+                entity.Property(p => p.ExternalReference).HasMaxLength(120);
+                entity.Property(p => p.RecordedAtUtc).IsRequired();
+
+                // Financial records can only attach to a bill from the same restaurant.
+                entity.HasOne(p => p.Bill)
+                    .WithMany(b => b.Payments)
+                    .HasForeignKey(p => new { p.RestaurantId, p.BillId })
+                    .HasPrincipalKey(b => new { b.RestaurantId, b.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // Actor must also belong to the same restaurant.
+                entity.HasOne(p => p.RecordedByStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(p => new { p.RestaurantId, p.RecordedByStaffMembershipId })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(p => new { p.RestaurantId, p.BillId, p.RecordedAtUtc, p.Id })
+                    .HasDatabaseName("IX_payment_records_bill_history");
+                entity.HasIndex(p => new { p.RestaurantId, p.ExternalReference })
+                    .IsUnique()
+                    .HasFilter("\"ExternalReference\" IS NOT NULL")
+                    .HasDatabaseName("UX_payment_records_external_reference");
             });
 
             modelBuilder.Entity<RestaurantOrderItem>(entity =>
