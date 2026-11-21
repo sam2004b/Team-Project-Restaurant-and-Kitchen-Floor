@@ -8,6 +8,8 @@ import {
   getMenuDishes,
   getOrderDetails,
   getWaiterOrderHistory,
+  getWaiterNotifications,
+  markWaiterItemServed,
   getWaiterTables,
   openOrCreateOrder,
   removeOrderItem,
@@ -19,6 +21,7 @@ import type {
   OrderDetailsResponse,
   OrderItemDetailsResponse,
   WaiterOrderHistoryEntry,
+  WaiterNotificationResponse,
   WaiterTableResponse,
 } from "./services/api";
 import { formatPrice } from "./services/currency";
@@ -47,6 +50,13 @@ function WaiterOrderPage() {
   const [dishes, setDishes] = useState<MenuDishResponse[]>([]);
   const [order, setOrder] = useState<OrderDetailsResponse | null>(null);
   const [orderHistory, setOrderHistory] = useState<WaiterOrderHistoryEntry[]>([]);
+  const [notifications, setNotifications] = useState<WaiterNotificationResponse[]>([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [servingItemId, setServingItemId] = useState<number | null>(null);
+  const [readyToast, setReadyToast] = useState<WaiterNotificationResponse | null>(null);
+  const seenNotificationIds = useRef<Set<number>>(new Set());
+  const notificationFeedInitialized = useRef(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
@@ -254,6 +264,61 @@ function WaiterOrderPage() {
       statusRefreshInFlight.current = false;
     }
   }, []);
+
+  const refreshNotifications = useCallback(async (showLoading = false) => {
+    if (showLoading) setNotificationLoading(true);
+    setNotificationError(null);
+    try {
+      const current = await getWaiterNotifications();
+      const newestUnseen = notificationFeedInitialized.current ? current.find((notification) =>
+        notification.serviceStatus !== "Served" && !seenNotificationIds.current.has(notification.id)) : undefined;
+      current.forEach((notification) => seenNotificationIds.current.add(notification.id));
+      notificationFeedInitialized.current = true;
+      setNotifications(current);
+      if (newestUnseen) setReadyToast(newestUnseen);
+    } catch (caughtError) {
+      setNotificationError(getErrorMessage(caughtError, "Could not load ready-dish notifications."));
+    } finally {
+      if (showLoading) setNotificationLoading(false);
+    }
+  }, []);
+
+  const handleMarkServed = async (notification: WaiterNotificationResponse) => {
+    if (servingItemId !== null || notification.serviceStatus === "Served") return;
+    setServingItemId(notification.orderItemId);
+    setNotificationError(null);
+    try {
+      const result = await markWaiterItemServed(notification.orderItemId);
+      if (result.id !== notification.orderItemId || result.serviceStatus !== "Served") {
+        throw new Error("The API response did not confirm this dish as served.");
+      }
+      setNotifications((current) => current.map((entry) => entry.orderItemId === notification.orderItemId
+        ? { ...entry, serviceStatus: "Served" }
+        : entry));
+      setReadyToast(null);
+    } catch (caughtError) {
+      setNotificationError(getErrorMessage(caughtError, "Could not mark the dish as served."));
+    } finally {
+      setServingItemId(null);
+    }
+  };
+
+
+  useEffect(() => {
+    if (!authorized) return;
+    void refreshNotifications(true);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshNotifications();
+    }, 5000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshNotifications();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [authorized, refreshNotifications]);
 
   useKitchenUpdates(() => {
     if (authorized && order && hasSubmittedItems) {
@@ -645,6 +710,45 @@ function WaiterOrderPage() {
 
         {error && <div className="admin-error" role="alert">{error}</div>}
         {notice && <div className="admin-success" role="status">{notice}</div>}
+        {authorized && (
+          <section className="waiter-ready-inbox staff-card" aria-labelledby="waiter-ready-title">
+            <div className="staff-card-heading">
+              <div><p className="eyebrow">KITCHEN UPDATES</p><h2 id="waiter-ready-title">Ready dishes</h2></div>
+              <button type="button" className="secondary-button" disabled={notificationLoading} onClick={() => void refreshNotifications(true)}>
+                {notificationLoading ? "Refreshing..." : "Refresh notifications"}
+              </button>
+            </div>
+            <p className="staff-help">Newly prepared dishes for your assigned tables. Mark each dish served after delivery.</p>
+            {notificationError && <p className="staff-notice error" role="alert">{notificationError}<button type="button" className="staff-text-button" onClick={() => void refreshNotifications(true)}>Try again</button></p>}
+            {notificationLoading && notifications.length === 0 ? (
+              <div className="waiter-notification-loading" role="status" aria-busy="true"><span className="admin-spinner" /> Loading ready dishes...</div>
+            ) : notifications.length === 0 ? (
+              <div className="waiter-notification-empty" role="status"><strong>All clear</strong><span>No ready dishes to deliver right now.</span></div>
+            ) : (
+              <div className="waiter-notification-list">
+                {notifications.map((notification) => (
+                  <article className={`waiter-notification${notification.serviceStatus === "Served" ? " served" : ""}`} key={notification.id}>
+                    <div className="waiter-notification-main">
+                      <span className={`waiter-notification-status ${notification.serviceStatus === "Served" ? "served" : "ready"}`}>{notification.serviceStatus === "Served" ? "Served" : "Ready to deliver"}</span>
+                      <strong>{notification.dishName}{notification.quantity > 1 ? ` × ${notification.quantity}` : ""}</strong>
+                      <span className="waiter-notification-table">Table {notification.tableNumber} · Order #{notification.orderId}</span>
+                      <time dateTime={notification.createdAtUtc}>{new Date(notification.createdAtUtc).toLocaleTimeString()}</time>
+                    </div>
+                    <button type="button" className="kitchen-status-button ready" disabled={servingItemId !== null || notification.serviceStatus === "Served"} onClick={() => void handleMarkServed(notification)}>
+                      {servingItemId === notification.orderItemId ? "Saving..." : notification.serviceStatus === "Served" ? "Served ✓" : "Mark served"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        {readyToast && authorized && (
+          <aside className="waiter-ready-toast" role="status" aria-live="polite">
+            <div><span className="waiter-toast-kicker">Dish ready</span><strong>{readyToast.dishName}</strong><span>Table {readyToast.tableNumber}{readyToast.quantity > 1 ? ` · × ${readyToast.quantity}` : ""}</span></div>
+            <button type="button" aria-label="Dismiss ready dish notification" onClick={() => setReadyToast(null)}>×</button>
+          </aside>
+        )}
 
         {loading ? (
           <div className="admin-loading" role="status" aria-busy="true">

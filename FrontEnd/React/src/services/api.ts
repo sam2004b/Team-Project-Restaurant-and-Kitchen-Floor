@@ -227,6 +227,47 @@ export interface KitchenSubmissionResponse {
     seatNumber: number | null;
 }
 
+export interface WaiterNotificationResponse {
+    id: number;
+    orderId: number;
+    orderItemId: number;
+    createdAtUtc: string;
+    isRead: boolean;
+    readAtUtc: string | null;
+    dishName: string;
+    quantity: number;
+    tableNumber: number;
+    diningTableId: number;
+    preparationStatus: "New" | "Preparing" | "Ready";
+    serviceStatus: "Unserved" | "Served";
+}
+
+
+export interface MarkServedResponse {
+    id: number;
+    orderId: number;
+    dishId: number;
+    dishName: string;
+    tableNumber: number;
+    serviceStatus: "Served";
+    servedAtUtc: string;
+}
+
+
+export function getWaiterNotifications(): Promise<WaiterNotificationResponse[]> {
+    return apiRequest<WaiterNotificationResponse[]>("/waiter/notifications", {
+        cache: "no-store",
+    });
+}
+
+
+export function markWaiterItemServed(orderItemId: number): Promise<MarkServedResponse> {
+    return apiRequest<MarkServedResponse>(`/waiter/orders/items/${orderItemId}/served`, {
+        method: "PATCH",
+    });
+}
+
+
 export interface WaiterOrderHistoryEntry {
     id: number;
     diningTableId: number;
