@@ -5020,3 +5020,137 @@ select:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Waiter ready-dish inbox (S3-US13-T05) */
+.waiter-ready-inbox {
+  margin-bottom: 20px;
+}
+.waiter-ready-inbox .staff-card-heading {
+  align-items: center;
+}
+.waiter-notification-list {
+  display: grid;
+  gap: 10px;
+}
+.waiter-notification {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #dce8e2;
+  border-left: 4px solid #c28a43;
+  border-radius: 12px;
+  background: #fff;
+}
+.waiter-notification.served {
+  border-left-color: #28724f;
+  background: #f5faf7;
+}
+.waiter-notification-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.waiter-notification-main strong {
+  color: #173e30;
+  font-size: 15px;
+}
+.waiter-notification-table {
+  color: #547166;
+  font-size: 13px;
+}
+.waiter-notification-main time {
+  color: #7d9187;
+  font-size: 12px;
+}
+.waiter-notification-status {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.waiter-notification-status.ready {
+  background: #fff2dc;
+  color: #8d5a16;
+}
+.waiter-notification-status.served {
+  background: #e3f2e8;
+  color: #236746;
+}
+.waiter-notification-empty,
+.waiter-notification-loading {
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-direction: column;
+  color: #668075;
+  background: #f7faf8;
+  border: 1px dashed #d6e4dc;
+  border-radius: 12px;
+  text-align: center;
+  padding: 18px;
+}
+.waiter-notification-empty strong {
+  color: #20513b;
+}
+.waiter-ready-toast {
+  position: fixed;
+  z-index: 30;
+  right: 24px;
+  bottom: 24px;
+  width: min(360px, calc(100vw - 32px));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid #d6e7dc;
+  border-left: 4px solid #28724f;
+  border-radius: 14px;
+  box-shadow: 0 14px 40px rgba(18, 49, 36, .18);
+}
+.waiter-ready-toast > div {
+  display: grid;
+  gap: 4px;
+}
+.waiter-ready-toast strong {
+  color: #183f30;
+  font-size: 15px;
+}
+.waiter-ready-toast span:last-child {
+  color: #637a6d;
+  font-size: 13px;
+}
+.waiter-toast-kicker {
+  color: #28724f !important;
+  text-transform: uppercase;
+  font-size: 10px !important;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.waiter-ready-toast button {
+  border: 0;
+  background: transparent;
+  color: #6b8175;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 620px) {
+  .waiter-notification {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .waiter-notification .kitchen-status-button {
+    width: 100%;
+  }
+  .waiter-ready-toast {
+    right: 16px;
+    bottom: 16px;
+  }
+}
