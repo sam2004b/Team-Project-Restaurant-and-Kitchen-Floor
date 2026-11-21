@@ -284,13 +284,13 @@ export function RestaurantConfigurationPanel({
         <span className="restaurant-configuration-id">Restaurant #{restaurantId}</span>
       </header>
 
-      <nav className="configuration-tabs" aria-label="Restaurant configuration">
+      <nav className="configuration-tabs restaurant-configuration-tabs" aria-label="Restaurant configuration">
         <button type="button" className={activeTab === "settings" ? "active" : ""} aria-current={activeTab === "settings" ? "page" : undefined} onClick={() => setActiveTab("settings")}>General settings</button>
         <button type="button" className={activeTab === "tables" ? "active" : ""} aria-current={activeTab === "tables" ? "page" : undefined} onClick={() => setActiveTab("tables")}>Tables</button>
         <button type="button" className={activeTab === "assignments" ? "active" : ""} aria-current={activeTab === "assignments" ? "page" : undefined} onClick={() => setActiveTab("assignments")}>Staff assignment</button>
       </nav>
 
-      <section className="configuration-summary" aria-label="Dining summary">
+      <section className="configuration-summary restaurant-configuration-summary" aria-label="Dining summary">
         <article><span>Configured tables</span><strong>{tables.length}</strong></article>
         <article><span>Total configured seats</span><strong>{configuredSeats}</strong></article>
         <article><span>Staff assignments</span><strong>{assignedTables}</strong></article>
