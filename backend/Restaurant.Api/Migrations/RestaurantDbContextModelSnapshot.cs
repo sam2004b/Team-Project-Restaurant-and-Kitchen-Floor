@@ -218,6 +218,76 @@ namespace Restaurant.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.Bill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("SubtotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("TaxAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("RestaurantId", "Id");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_bills_restaurant_table_created");
+
+                    b.HasIndex("RestaurantId", "OrderId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_bills_restaurant_order");
+
+                    b.ToTable("bills", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_bills_amounts_nonnegative",
+                                "\"SubtotalAmount\" >= 0 AND \"TaxAmount\" >= 0 AND " +
+                                "\"DiscountAmount\" >= 0 AND \"TotalAmount\" >= 0");
+                            t.HasCheckConstraint("CK_bills_total_consistency",
+                                "\"TotalAmount\" = \"SubtotalAmount\" + \"TaxAmount\" - \"DiscountAmount\" " +
+                                "AND \"DiscountAmount\" <= \"SubtotalAmount\" + \"TaxAmount\"");
+                            t.HasCheckConstraint("CK_bills_currency_code", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.DiningTable", b =>
                 {
                     b.Property<int>("Id")
@@ -423,6 +493,65 @@ namespace Restaurant.Api.Migrations
                                 "jsonb_typeof(\"AfterSnapshotJson\") = 'object') " +
                                 "OR (\"ChangeType\" = 'Cancelled' AND " +
                                 "\"AfterSnapshotJson\" IS NULL))");
+                        });
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.PaymentRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("BillId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RecordedByStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "RecordedByStaffMembershipId");
+
+                    b.HasIndex("RestaurantId", "BillId", "RecordedAtUtc", "Id")
+                        .HasDatabaseName("IX_payment_records_bill_history");
+
+                    b.HasIndex("RestaurantId", "ExternalReference")
+                        .IsUnique()
+                        .HasDatabaseName("UX_payment_records_external_reference")
+                        .HasFilter("\"ExternalReference\" IS NOT NULL");
+
+                    b.ToTable("payment_records", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_payment_records_amount_positive", "\"Amount\" > 0");
+                            t.HasCheckConstraint("CK_payment_records_kind", "\"Kind\" IN ('Payment', 'Refund')");
+                            t.HasCheckConstraint("CK_payment_records_method", "\"Method\" IN ('Cash', 'Card', 'Other')");
+                            t.HasCheckConstraint("CK_payment_records_reference", "\"ExternalReference\" IS NULL OR length(btrim(\"ExternalReference\")) > 0");
                         });
                 });
 
@@ -969,6 +1098,18 @@ namespace Restaurant.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.Bill", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "DiningTableId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.DiningTable", b =>
                 {
                     b.HasOne("Restaurant.Api.Models.RestaurantAccount", "Restaurant")
@@ -1022,6 +1163,27 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("ChangedByStaffMembership");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.PaymentRecord", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.Bill", "Bill")
+                        .WithMany("Payments")
+                        .HasForeignKey("RestaurantId", "BillId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "RecordedByStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "RecordedByStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bill");
+
+                    b.Navigation("RecordedByStaffMembership");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.PlatformAdminSession", b =>
@@ -1193,6 +1355,11 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("DiningTable");
 
                     b.Navigation("StaffMembership");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.Bill", b =>
+                {
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.DiningTable", b =>
