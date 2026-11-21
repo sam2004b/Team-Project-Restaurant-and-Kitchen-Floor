@@ -57,6 +57,8 @@ function WaiterOrderPage() {
   const [readyToast, setReadyToast] = useState<WaiterNotificationResponse | null>(null);
   const seenNotificationIds = useRef<Set<number>>(new Set());
   const notificationFeedInitialized = useRef(false);
+  const notificationRequestVersion = useRef(0);
+  const servingItemLock = useRef(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
@@ -266,39 +268,62 @@ function WaiterOrderPage() {
   }, []);
 
   const refreshNotifications = useCallback(async (showLoading = false) => {
+    const requestVersion = ++notificationRequestVersion.current;
     if (showLoading) setNotificationLoading(true);
     setNotificationError(null);
     try {
       const current = await getWaiterNotifications();
-      const newestUnseen = notificationFeedInitialized.current ? current.find((notification) =>
-        notification.serviceStatus !== "Served" && !seenNotificationIds.current.has(notification.id)) : undefined;
+      if (requestVersion !== notificationRequestVersion.current) return;
+
+      const newestUnseen = notificationFeedInitialized.current
+        ? current.find((notification) =>
+          notification.serviceStatus !== "Served" &&
+          !seenNotificationIds.current.has(notification.id))
+        : undefined;
       current.forEach((notification) => seenNotificationIds.current.add(notification.id));
       notificationFeedInitialized.current = true;
       setNotifications(current);
-      if (newestUnseen) setReadyToast(newestUnseen);
+      setReadyToast((existing) => {
+        if (existing && current.some((notification) =>
+          notification.orderItemId === existing.orderItemId &&
+          notification.serviceStatus === "Served")) {
+          return null;
+        }
+        return newestUnseen ?? existing;
+      });
     } catch (caughtError) {
-      setNotificationError(getErrorMessage(caughtError, "Could not load ready-dish notifications."));
+      if (requestVersion === notificationRequestVersion.current) {
+        setNotificationError(getErrorMessage(caughtError, "Could not load ready-dish notifications."));
+      }
     } finally {
-      if (showLoading) setNotificationLoading(false);
+      if (requestVersion === notificationRequestVersion.current) {
+        setNotificationLoading(false);
+      }
     }
   }, []);
 
   const handleMarkServed = async (notification: WaiterNotificationResponse) => {
-    if (servingItemId !== null || notification.serviceStatus === "Served") return;
+    if (servingItemLock.current || notification.serviceStatus === "Served") return;
+    servingItemLock.current = true;
     setServingItemId(notification.orderItemId);
     setNotificationError(null);
     try {
       const result = await markWaiterItemServed(notification.orderItemId);
-      if (result.id !== notification.orderItemId || result.serviceStatus !== "Served") {
+      if (result.id !== notification.orderItemId ||
+          result.orderId !== notification.orderId ||
+          result.serviceStatus !== "Served") {
         throw new Error("The API response did not confirm this dish as served.");
       }
       setNotifications((current) => current.map((entry) => entry.orderItemId === notification.orderItemId
         ? { ...entry, serviceStatus: "Served" }
         : entry));
-      setReadyToast(null);
+      setReadyToast((current) => current?.orderItemId === notification.orderItemId ? null : current);
+      setNotice(`${notification.dishName} marked as served.`);
+      await refreshNotifications();
     } catch (caughtError) {
       setNotificationError(getErrorMessage(caughtError, "Could not mark the dish as served."));
     } finally {
+      servingItemLock.current = false;
       setServingItemId(null);
     }
   };
@@ -321,6 +346,7 @@ function WaiterOrderPage() {
   }, [authorized, refreshNotifications]);
 
   useKitchenUpdates(() => {
+    if (authorized) void refreshNotifications();
     if (authorized && order && hasSubmittedItems) {
       void refreshSubmittedStatuses(order.id, order.diningTableId);
     }
@@ -491,7 +517,13 @@ function WaiterOrderPage() {
     setError(null);
     setNotice(null);
     try {
-      await addOrderItem(order.id, dishId, parsedQuantity, specialRequest);
+      await addOrderItem(
+        order.id,
+        dishId,
+        parsedQuantity,
+        specialRequest,
+        "Added from the waiter order screen.",
+      );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not add this dish. Refresh the order and try again."));
       try {
@@ -536,7 +568,13 @@ function WaiterOrderPage() {
     setError(null);
     setNotice(null);
     try {
-      await updateOrderItem(order.id, item.id, parsedQuantity, draft.specialRequest);
+      await updateOrderItem(
+        order.id,
+        item.id,
+        parsedQuantity,
+        draft.specialRequest,
+        "Updated from the waiter order screen.",
+      );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not update this dish."));
       try {
@@ -570,7 +608,7 @@ function WaiterOrderPage() {
     setError(null);
     setNotice(null);
     try {
-      await removeOrderItem(order.id, itemId);
+      await removeOrderItem(order.id, itemId, "Removed from the waiter order screen.");
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Could not remove this dish."));
       try {
@@ -622,6 +660,7 @@ function WaiterOrderPage() {
           changedItem.item.id,
           Number(changedItem.draft.quantity),
           changedItem.draft.specialRequest,
+          "Updated from the waiter order screen before sending.",
         );
       }
 

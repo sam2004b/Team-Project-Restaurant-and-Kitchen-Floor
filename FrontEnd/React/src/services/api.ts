@@ -315,11 +315,13 @@ export function addOrderItem(
     dishId: number,
     quantity: number,
     specialRequest: string,
+    reason: string,
 ): Promise<{ orderId: number; itemId: number }> {
     return apiSend(`/waiter/orders/${orderId}/items`, "POST", {
         dishId,
         quantity,
         specialRequest,
+        reason,
     });
 }
 
@@ -328,16 +330,18 @@ export function updateOrderItem(
     itemId: number,
     quantity: number,
     specialRequest: string,
+    reason: string,
 ): Promise<{ orderId: number; itemId: number; updated: boolean }> {
     return apiSend(`/waiter/orders/${orderId}/items/${itemId}`, "PUT", {
         quantity,
         specialRequest,
+        reason,
     });
 }
 
-export function removeOrderItem(orderId: number, itemId: number): Promise<void> {
-    return apiRequest<void>(`/waiter/orders/${orderId}/items/${itemId}`, {
-        method: "DELETE",
+export function removeOrderItem(orderId: number, itemId: number, reason: string): Promise<void> {
+    return apiSend(`/waiter/orders/${orderId}/items/${itemId}`, "DELETE", {
+        reason,
     });
 }
 
@@ -674,7 +678,7 @@ export async function uploadDishImage(
 
 async function apiSend<T>(
     path: string,
-    method: "POST" | "PUT",
+    method: "POST" | "PUT" | "DELETE",
     body: unknown,
 ): Promise<T> {
     return apiRequest<T>(path, {

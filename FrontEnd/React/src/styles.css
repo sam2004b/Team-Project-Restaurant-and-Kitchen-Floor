@@ -2924,6 +2924,7 @@ select:focus-visible {
 
 .staff-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -2961,7 +2962,10 @@ select:focus-visible {
 }
 
 .staff-role-control select {
+  min-width: 0;
   min-height: 32px;
+  width: auto;
+  flex: 1 1 130px;
   font-size: 0.7rem;
 }
 
@@ -3100,6 +3104,11 @@ select:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 3px;
+  }
+
+  .staff-role-control select {
+    width: 100%;
+    flex: none;
   }
 
   .staff-accept-page .staff-card {
@@ -5152,5 +5161,94 @@ select:focus-visible {
   .waiter-ready-toast {
     right: 16px;
     bottom: 16px;
+  }
+}
+
+.restaurant-configuration-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #e4e9e3;
+  border-radius: 12px;
+  background: #f0f3ef;
+}
+
+.restaurant-configuration-tabs button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #53665b;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.restaurant-configuration-tabs button:hover {
+  background: #fff;
+  color: var(--green);
+}
+
+.restaurant-configuration-tabs button.active {
+  border-color: #dce7dd;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(27, 55, 39, 0.08);
+  color: var(--green);
+}
+
+.restaurant-configuration-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.restaurant-configuration-summary article {
+  display: grid;
+  min-width: 0;
+  min-height: 84px;
+  align-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #e4e9e3;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(27, 55, 39, 0.035);
+}
+
+.restaurant-configuration-summary span {
+  color: #65756a;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.restaurant-configuration-summary strong {
+  color: var(--green);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+@media (max-width: 520px) {
+  .restaurant-configuration-header {
+    flex-direction: column;
+  }
+
+  .restaurant-configuration-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .restaurant-configuration-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .restaurant-configuration-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .restaurant-configuration-summary article {
+    min-height: 64px;
   }
 }
