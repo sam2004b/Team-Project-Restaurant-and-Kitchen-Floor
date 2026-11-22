@@ -1,0 +1,438 @@
+{
+  "branch": "develop",
+  "commit": "be545e3e63834fb8648ee9f05d9624e9d620c977",
+  "startedUtc": "2026-11-22T13:15:42.612Z",
+  "setup": {
+    "A": {
+      "user": "waiter",
+      "table": {
+        "id": 1,
+        "tableNumber": 1,
+        "seatCount": 4
+      }
+    },
+    "B": {
+      "user": "ivan",
+      "table": {
+        "id": 2,
+        "tableNumber": 2,
+        "seatCount": 2
+      }
+    },
+    "chef": "anna",
+    "assign": "Seeded table 1 and assigned the other waiter to table 2 in the isolated QA database",
+    "dish": {
+      "id": 7,
+      "name": "Beef Steak"
+    },
+    "pending": {
+      "id": 3,
+      "name": "Caesar Salad"
+    }
+  },
+  "orders": {
+    "normal": {
+      "orderId": 1,
+      "table": 1,
+      "seat": 1,
+      "items": [
+        {
+          "id": 1,
+          "dishName": "Beef Steak",
+          "preparationStatus": "New"
+        },
+        {
+          "id": 2,
+          "dishName": "Caesar Salad",
+          "preparationStatus": "New"
+        }
+      ]
+    },
+    "aa": {
+      "orderId": 2,
+      "table": 1,
+      "seat": 2,
+      "items": [
+        {
+          "id": 3,
+          "dishName": "Beef Steak",
+          "preparationStatus": "New"
+        }
+      ]
+    },
+    "bb": {
+      "orderId": 3,
+      "table": 2,
+      "seat": 1,
+      "items": [
+        {
+          "id": 4,
+          "dishName": "Beef Steak",
+          "preparationStatus": "New"
+        }
+      ]
+    }
+  },
+  "chrome": "157.0.8103.79",
+  "TC-01": {
+    "baseline": [
+      {
+        "http": 200,
+        "data": []
+      },
+      {
+        "http": 200,
+        "data": []
+      }
+    ],
+    "ready": [
+      {
+        "id": 1,
+        "orderId": 1,
+        "dishId": 7,
+        "status": "Preparing",
+        "preparationStartedAtUtc": "2026-11-22T13:15:48.6207386Z",
+        "readyAtUtc": null
+      },
+      {
+        "id": 1,
+        "orderId": 1,
+        "dishId": 7,
+        "status": "Ready",
+        "preparationStartedAtUtc": "2026-11-22T13:15:48.620738Z",
+        "readyAtUtc": "2026-11-22T13:15:48.6365997Z"
+      }
+    ],
+    "a": {
+      "http": 200,
+      "data": [
+        {
+          "id": 1,
+          "orderId": 1,
+          "orderItemId": 1,
+          "createdAtUtc": "2026-11-22T13:15:48.636599Z",
+          "isRead": false,
+          "readAtUtc": null,
+          "dishName": "Beef Steak",
+          "quantity": 1,
+          "tableNumber": 1,
+          "diningTableId": 1,
+          "preparationStatus": "Ready",
+          "serviceStatus": "Unserved"
+        }
+      ]
+    },
+    "b": {
+      "http": 200,
+      "data": []
+    },
+    "inboxA": [
+      "Ready to deliver\nBeef Steak\nTable 1 · Order #1\n20:15:48\nMark served"
+    ],
+    "inboxB": [],
+    "toast": [
+      "DISH READY\nBeef Steak\nTable 1\n×"
+    ]
+  },
+  "TC-02": {
+    "ready": [
+      {
+        "id": 3,
+        "startedUtc": "2026-11-22T13:16:02.777Z",
+        "elapsedMs": 16,
+        "http": 200,
+        "data": {
+          "id": 3,
+          "orderId": 2,
+          "dishId": 7,
+          "status": "Ready",
+          "preparationStartedAtUtc": "2026-11-22T13:16:02.776929Z",
+          "readyAtUtc": "2026-11-22T13:16:02.7906089Z"
+        }
+      },
+      {
+        "id": 4,
+        "startedUtc": "2026-11-22T13:16:02.777Z",
+        "elapsedMs": 15,
+        "http": 200,
+        "data": {
+          "id": 4,
+          "orderId": 3,
+          "dishId": 7,
+          "status": "Ready",
+          "preparationStartedAtUtc": "2026-11-22T13:16:02.776706Z",
+          "readyAtUtc": "2026-11-22T13:16:02.7900885Z"
+        }
+      }
+    ],
+    "a": {
+      "http": 200,
+      "data": [
+        {
+          "id": 3,
+          "orderId": 2,
+          "orderItemId": 3,
+          "createdAtUtc": "2026-11-22T13:16:02.790608Z",
+          "isRead": false,
+          "readAtUtc": null,
+          "dishName": "Beef Steak",
+          "quantity": 1,
+          "tableNumber": 1,
+          "diningTableId": 1,
+          "preparationStatus": "Ready",
+          "serviceStatus": "Unserved"
+        },
+        {
+          "id": 1,
+          "orderId": 1,
+          "orderItemId": 1,
+          "createdAtUtc": "2026-11-22T13:15:48.636599Z",
+          "isRead": false,
+          "readAtUtc": null,
+          "dishName": "Beef Steak",
+          "quantity": 1,
+          "tableNumber": 1,
+          "diningTableId": 1,
+          "preparationStatus": "Ready",
+          "serviceStatus": "Unserved"
+        }
+      ]
+    },
+    "b": {
+      "http": 200,
+      "data": [
+        {
+          "id": 2,
+          "orderId": 3,
+          "orderItemId": 4,
+          "createdAtUtc": "2026-11-22T13:16:02.790088Z",
+          "isRead": false,
+          "readAtUtc": null,
+          "dishName": "Beef Steak",
+          "quantity": 1,
+          "tableNumber": 2,
+          "diningTableId": 2,
+          "preparationStatus": "Ready",
+          "serviceStatus": "Unserved"
+        }
+      ]
+    },
+    "inboxA": [
+      "Ready to deliver\nBeef Steak\nTable 1 · Order #2\n20:16:02\nMark served",
+      "Ready to deliver\nBeef Steak\nTable 1 · Order #1\n20:15:48\nMark served"
+    ],
+    "inboxB": [
+      "Ready to deliver\nBeef Steak\nTable 2 · Order #3\n20:16:02\nMark served"
+    ]
+  },
+  "TC-03": {
+    "itemId": 1,
+    "before": [
+      {
+        "id": 1,
+        "orderId": 1,
+        "orderItemId": 1,
+        "createdAtUtc": "2026-11-22T13:15:48.636599Z",
+        "isRead": false,
+        "readAtUtc": null,
+        "dishName": "Beef Steak",
+        "quantity": 1,
+        "tableNumber": 1,
+        "diningTableId": 1,
+        "preparationStatus": "Ready",
+        "serviceStatus": "Unserved"
+      }
+    ],
+    "manualReplay": {
+      "http": 409,
+      "data": {
+        "error": "Invalid preparation status transition from Ready to Ready."
+      }
+    },
+    "after": [
+      {
+        "id": 1,
+        "orderId": 1,
+        "orderItemId": 1,
+        "createdAtUtc": "2026-11-22T13:15:48.636599Z",
+        "isRead": false,
+        "readAtUtc": null,
+        "dishName": "Beef Steak",
+        "quantity": 1,
+        "tableNumber": 1,
+        "diningTableId": 1,
+        "preparationStatus": "Ready",
+        "serviceStatus": "Unserved"
+      }
+    ],
+    "uiBefore": 1,
+    "uiAfter": 1
+  },
+  "TC-04": {
+    "before": [
+      {
+        "id": 1,
+        "dishName": "Beef Steak",
+        "prep": "Ready",
+        "hasServiceStatus": false
+      },
+      {
+        "id": 2,
+        "dishName": "Caesar Salad",
+        "prep": "New",
+        "hasServiceStatus": false
+      }
+    ],
+    "save": {
+      "http": 200,
+      "data": {
+        "id": 1,
+        "orderId": 1,
+        "dishId": 7,
+        "dishName": "Beef Steak",
+        "tableNumber": 1,
+        "serviceStatus": "Served",
+        "servedAtUtc": "2026-11-22T13:17:49.6088889Z"
+      }
+    },
+    "reopen": {
+      "selected": "true",
+      "rows": [
+        "Beef Steak\n24 ₽ each\nKitchen · Ready",
+        "Caesar Salad\n8 ₽ each\nSubmitted · New"
+      ]
+    },
+    "details": [
+      {
+        "id": 1,
+        "dishName": "Beef Steak",
+        "prep": "Ready",
+        "hasServiceStatus": false
+      },
+      {
+        "id": 2,
+        "dishName": "Caesar Salad",
+        "prep": "New",
+        "hasServiceStatus": false
+      }
+    ],
+    "card": "Served\nBeef Steak\nTable 1 · Order #1\n20:15:48\nServed ✓",
+    "savedInbox": {
+      "id": 1,
+      "orderId": 1,
+      "orderItemId": 1,
+      "createdAtUtc": "2026-11-22T13:15:48.636599Z",
+      "isRead": false,
+      "readAtUtc": null,
+      "dishName": "Beef Steak",
+      "quantity": 1,
+      "tableNumber": 1,
+      "diningTableId": 1,
+      "preparationStatus": "Ready",
+      "serviceStatus": "Served"
+    }
+  },
+  "TC-05": {
+    "itemId": 3,
+    "intercepted": 1,
+    "error": "Failed to fetchTry again",
+    "serverAfterAbort": {
+      "id": 3,
+      "orderId": 2,
+      "orderItemId": 3,
+      "createdAtUtc": "2026-11-22T13:16:02.790608Z",
+      "isRead": false,
+      "readAtUtc": null,
+      "dishName": "Beef Steak",
+      "quantity": 1,
+      "tableNumber": 1,
+      "diningTableId": 1,
+      "preparationStatus": "Ready",
+      "serviceStatus": "Unserved"
+    },
+    "failedReopen": {
+      "selected": "true",
+      "rows": [
+        "Beef Steak\n24 ₽ each\nKitchen · Ready"
+      ]
+    },
+    "failedCard": "Ready to deliver\nBeef Steak\nTable 1 · Order #2\n20:16:02\nMark served",
+    "successfulRetry": {
+      "http": 200,
+      "data": {
+        "id": 3,
+        "orderId": 2,
+        "dishId": 7,
+        "dishName": "Beef Steak",
+        "tableNumber": 1,
+        "serviceStatus": "Served",
+        "servedAtUtc": "2026-11-22T13:17:50.4724877Z"
+      }
+    },
+    "retriedReopen": {
+      "selected": "true",
+      "rows": [
+        "Beef Steak\n24 ₽ each\nKitchen · Ready"
+      ]
+    },
+    "servedCard": "Served\nBeef Steak\nTable 1 · Order #2\n20:16:02\nServed ✓",
+    "serverAfterRetry": {
+      "id": 3,
+      "orderId": 2,
+      "orderItemId": 3,
+      "createdAtUtc": "2026-11-22T13:16:02.790608Z",
+      "isRead": false,
+      "readAtUtc": null,
+      "dishName": "Beef Steak",
+      "quantity": 1,
+      "tableNumber": 1,
+      "diningTableId": 1,
+      "preparationStatus": "Ready",
+      "serviceStatus": "Served"
+    }
+  },
+  "TC-06": {
+    "documentedRoutes": [
+      "/waiter/notifications",
+      "/waiter/orders/items/{orderItemId}/served"
+    ],
+    "aNotificationId": 1,
+    "waiterB": {
+      "list": {
+        "http": 200,
+        "data": [
+          {
+            "id": 2,
+            "orderId": 3,
+            "orderItemId": 4,
+            "createdAtUtc": "2026-11-22T13:16:02.790088Z",
+            "isRead": false,
+            "readAtUtc": null,
+            "dishName": "Beef Steak",
+            "quantity": 1,
+            "tableNumber": 2,
+            "diningTableId": 2,
+            "preparationStatus": "Ready",
+            "serviceStatus": "Unserved"
+          }
+        ]
+      },
+      "inbox": [
+        "Ready to deliver\nBeef Steak\nTable 2 · Order #3\n20:16:02\nMark served"
+      ],
+      "aCardCount": 0
+    },
+    "signedOut": {
+      "list": {
+        "http": 401,
+        "data": ""
+      },
+      "url": "/login",
+      "headings": [
+        "Your team,\nworking in sync.",
+        "Welcome back"
+      ],
+      "notificationCards": 0
+    }
+  }
+}
