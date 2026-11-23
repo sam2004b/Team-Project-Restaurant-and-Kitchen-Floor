@@ -1,0 +1,67 @@
+  Determining projects to restore...
+  Restored /private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj (in 1.79 sec).
+  Restored /private/tmp/s3us14t06-qa/backend/Restaurant.Api.Tests/Restaurant.Api.Tests.csproj (in 1.89 sec).
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(160,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(165,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(205,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(209,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(214,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(347,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(372,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(376,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(776,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(779,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(782,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(785,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Data/RestaurantDbContext.cs(902,21): warning CS0618: 'RelationalEntityTypeBuilderExtensions.HasCheckConstraint<TEntity>(EntityTypeBuilder<TEntity>, string, string?)' is obsolete: 'Configure this using ToTable(t => t.HasCheckConstraint()) instead.' [/private/tmp/s3us14t06-qa/backend/Restaurant.Api/Restaurant.Api.csproj]
+  Restaurant.Api -> /private/tmp/s3us14t06-qa/backend/Restaurant.Api/bin/Debug/net8.0/Restaurant.Api.dll
+  Restaurant.Api.Tests -> /private/tmp/s3us14t06-qa/backend/Restaurant.Api.Tests/bin/Debug/net8.0/Restaurant.Api.Tests.dll
+Test run for /private/tmp/s3us14t06-qa/backend/Restaurant.Api.Tests/bin/Debug/net8.0/Restaurant.Api.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.12.0 (arm64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 9.0.8)
+[xUnit.net 00:00:00.07]   Discovering: Restaurant.Api.Tests
+[xUnit.net 00:00:00.12]   Discovered:  Restaurant.Api.Tests
+[xUnit.net 00:00:00.12]   Starting:    Restaurant.Api.Tests
+  Passed Restaurant.Api.Tests.OrderChangeAuditTests.CapturingAnotherOrdersLineIsRejected [10 ms]
+  Passed Restaurant.Api.Tests.OrderChangeAuditTests.OriginalSnapshotRetainsDetailsAfterAnAmendment [86 ms]
+  Passed Restaurant.Api.Tests.OrderChangeAuditTests.CancellationRetainsDeletedItemsOriginalDetails [703 ms]
+  Passed Restaurant.Api.Tests.OrderChangeAuditTests.AmendmentPersistsActorReasonAndBothSnapshots [6 ms]
+  Passed Restaurant.Api.Tests.OrderChangeAuditTests.SchemaContainsTenantSafeReferencesConstraintsAndHistoryIndexes [53 ms]
+  Passed Restaurant.Api.Tests.WaiterBillingServiceTests.PaymentIsIdempotentAndClosesOrderWhenFullyPaid [917 ms]
+  Passed Restaurant.Api.Tests.WaiterBillingServiceTests.CreateBillUsesAgreedOrderPriceAndIsIdempotent [4 ms]
+  Passed Restaurant.Api.Tests.WaiterBillingServiceTests.PaymentCannotExceedOutstandingBalance [7 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.SecondKitchenBatchDoesNotLeakPendingItemsOrResendOldItems [941 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.KitchenBatchesKeepTenantSequenceAndPreparationInstructions [951 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.OpenDraftDoesNotAppearInKitchenFeed [16 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.SentItemsCannotBeEditedButNewPendingItemsCanBeUpdatedOrDeleted [12 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.RemoveLineMakesOrderEmptyAndSendFails [4 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.KitchenOrderCannotBeCancelledAfterPreparationHasStarted [25 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.SendIsDurableIdempotentAndAllowsAdditionalPendingItems [9 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.KitchenFeedIsStrictlyRestaurantScoped [9 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.InvalidQuantityAndUnassignedWaiterAreRejected [17 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.PaidClosedOrderCannotAcceptMoreItemsAndRemainsInKitchenFeed [21 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.KitchenOrderDetails_ReturnSubmittedDishDetails_AndRespectRestaurantScope [2 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.ReassignmentTransfersDraftAccessWithoutChangingCreator [4 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.InvalidUpdateAndUnavailableDishAreRejected [4 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.EditLinePersistsQuantityAndDishSpecificNote [1 ms]
+  Passed Restaurant.Api.Tests.OrderComposerServiceTests.RepeatedSendProducesOneDurableKitchenOrderAfterReconnect [2 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.DifferentSeatsCanHaveSeparateActiveOrdersOnSameTable [38 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.EmptyDraftCannotBeSent [3 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.KitchenModelHasTenantSafeCompositeForeignKeysAndSequenceIndexes [1 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.DishUnavailableAtSendTimeKeepsOrderOpen [4 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.CreateReturnsSameOpenOrderForTheSameTable [3 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.LineItemsPersistWithIndividualQuantitiesRequestsAndSnapshots [4 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.AmendmentsAreAuditedWithBeforeAndAfterSnapshots [8 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.CancellationRequiresConfirmationAndPersistsAuditSnapshot [4 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.InvalidSeatsAndAmbiguousOldOrdersReturnErrorsNotWrongOrder [1 ms]
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.ReassignmentTransfersDraftControlButPreservesCreator [1 ms]
+[xUnit.net 00:00:01.33]   Finished:    Restaurant.Api.Tests
+  Passed Restaurant.Api.Tests.OrderDraftPersistenceServiceTests.SubmittedButNotStartedKitchenOrderCanBeCancelledAndWithdrawn [2 ms]
+
+Test Run Successful.
+Total tests: 34
+     Passed: 34
+ Total time: 1.7340 Seconds

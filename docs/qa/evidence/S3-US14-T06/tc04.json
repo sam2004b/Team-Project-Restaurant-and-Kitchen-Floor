@@ -1,0 +1,331 @@
+{
+  "orderId": 3,
+  "payment": {
+    "payment": {
+      "id": 1,
+      "amount": 48,
+      "method": "Cash",
+      "externalReference": "US14-QA-PAID",
+      "recordedAtUtc": "2026-11-23T19:45:05.042594Z"
+    },
+    "bill": {
+      "id": 1,
+      "orderId": 3,
+      "diningTableId": 1,
+      "currencyCode": "USD",
+      "subtotalAmount": 48,
+      "taxAmount": 0,
+      "discountAmount": 0,
+      "totalAmount": 48,
+      "amountPaid": 48,
+      "balanceDue": 0,
+      "paymentStatus": "Paid",
+      "createdAtUtc": "2026-11-23T19:45:05.003864Z",
+      "items": [
+        {
+          "orderItemId": 4,
+          "dishName": "Beef Steak",
+          "quantity": 2,
+          "unitPrice": 24,
+          "lineTotal": 48,
+          "specialRequest": "US14 paid lock"
+        }
+      ],
+      "payments": [
+        {
+          "id": 1,
+          "amount": 48,
+          "method": "Cash",
+          "externalReference": "US14-QA-PAID",
+          "recordedAtUtc": "2026-11-23T19:45:05.042594Z"
+        }
+      ]
+    }
+  },
+  "before": {
+    "http": 200,
+    "data": {
+      "id": 3,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Closed",
+      "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+      "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+      "items": [
+        {
+          "id": 4,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 paid lock",
+          "kitchenSubmissionId": 2,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+      "seatNumber": 3
+    }
+  },
+  "beforeBill": {
+    "http": 200,
+    "data": {
+      "id": 1,
+      "orderId": 3,
+      "diningTableId": 1,
+      "currencyCode": "USD",
+      "subtotalAmount": 48,
+      "taxAmount": 0,
+      "discountAmount": 0,
+      "totalAmount": 48,
+      "amountPaid": 48,
+      "balanceDue": 0,
+      "paymentStatus": "Paid",
+      "createdAtUtc": "2026-11-23T19:45:05.003864Z",
+      "items": [
+        {
+          "orderItemId": 4,
+          "dishName": "Beef Steak",
+          "quantity": 2,
+          "unitPrice": 24,
+          "lineTotal": 48,
+          "specialRequest": "US14 paid lock"
+        }
+      ],
+      "payments": [
+        {
+          "id": 1,
+          "amount": 48,
+          "method": "Cash",
+          "externalReference": "US14-QA-PAID",
+          "recordedAtUtc": "2026-11-23T19:45:05.042594Z"
+        }
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "action": "add",
+      "response": {
+        "http": 409,
+        "data": {
+          "error": "Order is not active, paid, or already closed."
+        }
+      },
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 3,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Closed",
+          "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+          "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+          "items": [
+            {
+              "id": 4,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 paid lock",
+              "kitchenSubmissionId": 2,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+          "seatNumber": 3
+        }
+      }
+    },
+    {
+      "action": "update",
+      "response": {
+        "http": 409,
+        "data": {
+          "error": "Order is not active, paid, or already closed."
+        }
+      },
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 3,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Closed",
+          "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+          "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+          "items": [
+            {
+              "id": 4,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 paid lock",
+              "kitchenSubmissionId": 2,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+          "seatNumber": 3
+        }
+      }
+    },
+    {
+      "action": "remove",
+      "response": {
+        "http": 409,
+        "data": {
+          "error": "Order is not active, paid, or already closed."
+        }
+      },
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 3,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Closed",
+          "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+          "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+          "items": [
+            {
+              "id": 4,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 paid lock",
+              "kitchenSubmissionId": 2,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+          "seatNumber": 3
+        }
+      }
+    },
+    {
+      "action": "cancel",
+      "response": {
+        "http": 409,
+        "data": {
+          "error": "Order is not active, paid, or already closed."
+        }
+      },
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 3,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Closed",
+          "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+          "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+          "items": [
+            {
+              "id": 4,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 paid lock",
+              "kitchenSubmissionId": 2,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+          "seatNumber": 3
+        }
+      }
+    }
+  ],
+  "ui": {
+    "heading": "Order closed",
+    "addControls": 0,
+    "saveControls": 0,
+    "removeControls": 0,
+    "cancelControls": 0,
+    "quantityReadOnly": true
+  },
+  "after": {
+    "http": 200,
+    "data": {
+      "id": 3,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Closed",
+      "createdAtUtc": "2026-11-23T19:45:04.951358Z",
+      "sentAtUtc": "2026-11-23T19:45:04.977807Z",
+      "items": [
+        {
+          "id": 4,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 paid lock",
+          "kitchenSubmissionId": 2,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": "2026-11-23T19:45:05.042594Z",
+      "seatNumber": 3
+    }
+  },
+  "afterBill": {
+    "http": 200,
+    "data": {
+      "id": 1,
+      "orderId": 3,
+      "diningTableId": 1,
+      "currencyCode": "USD",
+      "subtotalAmount": 48,
+      "taxAmount": 0,
+      "discountAmount": 0,
+      "totalAmount": 48,
+      "amountPaid": 48,
+      "balanceDue": 0,
+      "paymentStatus": "Paid",
+      "createdAtUtc": "2026-11-23T19:45:05.003864Z",
+      "items": [
+        {
+          "orderItemId": 4,
+          "dishName": "Beef Steak",
+          "quantity": 2,
+          "unitPrice": 24,
+          "lineTotal": 48,
+          "specialRequest": "US14 paid lock"
+        }
+      ],
+      "payments": [
+        {
+          "id": 1,
+          "amount": 48,
+          "method": "Cash",
+          "externalReference": "US14-QA-PAID",
+          "recordedAtUtc": "2026-11-23T19:45:05.042594Z"
+        }
+      ]
+    }
+  }
+}

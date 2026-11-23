@@ -1,0 +1,29 @@
+{
+  "date": "Tue Nov 24 2026 02:44:29 GMT+0700 (GMT+07:00)",
+  "branch": "develop",
+  "sha": "bac527257bbdca51a46ddf6eaba97902f4cf2dbd",
+  "browser": "157.0.8103.79",
+  "base": "http://127.0.0.1:15174",
+  "table": {
+    "id": 1,
+    "tableNumber": 1,
+    "seatCount": 4
+  },
+  "roles": {
+    "waiter": {
+      "role": "Waiter",
+      "restaurantId": "1"
+    },
+    "anna": {
+      "role": "Chef",
+      "restaurantId": "1"
+    },
+    "ivan": {
+      "role": "Waiter",
+      "restaurantId": "1"
+    }
+  },
+  "project": "s3us14t06qa",
+  "database": "us14qa",
+  "tester": "Shaik"
+}
