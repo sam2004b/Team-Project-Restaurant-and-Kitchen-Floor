@@ -6,6 +6,7 @@ public sealed class RestaurantOrder
     public int Id { get; set; }
     public int RestaurantId { get; set; }
     public int DiningTableId { get; set; }
+
     // Optional for historical orders. New per-seat orders use 1..DiningTable.SeatCount.
     public int? SeatNumber { get; set; }
     public DiningTable DiningTable { get; set; } = null!;
@@ -35,6 +36,7 @@ public static class RestaurantOrderStates
     public const string Open = "Open";
     public const string Sent = "Sent";
     public const string Closed = "Closed";
+    public const string Cancelled = "Cancelled";
 
     public static bool IsActive(string status) =>
         status is Open or Sent;
