@@ -1,0 +1,114 @@
+.order-table-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: space-between;
+  gap: 16px;
+  min-width: 190px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.order-table-card.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px var(--green-soft);
+}
+
+.order-table-card-details {
+  display: grid;
+  gap: 5px;
+}
+
+.order-table-card-details strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.order-table-card-details span {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.order-table-new-order-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid var(--green);
+  border-radius: 9px;
+  background: var(--green);
+  color: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.order-table-new-order-button > span {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.order-table-new-order-button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.order-table-new-order-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.order-table-new-order-button:focus-visible {
+  outline: 3px solid var(--green-soft);
+  outline-offset: 2px;
+}
+
+.order-table-new-order-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.order-seat-button-action {
+  color: var(--green);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .order-table-card {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+.order-seat-button.available:not(:disabled) {
+  cursor: pointer;
+}
+
+.order-seat-button.available:hover:not(:disabled) {
+  border-color: var(--green);
+  background: #f7fbf7;
+}
+
+.order-seat-button.occupied {
+  border-color: #dedede;
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.order-seat-button.occupied strong {
+  color: #737373;
+}
+
+.order-seat-button.occupied .order-seat-button-action {
+  color: #777;
+}
+
+.order-seat-button:disabled {
+  cursor: not-allowed;
+}

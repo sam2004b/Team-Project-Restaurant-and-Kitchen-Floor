@@ -1121,6 +1121,33 @@ button {
   opacity: 0.6;
 }
 
+.order-cancel-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d9aaa2;
+  border-radius: 8px;
+  background: #fff6f4;
+  color: #934638;
+  font-weight: 700;
+}
+
+.order-cancel-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.order-field-error {
+  color: #a33f32;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.order-item input[aria-invalid="true"] {
+  border-color: #b84b3d;
+  box-shadow: 0 0 0 2px rgb(184 75 61 / 10%);
+}
+
 .order-add-form {
   display: grid;
   grid-template-columns: minmax(180px, 2fr) minmax(90px, 0.7fr) minmax(180px, 1.5fr) auto;
@@ -4107,6 +4134,68 @@ select:focus-visible {
 .configuration-dialog-actions .primary-button,
 .configuration-dialog-actions .secondary-button {
   min-height: 40px;
+}
+
+.waiter-cancel-dialog {
+  width: min(100%, 540px);
+}
+
+.waiter-cancel-dialog textarea {
+  width: 100%;
+  min-height: 108px;
+  padding: 10px 12px;
+  border: 1px solid #dcded8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.waiter-cancel-dialog textarea:focus {
+  border-color: var(--green);
+  outline: 2px solid var(--green-soft);
+}
+
+.waiter-cancel-dialog textarea[aria-invalid="true"] {
+  border-color: #b84b3d;
+}
+
+.waiter-cancel-confirmation {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px !important;
+  color: var(--text) !important;
+  line-height: 1.45;
+}
+
+.configuration-dialog-form > .waiter-cancel-confirmation > input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  min-height: 17px;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  accent-color: var(--green);
+}
+
+.order-cancel-confirm-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #934638;
+  border-radius: 8px;
+  background: #934638;
+  color: #fff;
+  font-weight: 700;
+}
+
+.order-cancel-confirm-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .configuration-edit-fields .staff-text-button,
