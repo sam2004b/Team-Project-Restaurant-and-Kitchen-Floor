@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import {
   ApiError,
   addOrderItem,
+  cancelWaiterOrder,
   getCurrentAccount,
   getMenuDishes,
   getOrderDetails,
@@ -28,6 +29,8 @@ import { formatPrice } from "./services/currency";
 import { useKitchenUpdates } from "./services/useKitchenUpdates";
 import { useMenuUpdates } from "./services/useMenuUpdates";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
+import WaiterCancelDialog from "./WaiterCancelDialog";
+import "./waiter-order-table-actions.css";
 
 type ItemDraft = {
   quantity: string;
@@ -36,6 +39,11 @@ type ItemDraft = {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function isPositiveWholeNumber(value: string): boolean {
+  const parsed = Number(value);
+  return value.trim().length > 0 && Number.isSafeInteger(parsed) && parsed > 0;
 }
 
 const preparationStatusRank = {
@@ -61,11 +69,13 @@ function WaiterOrderPage() {
   const servingItemLock = useRef(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [selectedDishId, setSelectedDishId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [specialRequest, setSpecialRequest] = useState("");
   const [itemDrafts, setItemDrafts] = useState<Record<number, ItemDraft>>({});
+  const [itemValidationErrors, setItemValidationErrors] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshingTables, setRefreshingTables] = useState(false);
   const [assignmentsUnavailable, setAssignmentsUnavailable] = useState(false);
@@ -73,6 +83,11 @@ function WaiterOrderPage() {
   const [savingItem, setSavingItem] = useState(false);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelConfirmed, setCancelConfirmed] = useState(false);
+  const [cancelValidationError, setCancelValidationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [statusRefreshError, setStatusRefreshError] = useState<string | null>(null);
@@ -81,17 +96,16 @@ function WaiterOrderPage() {
   const addDishFormRef = useRef<HTMLFormElement>(null);
   const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
   const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
-  const hasSubmittedItems = order?.items.some((item) => item.kitchenSubmissionId !== null) ?? false;
+  const hasSubmittedItems = order?.items.some((item) =>
+    item.kitchenSubmissionId !== null || item.preparationStatus !== "New") ?? false;
+  const canCancelOrder = order?.status === "Open" && order.sentAtUtc === null && !hasSubmittedItems;
   const total = useMemo(
     () => order?.items.reduce((sum, item) => {
-      const currentQuantity = itemDrafts[item.id]
-        ? Number(itemDrafts[item.id].quantity)
+      const draftQuantity = itemDrafts[item.id]?.quantity;
+      const currentQuantity = draftQuantity && isPositiveWholeNumber(draftQuantity)
+        ? Number(draftQuantity)
         : item.quantity;
-      return sum + item.unitPrice * (
-        Number.isSafeInteger(currentQuantity) && currentQuantity > 0
-          ? currentQuantity
-          : 0
-      );
+      return sum + item.unitPrice * currentQuantity;
     }, 0) ?? 0,
     [itemDrafts, order],
   );
@@ -99,6 +113,7 @@ function WaiterOrderPage() {
     () => dishes.filter((dish) => dish.isAvailable),
     [dishes],
   );
+
 
   const refreshOrderHistory = useCallback(async (showLoading = true) => {
     if (showLoading) setHistoryLoading(true);
@@ -156,9 +171,17 @@ function WaiterOrderPage() {
         }
       } catch (caughtError: unknown) {
         if (active) {
-          setAuthorized(false);
           setAssignmentsUnavailable(true);
-          setError(getErrorMessage(caughtError, "Could not load the waiter workspace."));
+          const message = getErrorMessage(caughtError, "Could not load the waiter workspace.");
+          if (caughtError instanceof ApiError &&
+              [401, 403].includes(caughtError.status)) {
+            setAuthorized(false);
+            setError(message);
+          } else {
+            setAuthorized(null);
+            setWorkspaceLoadError(message);
+            setError(null);
+          }
         }
       } finally {
         if (active) setLoading(false);
@@ -205,6 +228,7 @@ function WaiterOrderPage() {
 
     setOrder(updatedOrder);
     setStatusRefreshError(null);
+    setItemValidationErrors({});
     setItemDrafts(Object.fromEntries(updatedOrder.items.map((item) => [
       item.id,
       { quantity: String(item.quantity), specialRequest: item.specialRequest ?? "" },
@@ -430,7 +454,7 @@ function WaiterOrderPage() {
     setNotice(null);
   };
 
-  const openTable = async (table: WaiterTableResponse, seatNumber: number) => {
+  const createNewOrder = async (table: WaiterTableResponse, seatNumber: number) => {
     if (operationLock.current) return;
     if (!tables.some((assignedTable) => assignedTable.id === table.id)) return;
     operationLock.current = true;
@@ -440,9 +464,52 @@ function WaiterOrderPage() {
     setOpening(true);
     setError(null);
     setNotice(null);
+
     try {
-      const opened = await openOrCreateOrder(table.id, seatNumber);
-      await refreshOrder(opened.orderId, table.id);
+      // Refresh first so an already-active seat is never offered as a new order.
+      const latestHistory = await getWaiterOrderHistory();
+      const sortedHistory = latestHistory.sort(
+        (first, second) => Date.parse(second.createdAtUtc) - Date.parse(first.createdAtUtc),
+      );
+      setOrderHistory(sortedHistory);
+
+      const activeOrder = sortedHistory.find((entry) =>
+        entry.diningTableId === table.id &&
+        entry.seatNumber === seatNumber &&
+        (entry.status === "Open" || entry.status === "Sent"),
+      );
+
+      if (activeOrder) {
+        setNotice(
+          `A new order was not created. Seat ${seatNumber} already has active order #${activeOrder.id}. ` +
+          "Cancel the unsent order or choose another available seat.",
+        );
+        return;
+      }
+
+      // The current backend route is GetOrCreateOpen. Refuse its reuse result
+      // rather than ever opening an existing order from the New order action.
+      const created = await openOrCreateOrder(table.id, seatNumber);
+      if (created.reused) {
+        const refreshedHistory = await getWaiterOrderHistory().catch(() => latestHistory);
+        setOrderHistory(refreshedHistory.sort(
+          (first, second) => Date.parse(second.createdAtUtc) - Date.parse(first.createdAtUtc),
+        ));
+        setNotice(
+          `A new order was not created because an active order (#${created.orderId}) now exists ` +
+          `for Table ${table.tableNumber}, Seat ${seatNumber}. No existing order was opened.`,
+        );
+        return;
+      }
+
+      const createdOrder = await refreshOrder(created.orderId, table.id);
+      if (createdOrder.id !== created.orderId || createdOrder.seatNumber !== seatNumber) {
+        throw new Error("The server response did not match the newly created table seat order.");
+      }
+
+      setNotice(
+        `New order #${created.orderId} created for Table ${table.tableNumber}, Seat ${seatNumber}.`,
+      );
       void refreshOrderHistory(false);
     } catch (caughtError) {
       if (caughtError instanceof ApiError &&
@@ -453,7 +520,8 @@ function WaiterOrderPage() {
         setOrder(null);
         setItemDrafts({});
       }
-      setError(getErrorMessage(caughtError, "Could not open this table's order."));
+      setError(getErrorMessage(caughtError, "Could not create a new order for this table seat."));
+      void refreshOrderHistory(false);
     } finally {
       operationLock.current = false;
       setOpening(false);
@@ -507,8 +575,8 @@ function WaiterOrderPage() {
     const dishId = Number(selectedDishId);
     const parsedQuantity = Number(quantity);
     if (!Number.isSafeInteger(dishId) || dishId <= 0 ||
-        !Number.isSafeInteger(parsedQuantity) || parsedQuantity <= 0) {
-      setError("Choose an available dish and enter a positive whole-number quantity.");
+        !isPositiveWholeNumber(quantity)) {
+      setError("Choose an available dish and enter a quantity that is a whole number of at least 1.");
       return;
     }
 
@@ -557,11 +625,15 @@ function WaiterOrderPage() {
       setError("Submitted dishes cannot be edited. Use Add more to request an additional quantity.");
       return;
     }
-    const parsedQuantity = Number(draft.quantity);
-    if (!Number.isSafeInteger(parsedQuantity) || parsedQuantity <= 0) {
-      setError("Quantity must be a positive whole number.");
+    if (!isPositiveWholeNumber(draft.quantity)) {
+      setItemValidationErrors((current) => ({
+        ...current,
+        [item.id]: "Enter a whole number of at least 1.",
+      }));
+      setError(null);
       return;
     }
+    const parsedQuantity = Number(draft.quantity);
 
     operationLock.current = true;
     setBusyItemId(item.id);
@@ -588,6 +660,11 @@ function WaiterOrderPage() {
     }
     try {
       await refreshOrder(order.id, order.diningTableId);
+      setItemValidationErrors((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
     } catch (caughtError) {
       setNotice(`Dish updated, but the order could not be reloaded: ${getErrorMessage(caughtError, "Please refresh the order.")}`);
     } finally {
@@ -627,6 +704,107 @@ function WaiterOrderPage() {
     } finally {
       operationLock.current = false;
       setBusyItemId(null);
+    }
+  };
+
+  const openCancelDialog = () => {
+    if (!order || !canCancelOrder || operationLock.current) return;
+    setCancelReason("");
+    setCancelConfirmed(false);
+    setCancelValidationError(null);
+    setCancelDialogOpen(true);
+  };
+
+  const closeCancelDialog = () => {
+    if (cancelling) return;
+    setCancelDialogOpen(false);
+    setCancelValidationError(null);
+  };
+
+  const submitCancellation = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!order || !canCancelOrder || operationLock.current) {
+      setCancelValidationError(
+        hasSubmittedItems
+          ? "This order already contains kitchen-submitted items and cannot be cancelled from the waiter screen."
+          : "This order is no longer active and cannot be cancelled.",
+      );
+      return;
+    }
+
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelValidationError("Enter a reason for cancelling this order.");
+      return;
+    }
+    if (reason.length > 500) {
+      setCancelValidationError("The cancellation reason must be 500 characters or fewer.");
+      return;
+    }
+    if (!cancelConfirmed) {
+      setCancelValidationError("Confirm that you want to cancel this order before continuing.");
+      return;
+    }
+
+    const orderId = order.id;
+    const tableId = order.diningTableId;
+    operationLock.current = true;
+    setCancelling(true);
+    setCancelValidationError(null);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result = await cancelWaiterOrder(orderId, true, reason);
+      if (result.orderId !== orderId || result.status !== "Cancelled") {
+        throw new Error("The API did not confirm cancellation of this order.");
+      }
+
+      setOrder((current) => current?.id === orderId
+        ? { ...current, status: "Closed" }
+        : current);
+      setOrderHistory((current) => current.map((entry) => entry.id === orderId
+        ? { ...entry, status: "Closed" }
+        : entry));
+      setCancelDialogOpen(false);
+      setCancelReason("");
+      setCancelConfirmed(false);
+      setNotice(`Order #${orderId} was cancelled.`);
+      void refreshOrderHistory(false);
+
+      try {
+        const refreshed = await refreshOrder(orderId, tableId);
+        if (refreshed.status !== "Closed") {
+          throw new Error("The refreshed order did not show the cancelled status.");
+        }
+      } catch {
+        setNotice(`Order #${orderId} was cancelled, but the latest order details could not be reloaded. Refresh the order before continuing.`);
+      }
+    } catch (caughtError) {
+      const message = getErrorMessage(caughtError, "Could not cancel this order.");
+      setCancelValidationError(message);
+
+      // A lost response must not leave the screen claiming that a successful
+      // cancellation failed when the server actually completed it.
+      try {
+        const latest = await refreshOrder(orderId, tableId);
+        if (latest.status === "Closed") {
+          setOrderHistory((current) => current.map((entry) => entry.id === orderId
+            ? { ...entry, status: "Closed" }
+            : entry));
+          setCancelDialogOpen(false);
+          setCancelReason("");
+          setCancelConfirmed(false);
+          setCancelValidationError(null);
+          setNotice(`Order #${orderId} was cancelled and the updated status was verified.`);
+          void refreshOrderHistory(false);
+        }
+      } catch {
+        // Keep the API error visible in the confirmation dialog.
+      }
+    } finally {
+      operationLock.current = false;
+      setCancelling(false);
     }
   };
 
@@ -793,6 +971,16 @@ function WaiterOrderPage() {
           <div className="admin-loading" role="status" aria-busy="true">
             <span className="admin-spinner" /> Loading waiter workspace...
           </div>
+        ) : authorized === null ? (
+          <section className="staff-card" role="alert">
+            <h2>Could not load waiter workspace</h2>
+            <p className="staff-help">
+              {workspaceLoadError ?? "The waiter workspace could not be loaded. Check the connection and try again."}
+            </p>
+            <button type="button" className="secondary-button" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+          </section>
         ) : !authorized ? (
           <section className="staff-card">
             <h2>Waiter sign-in required</h2>
@@ -824,23 +1012,35 @@ function WaiterOrderPage() {
               ) : (
                 <div className="order-table-list">
                   {tables.map((table) => (
-                    <button
-                      type="button"
+                    <article
                       key={table.id}
-                      className={`order-table-button${selectedTableId === table.id ? " selected" : ""}`}
-                      disabled={opening || refreshingTables}
-                      onClick={() => selectTable(table)}
+                      className={`order-table-card${selectedTableId === table.id ? " selected" : ""}`}
                     >
-                      <strong>Table {table.tableNumber}</strong>
-                      <span>{table.seatCount} seats</span>
-                    </button>
+                      <div className="order-table-card-details">
+                        <strong>Table {table.tableNumber}</strong>
+                        <span>{table.seatCount} seats</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="order-table-new-order-button"
+                        disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null}
+                        aria-label={`Start a new order at Table ${table.tableNumber}`}
+                        onClick={() => selectTable(table)}
+                      >
+                        <span aria-hidden="true">+</span>
+                        New order
+                      </button>
+                    </article>
                   ))}
                 </div>
               )}
               {selectedTableId !== null && activeTable && (
                 <div className="order-seat-selector">
-                  <h3>Select a seat at Table {activeTable.tableNumber}</h3>
-                  <p className="staff-help">Each seat has its own active order. Select a seat to create or reopen its existing order.</p>
+                  <h3>Create a new order at Table {activeTable.tableNumber}</h3>
+                  <p className="staff-help">
+                    Select an available seat. This action creates a brand-new order with a new ID; seats with an active order cannot be reopened here.
+                    After an unsent order is cancelled, its seat becomes available for another new order.
+                  </p>
                   <div className="order-seat-list">
                     {Array.from({ length: activeTable.seatCount }, (_, index) => index + 1).map((seat) => {
                       const existing = orderHistory.find((entry) =>
@@ -851,13 +1051,19 @@ function WaiterOrderPage() {
                         <button
                           type="button"
                           key={seat}
-                          className={`order-seat-button${order?.seatNumber === seat ? " selected" : ""}`}
+                          className={`order-seat-button${order?.seatNumber === seat ? " selected" : ""}${existing ? " occupied" : " available"}`}
                           aria-pressed={order?.seatNumber === seat}
-                          disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null}
-                          onClick={() => void openTable(activeTable, seat)}
+                          aria-label={existing
+                            ? `Seat ${seat} unavailable because order ${existing.id} is ${existing.status}`
+                            : `Create a new order for seat ${seat}`}
+                          disabled={Boolean(existing) || opening || refreshingTables || savingItem || sending || busyItemId !== null}
+                          onClick={() => void createNewOrder(activeTable, seat)}
                         >
                           <strong>Seat {seat}</strong>
-                          <span>{existing ? `Order #${existing.id} · ${existing.status}` : "Open or create order"}</span>
+                          <span>{existing ? `Active order #${existing.id} · ${existing.status}` : "Available"}</span>
+                          <span className="order-seat-button-action">
+                            {existing ? "Seat unavailable" : "Create new order"}
+                          </span>
                         </button>
                       );
                     })}
@@ -952,8 +1158,29 @@ function WaiterOrderPage() {
                         Add more dishes
                       </button>
                     )}
+                    {canCancelOrder && (
+                      <button
+                        type="button"
+                        className="order-cancel-button"
+                        disabled={opening || savingItem || sending || cancelling || busyItemId !== null}
+                        aria-describedby={hasSubmittedItems ? "waiter-cancel-unavailable" : undefined}
+                        title={hasSubmittedItems
+                          ? "View why this order cannot be cancelled"
+                          : "Cancel this unpaid order"}
+                        onClick={openCancelDialog}
+                      >
+                        Cancel order
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {orderIsActive && hasSubmittedItems && (
+                  <p className="staff-notice warning" id="waiter-cancel-unavailable" role="status">
+                    This order contains items already sent to the kitchen. The current waiter cancellation endpoint
+                    cannot withdraw submitted kitchen items, so cancellation is unavailable.
+                  </p>
+                )}
 
                 {statusRefreshError && (
                   <p className="staff-notice error kitchen-status-refresh-error" role="alert">
@@ -1018,16 +1245,38 @@ function WaiterOrderPage() {
                             Quantity
                             <input
                               type="number"
-                              min="1"
-                              step="1"
-                              required
+                              inputMode="numeric"
+                              step="any"
                               disabled={!editable || busyItemId === item.id || savingItem || sending}
                               value={draft.quantity}
-                              onChange={(event) => setItemDrafts((current) => ({
-                                ...current,
-                                [item.id]: { ...draft, quantity: event.target.value },
-                              }))}
+                              aria-invalid={Boolean(itemValidationErrors[item.id])}
+                              aria-describedby={itemValidationErrors[item.id]
+                                ? `order-item-${item.id}-quantity-error`
+                                : undefined}
+                              onChange={(event) => {
+                                const nextQuantity = event.target.value;
+                                setItemDrafts((current) => ({
+                                  ...current,
+                                  [item.id]: { ...draft, quantity: nextQuantity },
+                                }));
+                                if (isPositiveWholeNumber(nextQuantity)) {
+                                  setItemValidationErrors((current) => {
+                                    const next = { ...current };
+                                    delete next[item.id];
+                                    return next;
+                                  });
+                                }
+                              }}
                             />
+                            {itemValidationErrors[item.id] && (
+                              <span
+                                className="order-field-error"
+                                id={`order-item-${item.id}-quantity-error`}
+                                role="alert"
+                              >
+                                {itemValidationErrors[item.id]}
+                              </span>
+                            )}
                           </label>
                           <label>
                             Special request
@@ -1043,9 +1292,9 @@ function WaiterOrderPage() {
                           </label>
                           <span className="order-line-total">
                             {formatPrice(item.unitPrice * (
-                              Number.isSafeInteger(Number(draft.quantity)) && Number(draft.quantity) > 0
+                              isPositiveWholeNumber(draft.quantity)
                                 ? Number(draft.quantity)
-                                : 0
+                                : item.quantity
                             ))}
                           </span>
                           {orderIsActive && !editable && (
@@ -1170,6 +1419,32 @@ function WaiterOrderPage() {
           </>
         )}
       </main>
+      {cancelDialogOpen && order && (
+        <WaiterCancelDialog
+          orderId={order.id}
+          tableNumber={activeTable?.tableNumber}
+          seatNumber={order.seatNumber}
+          itemCount={order.items.length}
+          reason={cancelReason}
+          confirmed={cancelConfirmed}
+          validationError={cancelValidationError}
+          cancelling={cancelling}
+          canCancel={canCancelOrder}
+          restrictionMessage={hasSubmittedItems
+            ? "This order already contains items sent to the kitchen. Kitchen-submitted work cannot be withdrawn from the waiter screen."
+            : "Only an active order that has not been sent to the kitchen can be cancelled."}
+          onReasonChange={(value: string) => {
+            setCancelReason(value);
+            setCancelValidationError(null);
+          }}
+          onConfirmedChange={(value: boolean) => {
+            setCancelConfirmed(value);
+            setCancelValidationError(null);
+          }}
+          onClose={closeCancelDialog}
+          onSubmit={(event: FormEvent<HTMLFormElement>) => void submitCancellation(event)}
+        />
+      )}
     </div>
   );
 }

@@ -345,6 +345,22 @@ export function removeOrderItem(orderId: number, itemId: number, reason: string)
     });
 }
 
+export interface CancelOrderResponse {
+    orderId: number;
+    status: "Cancelled";
+}
+
+export function cancelWaiterOrder(
+    orderId: number,
+    confirm: boolean,
+    reason: string,
+): Promise<CancelOrderResponse> {
+    return apiSend<CancelOrderResponse>(`/waiter/orders/${orderId}/cancel`, "POST", {
+        confirm,
+        reason,
+    });
+}
+
 export function sendOrder(orderId: number): Promise<SendOrderResponse> {
     return apiRequest<SendOrderResponse>(`/waiter/orders/${orderId}/send`, {
         method: "POST",

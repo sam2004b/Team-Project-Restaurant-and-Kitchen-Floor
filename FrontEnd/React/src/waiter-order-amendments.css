@@ -1,0 +1,59 @@
+.order-item .order-item-reason {
+  grid-column: 1 / -1;
+}
+
+.order-item-reason input,
+.order-add-reason input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.order-item-reason input:focus,
+.order-add-reason input:focus {
+  border-color: var(--green);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.order-item-reason input[aria-invalid="true"],
+.order-add-reason input[aria-invalid="true"] {
+  border-color: #b44c3f;
+  box-shadow: 0 0 0 3px rgb(180 76 63 / 9%);
+}
+
+.order-reason-error {
+  grid-column: 1 / -1;
+  margin: -5px 0 0;
+  color: #a04437;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.order-add-form .order-add-reason {
+  min-width: 180px;
+}
+
+.order-add-reason .order-reason-error {
+  display: block;
+  margin-top: 5px;
+}
+
+@media (min-width: 761px) {
+  .order-workspace .order-add-form {
+    grid-template-columns: minmax(160px, 1.3fr) minmax(90px, 0.55fr)
+      minmax(160px, 1fr) minmax(180px, 1.25fr) auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .order-add-form .order-add-reason {
+    grid-column: 1 / -1;
+  }
+}
