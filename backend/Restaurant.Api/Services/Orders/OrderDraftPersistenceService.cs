@@ -331,14 +331,20 @@ public sealed class OrderDraftPersistenceService
 
         var items = await _db.OrderItems.Where(i => i.OrderId == orderId)
             .OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id).ToListAsync(ct);
-        // Submitted/preparing/ready items already belong to the kitchen workflow.
-        // They cannot be silently withdrawn by the waiter cancellation endpoint.
-        if (items.Any(i => i.KitchenSubmissionId is not null ||
-            i.PreparationStatus != DishPreparationStates.Pending))
+        // A submitted line may be withdrawn only while it is still queued
+        // (Pending/New). Once preparation starts, waiter cancellation must not
+        // silently interrupt kitchen work.
+        if (items.Any(i =>
+            i.PreparationStatus != DishPreparationStates.Pending ||
+            i.ServiceStatus != DishServiceStates.Unserved))
             return new(OrderWriteStatus.OrderHasKitchenItems, order.Id,
-                Error: "An order with kitchen-submitted items cannot be cancelled through this endpoint.");
+                Error: "This order cannot be cancelled because kitchen preparation has started or a dish has been served.");
 
+        // Keep the complete pre-cancellation order in the audit snapshot.
+        // Removing the queued lines withdraws them from the kitchen feed while
+        // preserving the historical record in OrderChangeAudit.
         var before = OrderAuditSnapshot.Capture(order, items).ToJson();
+        _db.OrderItems.RemoveRange(items);
         order.Status = RestaurantOrderStates.Closed;
         _db.OrderChangeAudits.Add(new OrderChangeAudit
         {

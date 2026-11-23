@@ -152,9 +152,13 @@ public sealed class OrderComposerController : ControllerBase
         var result = await _drafts.CancelAsync(
             context.RestaurantId, context.MembershipId, orderId,
             request.Confirm, request.Reason, ct);
-        return result.Status == OrderWriteStatus.OrderCancelled
-            ? Ok(new { orderId, status = "Cancelled" })
-            : WriteError(result);
+        if (result.Status != OrderWriteStatus.OrderCancelled)
+            return WriteError(result);
+
+        // The order may have contained queued kitchen lines that were
+        // withdrawn by cancellation; refresh connected kitchen clients.
+        await _kitchenUpdates.NotifyKitchenChangedAsync(ct);
+        return Ok(new { orderId, status = "Cancelled" });
     }
 
     [HttpPost("orders/{orderId:int}/send")]
