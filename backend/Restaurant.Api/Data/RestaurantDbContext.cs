@@ -58,6 +58,9 @@ namespace Restaurant.Api.Data
         public DbSet<OrderChangeAudit> OrderChangeAudits =>
             Set<OrderChangeAudit>();
 
+        public DbSet<OrderHistoryEvent> OrderHistoryEvents =>
+            Set<OrderHistoryEvent>();
+
         public DbSet<Bill> Bills => Set<Bill>();
 
         public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
@@ -618,6 +621,71 @@ namespace Restaurant.Api.Data
                 {
                     a.RestaurantId, a.ChangedByStaffMembershipId, a.ChangedAtUtc
                 }).HasDatabaseName("IX_order_change_audits_actor_history");
+            });
+
+            // S3-US16-T01: general order lifecycle history, separate from
+            // the specialized amendment/cancellation audit in S3-US14-T01.
+            modelBuilder.Entity<OrderHistoryEvent>(entity =>
+            {
+                entity.ToTable("order_history_events", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_order_history_events_type_not_blank",
+                        "length(btrim(\"EventType\")) > 0");
+
+                    table.HasCheckConstraint(
+                        "CK_order_history_events_item_positive",
+                        "\"OrderItemId\" IS NULL OR \"OrderItemId\" > 0");
+
+                    table.HasCheckConstraint(
+                        "CK_order_history_events_values",
+                        "(\"BeforeValueJson\" IS NOT NULL OR \"AfterValueJson\" IS NOT NULL) " +
+                        "AND (\"BeforeValueJson\" IS NULL OR " +
+                        "jsonb_typeof(\"BeforeValueJson\") = 'object') " +
+                        "AND (\"AfterValueJson\" IS NULL OR " +
+                        "jsonb_typeof(\"AfterValueJson\") = 'object')");
+                });
+
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.EventType)
+                    .IsRequired().HasMaxLength(64);
+                entity.Property(e => e.OccurredAtUtc).IsRequired();
+                entity.Property(e => e.BeforeValueJson).HasColumnType("jsonb");
+                entity.Property(e => e.AfterValueJson).HasColumnType("jsonb");
+
+                // Restaurant and table must match the historical order.
+                entity.HasOne(e => e.Order)
+                    .WithMany()
+                    .HasForeignKey(e => new
+                    {
+                        e.RestaurantId, e.DiningTableId, e.OrderId
+                    })
+                    .HasPrincipalKey(o => new
+                    {
+                        o.RestaurantId, o.DiningTableId, o.Id
+                    })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // The actor must belong to the same restaurant.
+                entity.HasOne(e => e.ActorStaffMembership)
+                    .WithMany()
+                    .HasForeignKey(e => new
+                    {
+                        e.RestaurantId, e.ActorStaffMembershipId
+                    })
+                    .HasPrincipalKey(m => new { m.RestaurantId, m.Id })
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // History by order and by actor, always restaurant-scoped.
+                entity.HasIndex(e => new
+                {
+                    e.RestaurantId, e.OrderId, e.OccurredAtUtc, e.Id
+                }).HasDatabaseName("IX_order_history_events_order_timeline");
+
+                entity.HasIndex(e => new
+                {
+                    e.RestaurantId, e.ActorStaffMembershipId, e.OccurredAtUtc
+                }).HasDatabaseName("IX_order_history_events_actor_timeline");
             });
 
             // S3-US15-T01: one durable bill per order (NOT per table).
