@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -151,6 +152,23 @@ public sealed class KitchenOrdersController : ControllerBase
                 error = $"Invalid preparation status transition from {ToKitchenStatus(item.PreparationStatus)} to {requestedStatus}."
             });
         }
+
+        // Persist an immutable lifecycle event in the same SaveChanges call
+        // as the preparation-state mutation.
+        if (!int.TryParse(User.FindFirstValue(StaffSessionClaims.MembershipId), out var actorId) || actorId <= 0)
+            return Unauthorized();
+        _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+        {
+            RestaurantId = restaurantId,
+            DiningTableId = item.Order.DiningTableId,
+            OrderId = item.OrderId,
+            OrderItemId = item.Id,
+            ActorStaffMembershipId = actorId,
+            EventType = OrderHistoryEventTypes.DishPreparationChanged,
+            OccurredAtUtc = now,
+            BeforeValueJson = JsonSerializer.Serialize(new { status = requestedStatus == "Ready" ? "Preparing" : "New" }),
+            AfterValueJson = JsonSerializer.Serialize(new { status = requestedStatus })
+        });
 
         await _db.SaveChangesAsync(ct);
         await _kitchenUpdates.NotifyKitchenChangedAsync(ct);

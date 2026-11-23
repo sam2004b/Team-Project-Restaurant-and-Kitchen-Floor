@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -111,6 +112,18 @@ public sealed class WaiterNotificationsController : ControllerBase
         {
             item.ServiceStatus = DishServiceStates.Served;
             item.ServedAtUtc = DateTime.UtcNow;
+            _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+            {
+                RestaurantId = restaurantId,
+                DiningTableId = item.Order.DiningTableId,
+                OrderId = item.OrderId,
+                OrderItemId = item.Id,
+                ActorStaffMembershipId = membershipId,
+                EventType = OrderHistoryEventTypes.DishServed,
+                OccurredAtUtc = item.ServedAtUtc.Value,
+                BeforeValueJson = JsonSerializer.Serialize(new { serviceStatus = DishServiceStates.Unserved }),
+                AfterValueJson = JsonSerializer.Serialize(new { serviceStatus = DishServiceStates.Served, servedAtUtc = item.ServedAtUtc })
+            });
             await _db.SaveChangesAsync(ct);
         }
 

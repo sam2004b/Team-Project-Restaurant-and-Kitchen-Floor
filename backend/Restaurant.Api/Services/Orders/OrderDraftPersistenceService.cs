@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -135,6 +136,20 @@ public sealed class OrderDraftPersistenceService
 
         try
         {
+            await _db.SaveChangesAsync(ct);
+            _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+            {
+                RestaurantId = restaurantId,
+                DiningTableId = tableId,
+                OrderId = order.Id,
+                ActorStaffMembershipId = waiterMembershipId,
+                EventType = OrderHistoryEventTypes.OrderCreated,
+                OccurredAtUtc = order.CreatedAtUtc,
+                AfterValueJson = JsonSerializer.Serialize(new
+                {
+                    order.Status, order.DiningTableId, order.SeatNumber
+                })
+            });
             await _db.SaveChangesAsync(ct);
             await CommitAsync(tx, ct);
             return new(OrderWriteStatus.Created, order.Id);
@@ -461,8 +476,24 @@ public sealed class OrderDraftPersistenceService
         foreach (var item in pending)
             item.KitchenSubmission = submission;
 
+        var previousStatus = order.Status;
         order.Status = RestaurantOrderStates.Sent;
         order.SentAtUtc ??= now; // retain timestamp of the FIRST send
+        _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+        {
+            RestaurantId = restaurantId,
+            DiningTableId = order.DiningTableId,
+            OrderId = order.Id,
+            ActorStaffMembershipId = waiterMembershipId,
+            EventType = OrderHistoryEventTypes.KitchenSubmitted,
+            OccurredAtUtc = now,
+            BeforeValueJson = JsonSerializer.Serialize(new { status = previousStatus }),
+            AfterValueJson = JsonSerializer.Serialize(new
+            {
+                status = order.Status, submissionId = submission.Id,
+                itemIds = pending.Select(i => i.Id).ToArray()
+            })
+        });
         await _db.SaveChangesAsync(ct);
         await CommitAsync(tx, ct);
         return new(OrderWriteStatus.Sent, order.Id,

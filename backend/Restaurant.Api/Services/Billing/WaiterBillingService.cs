@@ -180,11 +180,35 @@ public sealed class WaiterBillingService
             RecordedAtUtc = DateTime.UtcNow
         };
         _db.PaymentRecords.Add(payment);
+        _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+        {
+            RestaurantId = restaurantId,
+            DiningTableId = order.DiningTableId,
+            OrderId = order.Id,
+            ActorStaffMembershipId = waiterMembershipId,
+            EventType = OrderHistoryEventTypes.PaymentRecorded,
+            OccurredAtUtc = payment.RecordedAtUtc,
+            AfterValueJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                payment.Amount, payment.Method, payment.ExternalReference
+            })
+        });
 
         if (amount == balance)
         {
             order.Status = RestaurantOrderStates.Closed;
             order.PaidAtUtc = payment.RecordedAtUtc;
+            _db.OrderHistoryEvents.Add(new OrderHistoryEvent
+            {
+                RestaurantId = restaurantId,
+                DiningTableId = order.DiningTableId,
+                OrderId = order.Id,
+                ActorStaffMembershipId = waiterMembershipId,
+                EventType = OrderHistoryEventTypes.OrderClosed,
+                OccurredAtUtc = payment.RecordedAtUtc,
+                BeforeValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = RestaurantOrderStates.Sent }),
+                AfterValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = RestaurantOrderStates.Closed, paidAtUtc = order.PaidAtUtc })
+            });
         }
 
         await _db.SaveChangesAsync(ct);
