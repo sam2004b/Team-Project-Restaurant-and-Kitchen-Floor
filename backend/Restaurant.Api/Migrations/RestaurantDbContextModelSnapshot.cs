@@ -496,6 +496,65 @@ namespace Restaurant.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Restaurant.Api.Models.OrderHistoryEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActorStaffMembershipId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AfterValueJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("BeforeValueJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("DiningTableId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OrderItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestaurantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "DiningTableId", "OrderId");
+
+                    b.HasIndex("RestaurantId", "ActorStaffMembershipId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_order_history_events_actor_timeline");
+
+                    b.HasIndex("RestaurantId", "OrderId", "OccurredAtUtc", "Id")
+                        .HasDatabaseName("IX_order_history_events_order_timeline");
+
+                    b.ToTable("order_history_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_order_history_events_type_not_blank", "length(btrim(\"EventType\")) > 0");
+                            t.HasCheckConstraint("CK_order_history_events_item_positive", "\"OrderItemId\" IS NULL OR \"OrderItemId\" > 0");
+                            t.HasCheckConstraint("CK_order_history_events_values", "(\"BeforeValueJson\" IS NOT NULL OR \"AfterValueJson\" IS NOT NULL) " +
+                                "AND (\"BeforeValueJson\" IS NULL OR " +
+                                "jsonb_typeof(\"BeforeValueJson\") = 'object') " +
+                                "AND (\"AfterValueJson\" IS NULL OR " +
+                                "jsonb_typeof(\"AfterValueJson\") = 'object')");
+                        });
+                });
+
             modelBuilder.Entity("Restaurant.Api.Models.PaymentRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -1163,6 +1222,27 @@ namespace Restaurant.Api.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("ChangedByStaffMembership");
+                });
+
+            modelBuilder.Entity("Restaurant.Api.Models.OrderHistoryEvent", b =>
+                {
+                    b.HasOne("Restaurant.Api.Models.RestaurantOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "DiningTableId", "OrderId")
+                        .HasPrincipalKey("RestaurantId", "DiningTableId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurant.Api.Models.StaffMembership", "ActorStaffMembership")
+                        .WithMany()
+                        .HasForeignKey("RestaurantId", "ActorStaffMembershipId")
+                        .HasPrincipalKey("RestaurantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("ActorStaffMembership");
                 });
 
             modelBuilder.Entity("Restaurant.Api.Models.PaymentRecord", b =>
