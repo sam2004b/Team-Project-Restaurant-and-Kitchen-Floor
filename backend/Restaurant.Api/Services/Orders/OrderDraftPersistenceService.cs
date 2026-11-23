@@ -360,7 +360,7 @@ public sealed class OrderDraftPersistenceService
         // preserving the historical record in OrderChangeAudit.
         var before = OrderAuditSnapshot.Capture(order, items).ToJson();
         _db.OrderItems.RemoveRange(items);
-        order.Status = RestaurantOrderStates.Closed;
+        order.Status = RestaurantOrderStates.Cancelled;
         _db.OrderChangeAudits.Add(new OrderChangeAudit
         {
             RestaurantId = restaurantId,
