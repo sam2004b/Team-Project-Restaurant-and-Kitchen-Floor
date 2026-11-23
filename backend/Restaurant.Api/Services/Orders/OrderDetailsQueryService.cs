@@ -72,6 +72,7 @@ public sealed class OrderDetailsQueryService
         var submissionQuery = _db.KitchenSubmissions.AsNoTracking()
             .Where(s => s.RestaurantId == restaurantId &&
                         s.Order.RestaurantId == restaurantId &&
+                        s.Items.Any() &&
                         (!orderId.HasValue || s.OrderId == orderId.Value))
             .Include(s => s.Order)
             .Include(s => s.Items);

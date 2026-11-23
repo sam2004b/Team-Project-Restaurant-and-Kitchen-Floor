@@ -402,7 +402,7 @@ public sealed class OrderDraftPersistenceServiceTests
     }
 
     [Fact]
-    public async Task SubmittedKitchenOrderCannotBeCancelledThroughWaiterDraftApi()
+    public async Task SubmittedButNotStartedKitchenOrderCanBeCancelledAndWithdrawn()
     {
         var f = await CreateFixtureAsync();
         await using var db = new RestaurantDbContext(f.Options);
@@ -418,7 +418,42 @@ public sealed class OrderDraftPersistenceServiceTests
         var result = await service.CancelAsync(
             f.RestaurantId, f.WaiterId, order.OrderId.Value,
             true, "Customer cancelled");
+
+        Assert.Equal(OrderWriteStatus.OrderCancelled, result.Status);
+        Assert.Equal(RestaurantOrderStates.Closed,
+            (await db.Orders.SingleAsync()).Status);
+        Assert.Empty(await db.OrderItems.ToListAsync());
+        var audit = await db.OrderChangeAudits.SingleAsync();
+        Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
+        using var before = System.Text.Json.JsonDocument.Parse(audit.BeforeSnapshotJson);
+        Assert.Equal("Soup", before.RootElement.GetProperty("Items")[0]
+            .GetProperty("DishNameSnapshot").GetString());
+    }
+
+    [Fact]
+    public async Task KitchenOrderCannotBeCancelledAfterPreparationHasStarted()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        var order = await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId);
+        await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, order.OrderId!.Value,
+            f.SoupId, 1, null);
+        Assert.Equal(OrderWriteStatus.Sent,
+            (await service.SendAsync(f.RestaurantId, f.WaiterId, order.OrderId.Value)).Status);
+
+        var item = await db.OrderItems.SingleAsync();
+        item.PreparationStatus = DishPreparationStates.Preparing;
+        item.PreparationStartedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var result = await service.CancelAsync(
+            f.RestaurantId, f.WaiterId, order.OrderId.Value,
+            true, "Customer cancelled");
         Assert.Equal(OrderWriteStatus.OrderHasKitchenItems, result.Status);
+        Assert.Single(await db.OrderItems.ToListAsync());
         Assert.Empty(await db.OrderChangeAudits.ToListAsync());
     }
 
