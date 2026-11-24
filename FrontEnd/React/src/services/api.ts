@@ -204,7 +204,7 @@ export interface OrderDetailsResponse {
     restaurantId: number;
     diningTableId: number;
     createdByStaffMembershipId: number;
-    status: "Open" | "Sent" | "Closed" | "Legacy";
+    status: "Open" | "Sent" | "Closed" | "Cancelled" | "Legacy";
     createdAtUtc: string;
     sentAtUtc: string | null;
     items: OrderItemDetailsResponse[];
@@ -272,7 +272,7 @@ export interface WaiterOrderHistoryEntry {
     id: number;
     diningTableId: number;
     createdAtUtc: string;
-    status: "Open" | "Sent" | "Closed" | "Legacy";
+    status: "Open" | "Sent" | "Closed" | "Cancelled" | "Legacy";
     // Older orders can have no seat; the API omits null seat numbers.
     seatNumber?: number | null;
 }

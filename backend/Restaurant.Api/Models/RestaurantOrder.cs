@@ -17,7 +17,8 @@ public sealed class RestaurantOrder
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
-    // Sent is still an active, editable order. Only payment closes the order.
+    // Sent is still an active, editable order. Payment closes an order;
+    // cancellation is a separate terminal state.
     // Legacy = older order headers created before this feature.
     public string Status { get; set; } = RestaurantOrderStates.Open;
     public DateTime? SentAtUtc { get; set; }

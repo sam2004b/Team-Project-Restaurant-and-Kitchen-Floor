@@ -183,4 +183,23 @@ public sealed class OrderChangeAuditTests
 
         Assert.Equal("jsonb", columnType);
     }
+
+    [Fact]
+    public void OrderConstraintsAllowCancellationWithoutMarkingOrderPaid()
+    {
+        using var db = new RestaurantDbContext(NewOptions());
+        var entity = db.GetService<IDesignTimeModel>().Model
+            .FindEntityType(typeof(RestaurantOrder))!;
+        var constraints = entity.GetCheckConstraints();
+        Assert.Contains(constraints, constraint =>
+            constraint.Name == "CK_orders_state" &&
+            constraint.Sql?.Contains("'Cancelled'") == true);
+        Assert.Contains(constraints, constraint =>
+            constraint.Name == "CK_orders_sent_consistency" &&
+            constraint.Sql?.Contains("\"Status\" = 'Cancelled'") == true);
+        Assert.Contains(constraints, constraint =>
+            constraint.Name == "CK_orders_paid_consistency" &&
+            constraint.Sql?.Contains(
+                "\"Status\" = 'Closed' AND \"PaidAtUtc\" IS NOT NULL") == true);
+    }
 }

@@ -485,7 +485,7 @@ namespace Restaurant.Api.Data
                     table.HasCheckConstraint("CK_orders_sent_consistency",
                         "(\"Status\" IN ('Sent', 'Closed') AND \"SentAtUtc\" IS NOT NULL) " +
                         "OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL) " +
-                        "OR (\"Status\" = 'Cancelled')");
+                        "OR \"Status\" = 'Cancelled'");
 
                     table.HasCheckConstraint("CK_orders_paid_consistency",
                         "(\"Status\" = 'Closed' AND \"PaidAtUtc\" IS NOT NULL) " +

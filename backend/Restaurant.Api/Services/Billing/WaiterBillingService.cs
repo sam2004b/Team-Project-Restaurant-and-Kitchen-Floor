@@ -155,6 +155,9 @@ public sealed class WaiterBillingService
         if (order.Status == RestaurantOrderStates.Closed ||
             order.PaidAtUtc is not null)
             return new(BillingOperationStatus.AlreadyPaid);
+        if (order.Status == RestaurantOrderStates.Cancelled)
+            return new(BillingOperationStatus.OrderNotPayable,
+                Error: "A cancelled order cannot be paid.");
 
         var paid = await _db.PaymentRecords.AsNoTracking()
             .Where(p => p.RestaurantId == restaurantId &&

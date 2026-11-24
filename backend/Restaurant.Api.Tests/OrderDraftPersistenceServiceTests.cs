@@ -390,44 +390,48 @@ public sealed class OrderDraftPersistenceServiceTests
         var cancelled = await service.CancelAsync(
             f.RestaurantId, f.WaiterId, order.OrderId.Value,
             true, "Customer changed their mind");
-        Assert.Equal(RestaurantOrderStates.Cancelled,
-    (await db.Orders.SingleAsync()).Status);
-var audit = await db.OrderChangeAudits.SingleAsync();
-Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
-Assert.Null(audit.AfterSnapshotJson);
-using var snapshot = System.Text.Json.JsonDocument.Parse(audit.BeforeSnapshotJson);
-Assert.Equal("Soup", snapshot.RootElement.GetProperty("Items")[0]
-    .GetProperty("DishNameSnapshot").GetString());
-}
+        Assert.Equal(OrderWriteStatus.OrderCancelled,cancelled.Status);
+        var cancelledOrder = await db.Orders.SingleAsync();
+        Assert.Equal(RestaurantOrderStates.Cancelled, cancelledOrder.Status);
+        Assert.Null(cancelledOrder.PaidAtUtc);
+        var audit = await db.OrderChangeAudits.SingleAsync();
+        Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
+        Assert.Null(audit.AfterSnapshotJson);
+        using var snapshot = System.Text.Json.JsonDocument.Parse(audit.BeforeSnapshotJson);
+        Assert.Equal("Soup", snapshot.RootElement.GetProperty("Items")[0]
+            .GetProperty("DishNameSnapshot").GetString());
+    }
 
-[Fact]
-public async Task SubmittedButNotStartedKitchenOrderCanBeCancelledAndWithdrawn()
-{
-    var f = await CreateFixtureAsync();
-    await using var db = new RestaurantDbContext(f.Options);
-    var service = new OrderDraftPersistenceService(db);
-    var order = await service.GetOrCreateOpenAsync(
-        f.RestaurantId, f.WaiterId, f.TableId);
-    await service.AddItemAsync(
-        f.RestaurantId, f.WaiterId, order.OrderId!.Value,
-        f.SoupId, 1, null);
-    Assert.Equal(OrderWriteStatus.Sent,
-        (await service.SendAsync(f.RestaurantId, f.WaiterId, order.OrderId.Value)).Status);
+    [Fact]
+    public async Task SubmittedButNotStartedKitchenOrderCanBeCancelledAndWithdrawn()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new OrderDraftPersistenceService(db);
+        var order = await service.GetOrCreateOpenAsync(
+            f.RestaurantId, f.WaiterId, f.TableId);
+        await service.AddItemAsync(
+            f.RestaurantId, f.WaiterId, order.OrderId!.Value,
+            f.SoupId, 1, null);
+        Assert.Equal(OrderWriteStatus.Sent,
+            (await service.SendAsync(f.RestaurantId, f.WaiterId, order.OrderId.Value)).Status);
 
-    var result = await service.CancelAsync(
-        f.RestaurantId, f.WaiterId, order.OrderId.Value,
-        true, "Customer cancelled");
+        var result = await service.CancelAsync(
+            f.RestaurantId, f.WaiterId, order.OrderId.Value,
+            true, "Customer cancelled");
 
-    Assert.Equal(OrderWriteStatus.OrderCancelled, result.Status);
-    Assert.Equal(RestaurantOrderStates.Cancelled,
-        (await db.Orders.SingleAsync()).Status);
-    Assert.Empty(await db.OrderItems.ToListAsync());
-    var audit = await db.OrderChangeAudits.SingleAsync();
-    Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
-    using var before = System.Text.Json.JsonDocument.Parse(audit.BeforeSnapshotJson);
-    Assert.Equal("Soup", before.RootElement.GetProperty("Items")[0]
-        .GetProperty("DishNameSnapshot").GetString());
-}
+        Assert.Equal(OrderWriteStatus.OrderCancelled, result.Status);
+        var cancelledOrder = await db.Orders.SingleAsync();
+        Assert.Equal(RestaurantOrderStates.Cancelled, cancelledOrder.Status);
+        Assert.NotNull(cancelledOrder.SentAtUtc);
+        Assert.Null(cancelledOrder.PaidAtUtc);
+        Assert.Empty(await db.OrderItems.ToListAsync());
+        var audit = await db.OrderChangeAudits.SingleAsync();
+        Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
+        using var before = System.Text.Json.JsonDocument.Parse(audit.BeforeSnapshotJson);
+        Assert.Equal("Soup", before.RootElement.GetProperty("Items")[0]
+            .GetProperty("DishNameSnapshot").GetString());
+    }
 
     [Fact]
     public async Task KitchenOrderCannotBeCancelledAfterPreparationHasStarted()

@@ -761,10 +761,10 @@ function WaiterOrderPage() {
       }
 
       setOrder((current) => current?.id === orderId
-        ? { ...current, status: "Closed" }
+        ? { ...current, status: "Cancelled" }
         : current);
       setOrderHistory((current) => current.map((entry) => entry.id === orderId
-        ? { ...entry, status: "Closed" }
+        ? { ...entry, status: "Cancelled" }
         : entry));
       setCancelDialogOpen(false);
       setCancelReason("");
@@ -774,7 +774,7 @@ function WaiterOrderPage() {
 
       try {
         const refreshed = await refreshOrder(orderId, tableId);
-        if (refreshed.status !== "Closed") {
+        if (refreshed.status !== "Cancelled") {
           throw new Error("The refreshed order did not show the cancelled status.");
         }
       } catch {
@@ -788,9 +788,9 @@ function WaiterOrderPage() {
       // cancellation failed when the server actually completed it.
       try {
         const latest = await refreshOrder(orderId, tableId);
-        if (latest.status === "Closed") {
+        if (latest.status === "Cancelled") {
           setOrderHistory((current) => current.map((entry) => entry.id === orderId
-            ? { ...entry, status: "Closed" }
+            ? { ...entry, status: "Cancelled" }
             : entry));
           setCancelDialogOpen(false);
           setCancelReason("");
@@ -1137,7 +1137,7 @@ function WaiterOrderPage() {
                     <p className="eyebrow">
                       TABLE {activeTable.tableNumber}{order.seatNumber ? ` / SEAT ${order.seatNumber}` : ""} / ORDER #{order.id}
                     </p>
-                    <h2 id="order-heading">{order.status === "Sent" ? "Sent to kitchen · Still active" : order.status === "Closed" ? "Order closed" : "Order draft"}</h2>
+                    <h2 id="order-heading">{order.status === "Sent" ? "Sent to kitchen · Still active" : order.status === "Closed" ? "Order closed" : order.status === "Cancelled" ? "Order cancelled" : "Order draft"}</h2>
                   </div>
                   <div className="order-header-actions">
                     <button
@@ -1206,6 +1206,9 @@ function WaiterOrderPage() {
 
                 {order.status === "Closed" && (
                   <p className="staff-help">This order is closed and cannot be changed.</p>
+                )}
+                {order.status === "Cancelled" && (
+                  <p className="staff-help">This order was cancelled and cannot be changed.</p>
                 )}
 
                 {order.items.length === 0 ? (

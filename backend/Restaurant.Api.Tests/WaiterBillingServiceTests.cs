@@ -157,4 +157,24 @@ public sealed class WaiterBillingServiceTests
         Assert.Equal(BillingOperationStatus.Overpayment, result.Status);
         Assert.Empty(await db.PaymentRecords.ToListAsync());
     }
+
+    [Fact]
+    public async Task CancelledOrderCannotAcceptPayment()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var service = new WaiterBillingService(db);
+        var bill = await service.CreateBillAsync(
+            f.RestaurantId, f.WaiterId, f.OrderId, "USD");
+        var order = await db.Orders.SingleAsync(o => o.Id == f.OrderId);
+        order.Status = RestaurantOrderStates.Cancelled;
+        await db.SaveChangesAsync();
+
+        var result = await service.RecordPaymentAsync(
+            f.RestaurantId, f.WaiterId, bill.Bill!.Id,
+            10m, PaymentRecordMethods.Cash, "cancelled-order-payment");
+
+        Assert.Equal(BillingOperationStatus.OrderNotPayable, result.Status);
+        Assert.Empty(await db.PaymentRecords.ToListAsync());
+    }
 }
