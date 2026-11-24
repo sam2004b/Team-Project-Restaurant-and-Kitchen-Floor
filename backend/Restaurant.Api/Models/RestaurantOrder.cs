@@ -6,6 +6,7 @@ public sealed class RestaurantOrder
     public int Id { get; set; }
     public int RestaurantId { get; set; }
     public int DiningTableId { get; set; }
+
     // Optional for historical orders. New per-seat orders use 1..DiningTable.SeatCount.
     public int? SeatNumber { get; set; }
     public DiningTable DiningTable { get; set; } = null!;

@@ -157,12 +157,12 @@ namespace Restaurant.Api.Data
             {
                 entity.ToTable("staff_memberships", table =>
                 {
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_staff_memberships_role",
                         "\"Role\" IN ('Administrator', 'Waiter', " +
                         "'Chef', 'Reception Manager')");
 
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_staff_memberships_status",
                         "\"Status\" IN ('Active', 'Revoked')");
                 });
@@ -202,16 +202,16 @@ namespace Restaurant.Api.Data
             {
                 entity.ToTable("staff_invitations", table =>
                 {
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_staff_invitations_email_not_blank",
                         "length(btrim(\"Email\")) > 0");
 
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_staff_invitations_role",
                         "\"Role\" IN ('Administrator', 'Waiter', " +
                         "'Chef', 'Reception Manager')");
 
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_staff_invitations_status",
                         "\"Status\" IN ('Pending', 'Accepted', 'Revoked')");
                 });
@@ -344,7 +344,7 @@ namespace Restaurant.Api.Data
             {
                 entity.ToTable("restaurant_settings", table =>
                 {
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_restaurant_settings_default_seats_positive",
                         "\"DefaultSeatCapacity\" > 0");
                 });
@@ -369,11 +369,11 @@ namespace Restaurant.Api.Data
             {
                 entity.ToTable("dining_tables", table =>
                 {
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_dining_tables_number_positive",
                         "\"TableNumber\" > 0");
 
-                    table.HasCheckConstraint(
+                    entity.HasCheckConstraint(
                         "CK_dining_tables_seats_positive",
                         "\"SeatCount\" > 0");
                 });
@@ -480,6 +480,8 @@ namespace Restaurant.Api.Data
                     table.HasCheckConstraint("CK_orders_seat_number",
                         "\"SeatNumber\" IS NULL OR \"SeatNumber\" > 0");
 
+                    // Cancelled orders can be unsent drafts (no SentAtUtc) or
+                    // previously submitted orders (with SentAtUtc).
                     table.HasCheckConstraint("CK_orders_sent_consistency",
                         "(\"Status\" IN ('Sent', 'Closed') AND \"SentAtUtc\" IS NOT NULL) " +
                         "OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL) " +
@@ -774,16 +776,16 @@ namespace Restaurant.Api.Data
             {
                 entity.ToTable("order_items", table =>
                 {
-                    table.HasCheckConstraint("CK_order_items_quantity_positive",
+                    entity.HasCheckConstraint("CK_order_items_quantity_positive",
                         "\"Quantity\" > 0");
 
-                    table.HasCheckConstraint("CK_order_items_price_positive",
+                    entity.HasCheckConstraint("CK_order_items_price_positive",
                         "\"UnitPriceSnapshot\" > 0");
 
-                    table.HasCheckConstraint("CK_order_items_sequence_positive",
+                    entity.HasCheckConstraint("CK_order_items_sequence_positive",
                         "\"SequenceNumber\" > 0");
 
-                    table.HasCheckConstraint("CK_order_items_service_status",
+                    entity.HasCheckConstraint("CK_order_items_service_status",
                         "\"ServiceStatus\" IN ('Unserved', 'Served')");
 
                     // Only ready, submitted lines can be served.
@@ -894,12 +896,13 @@ namespace Restaurant.Api.Data
                 entity.HasIndex(s => new { s.RestaurantId, s.SentAtUtc, s.Id })
                     .HasDatabaseName("IX_kitchen_submissions_restaurant_sent_id");
             });
+
             // S3-US13-T01: persistent unread/read notifications per waiter + dish.
             modelBuilder.Entity<WaiterNotification>(entity =>
             {
                 entity.ToTable("waiter_notifications", table =>
                 {
-                    table.HasCheckConstraint("CK_waiter_notifications_read_after_created",
+                    entity.HasCheckConstraint("CK_waiter_notifications_read_after_created",
                         "\"ReadAtUtc\" IS NULL OR \"ReadAtUtc\" >= \"CreatedAtUtc\"");
                 });
 
@@ -956,7 +959,6 @@ namespace Restaurant.Api.Data
                     .HasFilter("\"ReadAtUtc\" IS NULL")
                     .HasDatabaseName("IX_waiter_notifications_unread_inbox");
             });
-
         }
     }
 }
