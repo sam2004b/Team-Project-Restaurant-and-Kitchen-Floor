@@ -743,7 +743,7 @@ namespace Restaurant.Api.Migrations
 
                             t.HasCheckConstraint("CK_orders_sent_after_created", "\"SentAtUtc\" IS NULL OR \"SentAtUtc\" >= \"CreatedAtUtc\"");
 
-                            t.HasCheckConstraint("CK_orders_sent_consistency", "(\"Status\" IN ('Sent', 'Closed', 'Cancelled') AND \"SentAtUtc\" IS NOT NULL) OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL)");
+                            t.HasCheckConstraint("CK_orders_sent_consistency", "(\"Status\" IN ('Sent', 'Closed') AND \"SentAtUtc\" IS NOT NULL) OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL) OR (\"Status\" = 'Cancelled')");
 
                             t.HasCheckConstraint("CK_orders_state", "\"Status\" IN ('Legacy', 'Open', 'Sent', 'Closed', 'Cancelled')");
                         });
