@@ -391,8 +391,9 @@ public sealed class OrderDraftPersistenceServiceTests
             f.RestaurantId, f.WaiterId, order.OrderId.Value,
             true, "Customer changed their mind");
         Assert.Equal(OrderWriteStatus.OrderCancelled,cancelled.Status);
-        Assert.Equal(RestaurantOrderStates.Closed,
-            (await db.Orders.SingleAsync()).Status);
+        var cancelledOrder = await db.Orders.SingleAsync();
+        Assert.Equal(RestaurantOrderStates.Cancelled, cancelledOrder.Status);
+        Assert.Null(cancelledOrder.PaidAtUtc);
         var audit = await db.OrderChangeAudits.SingleAsync();
         Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
         Assert.Null(audit.AfterSnapshotJson);
@@ -420,8 +421,10 @@ public sealed class OrderDraftPersistenceServiceTests
             true, "Customer cancelled");
 
         Assert.Equal(OrderWriteStatus.OrderCancelled, result.Status);
-        Assert.Equal(RestaurantOrderStates.Closed,
-            (await db.Orders.SingleAsync()).Status);
+        var cancelledOrder = await db.Orders.SingleAsync();
+        Assert.Equal(RestaurantOrderStates.Cancelled, cancelledOrder.Status);
+        Assert.NotNull(cancelledOrder.SentAtUtc);
+        Assert.Null(cancelledOrder.PaidAtUtc);
         Assert.Empty(await db.OrderItems.ToListAsync());
         var audit = await db.OrderChangeAudits.SingleAsync();
         Assert.Equal(OrderChangeTypes.Cancelled, audit.ChangeType);
