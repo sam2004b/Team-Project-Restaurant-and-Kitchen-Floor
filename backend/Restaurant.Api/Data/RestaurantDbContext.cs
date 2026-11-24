@@ -480,9 +480,12 @@ namespace Restaurant.Api.Data
                     table.HasCheckConstraint("CK_orders_seat_number",
                         "\"SeatNumber\" IS NULL OR \"SeatNumber\" > 0");
 
+                    // Cancelled orders can be unsent drafts (no SentAtUtc) or
+                    // previously submitted orders (with SentAtUtc).
                     table.HasCheckConstraint("CK_orders_sent_consistency",
-                         "(\"Status\" IN ('Sent', 'Closed', 'Cancelled') AND \"SentAtUtc\" IS NOT NULL) " +
-                        "OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL)");
+                        "(\"Status\" IN ('Sent', 'Closed') AND \"SentAtUtc\" IS NOT NULL) " +
+                        "OR (\"Status\" IN ('Legacy', 'Open') AND \"SentAtUtc\" IS NULL) " +
+                        "OR (\"Status\" = 'Cancelled')");
 
                     table.HasCheckConstraint("CK_orders_paid_consistency",
                         "(\"Status\" = 'Closed' AND \"PaidAtUtc\" IS NOT NULL) " +
