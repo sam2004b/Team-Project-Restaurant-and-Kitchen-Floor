@@ -514,6 +514,7 @@ function App() {
         <Route path="/waiter/tables" element={protect(["Waiter"], <WaiterTablesPage />)} />
       </Route>
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
+      <Route path="/register" element={<AcceptInvitationPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
       <Route path="/platform-admin"element={protect(["PlatformAdmin"], <PlatformAdminPage />)}/>
     </Routes>

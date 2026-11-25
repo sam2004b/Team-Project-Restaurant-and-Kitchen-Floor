@@ -69,6 +69,14 @@ function getMembershipStatus(status: number | string): "Active" | "Revoked" {
   return status === 1 || normalized === "1" || normalized === "active" ? "Active" : "Revoked";
 }
 
+function createLocalRegistrationUrl(invitation: StaffInvitationResponse): string | null {
+  if (!invitation.developmentToken) return null;
+  const registrationUrl = new URL("/register", window.location.origin);
+  registrationUrl.searchParams.set("token", invitation.developmentToken);
+  registrationUrl.searchParams.set("email", invitation.email);
+  return registrationUrl.toString();
+}
+
 function getInvitationStatus(status: number | string): "Pending" | "Accepted" | "Revoked" {
   const normalized = String(status).toLowerCase();
   if (status === 1 || normalized === "1" || normalized === "pending") return "Pending";
@@ -812,7 +820,9 @@ function StaffManagementPage() {
       setInviteEmail("");
       setInviteNotice({
         type: "success",
-        message: `Invitation sent to ${invitation.email}; status is ${getInvitationStatus(invitation.status).toLowerCase()}.`,
+        message: invitation.developmentToken
+          ? `Local invitation created for ${invitation.email}. Copy the registration link below and open it in a private browser window. No email was sent.`
+          : `Invitation sent to ${invitation.email}; status is ${getInvitationStatus(invitation.status).toLowerCase()}.`,
       });
     } catch (error) {
       const message = getErrorMessage(error, "Could not send the invitation.");
@@ -1030,10 +1040,33 @@ function StaffManagementPage() {
                       <span>
                         {lastInvitation.email} · {lastInvitation.role} · {getInvitationStatus(lastInvitation.status)}
                       </span>
-                      {lastInvitation.developmentToken && (
-                        <Link to={`/invitations/accept?token=${encodeURIComponent(lastInvitation.developmentToken)}`}>
-                          Open development acceptance link
-                        </Link>
+                      {createLocalRegistrationUrl(lastInvitation) && (
+                        <div className="staff-local-invitation">
+                          <p>Development registration link (local testing only):</p>
+                          <input
+                            type="text"
+                            readOnly
+                            aria-label="Registration link"
+                            value={createLocalRegistrationUrl(lastInvitation) ?? ""}
+                            onFocus={(event) => event.currentTarget.select()}
+                          />
+                          <button
+                            type="button"
+                            className="staff-text-button"
+                            onClick={() => {
+                              const url = createLocalRegistrationUrl(lastInvitation);
+                              if (!url) return;
+                              void navigator.clipboard.writeText(url).then(() => {
+                                setInviteNotice({ type: "success", message: "Registration link copied. Open it in an incognito/private browser window to create the employee account." });
+                              }).catch(() => {
+                                setInviteNotice({ type: "warning", message: "Clipboard access unavailable. Select and copy the registration URL above manually." });
+                              });
+                            }}
+                          >
+                            Copy registration link
+                          </button>
+                          <p>Use a private window so the new employee does not accidentally accept the invitation while signed in as the administrator.</p>
+                        </div>
                       )}
                       {getInvitationStatus(lastInvitation.status) === "Pending" && (
                         <button type="button" className="staff-text-button" disabled={revokingInvitation} onClick={() => void revokeInvitation()}>
@@ -1079,6 +1112,8 @@ function StaffManagementPage() {
 function AcceptInvitationPage() {
   const [searchParams] = useSearchParams();
   const [token, setToken] = useState(searchParams.get("token") ?? "");
+  // For display only; the API determines the actual invited email from the token.
+  const invitedEmail = searchParams.get("email")?.trim() ?? "";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1131,13 +1166,21 @@ function AcceptInvitationPage() {
         <Link className="staff-back-link" to="/admin/staff">← Staff and access</Link>
         <section className="staff-card">
           <p className="eyebrow">RESTAURANT STAFF</p>
-          <h1>Accept invitation</h1>
-          <p className="staff-help">If you already have an account for the invited email, sign out of any other account and sign in as the invited user under Staff and access before accepting. Otherwise, create an account below.</p>
+          <h1>Register with an invitation</h1>
+          <p className="staff-help">Create an account using this invitation link. The server uses the invited email saved with the token; the email shown here cannot be changed. For an existing account, sign in as that invited user before accepting.</p>
           <form className="staff-form" onSubmit={(event) => void submit(event)}>
-            <label>
-              Invitation token
-              <input required maxLength={200} value={token} onChange={(event) => setToken(event.target.value)} />
-            </label>
+            {invitedEmail && (
+              <label>
+                Invited email
+                <input type="email" readOnly value={invitedEmail} />
+              </label>
+            )}
+            {!searchParams.get("token") && (
+              <label>
+                Invitation token
+                <input required maxLength={200} value={token} onChange={(event) => setToken(event.target.value)} />
+              </label>
+            )}
             <label>
               New username <span className="staff-field-hint">(only for a new account)</span>
               <input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} />
@@ -1150,7 +1193,7 @@ function AcceptInvitationPage() {
             <button type="submit" className="primary-button" disabled={submitting}>
               {submitting ? "Accepting..." : "Accept invitation"}
             </button>
-            {result && <p className="staff-help">Membership #{result.id} is saved. Sign in to view your account.</p>}
+            {result && <p className="staff-help">Membership #{result.id} is saved. <Link to="/login">Sign in with your new account</Link> to open your restaurant workspace.</p>}
           </form>
         </section>
       </main>
