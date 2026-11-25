@@ -36,6 +36,7 @@ import { formatPrice } from "./services/currency";
 import { useKitchenUpdates } from "./services/useKitchenUpdates";
 import { useMenuUpdates } from "./services/useMenuUpdates";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
+import WaiterCancelDialog from "./WaiterCancelDialog";
 import "./waiter-billing.css";
 import "./waiter-order-history.css";
 
@@ -158,7 +159,6 @@ function WaiterOrderPage() {
   const operationLock = useRef(false);
   const statusRefreshInFlight = useRef(false);
   const addDishFormRef = useRef<HTMLFormElement>(null);
-  const cancelReasonRef = useRef<HTMLTextAreaElement>(null);
   const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
   const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
   const hasSubmittedItems = order?.items.some((item) =>
@@ -303,10 +303,6 @@ function WaiterOrderPage() {
       return Date.parse(first.timestamp) - Date.parse(second.timestamp);
     });
   }, [bill, order, orderSubmissions]);
-
-  useEffect(() => {
-    if (cancelDialogOpen) cancelReasonRef.current?.focus();
-  }, [cancelDialogOpen]);
 
   useEffect(() => {
     const targetId = location.hash.replace(/^#/, "");
@@ -1103,11 +1099,11 @@ function WaiterOrderPage() {
     setCancelDialogOpen(true);
   };
 
-  const closeCancelDialog = () => {
+  const closeCancelDialog = useCallback(() => {
     if (cancelling) return;
     setCancelDialogOpen(false);
     setCancelValidationError(null);
-  };
+  }, [cancelling]);
 
   const submitCancellation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2175,111 +2171,32 @@ function WaiterOrderPage() {
         )}
       </main>
       {cancelDialogOpen && order && (
-        <div className="configuration-dialog-backdrop">
-          <section
-            className="configuration-dialog waiter-cancel-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="waiter-cancel-title"
-            aria-describedby="waiter-cancel-description"
-          >
-            <header>
-              <div>
-                <h3 id="waiter-cancel-title">Cancel order #{order.id}?</h3>
-                <p id="waiter-cancel-description">
-                  {canCancelOrder
-                    ? "This closes the unpaid order. The action cannot be undone from this screen."
-                    : bill
-                      ? "A bill has already been prepared. Cancellation is disabled to protect its totals and payment history."
-                      : "Check the cancellation restriction for this order."}
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close cancellation dialog"
-                disabled={cancelling}
-                onClick={closeCancelDialog}
-              >
-                ×
-              </button>
-            </header>
-            {!canCancelOrder ? (
-              <div className="configuration-dialog-form">
-                <p className="staff-notice warning" role="status">
-                  {bill
-                    ? "A bill has already been prepared for this order. Cancellation is disabled to protect the bill and payment record."
-                    : hasSubmittedItems
-                      ? "This order already contains one or more items submitted to the kitchen. The current backend does not allow the waiter cancellation endpoint to withdraw kitchen work, so this order cannot be cancelled here. You can still manage eligible unsent items or contact a manager."
-                      : "This order is no longer active and cannot be cancelled."}
-                </p>
-                <div className="configuration-dialog-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={closeCancelDialog}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form className="configuration-dialog-form" onSubmit={(event) => void submitCancellation(event)}>
-                <label>
-                  Reason for cancellation
-                  <textarea
-                    ref={cancelReasonRef}
-                    rows={4}
-                    maxLength={500}
-                    value={cancelReason}
-                    aria-invalid={Boolean(cancelValidationError && !cancelReason.trim())}
-                    aria-describedby="waiter-cancel-reason-help"
-                    disabled={cancelling}
-                    placeholder="For example: customer changed their mind"
-                    onChange={(event) => {
-                      setCancelReason(event.target.value);
-                      setCancelValidationError(null);
-                    }}
-                  />
-                  <small id="waiter-cancel-reason-help">
-                    Required · 1–500 characters · {cancelReason.length}/500
-                  </small>
-                </label>
-                <label className="waiter-cancel-confirmation">
-                  <input
-                    type="checkbox"
-                    checked={cancelConfirmed}
-                    disabled={cancelling}
-                    onChange={(event) => {
-                      setCancelConfirmed(event.target.checked);
-                      setCancelValidationError(null);
-                    }}
-                  />
-                  <span>I confirm that order #{order.id} should be cancelled.</span>
-                </label>
-                {cancelValidationError && (
-                  <p className="staff-notice error" role="alert">{cancelValidationError}</p>
-                )}
-                <div className="configuration-dialog-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={cancelling}
-                    onClick={closeCancelDialog}
-                  >
-                    Keep order
-                  </button>
-                  <button
-                    type="submit"
-                    className="order-cancel-confirm-button"
-                    disabled={cancelling}
-                  >
-                    {cancelling ? "Cancelling..." : "Confirm cancellation"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-        </div>
+        <WaiterCancelDialog
+          orderId={order.id}
+          tableNumber={activeTable?.tableNumber}
+          seatNumber={order.seatNumber}
+          itemCount={order.items.length}
+          reason={cancelReason}
+          confirmed={cancelConfirmed}
+          validationError={cancelValidationError}
+          cancelling={cancelling}
+          canCancel={canCancelOrder}
+          restrictionMessage={bill
+            ? "A bill has already been prepared for this order. Cancellation is disabled to protect the bill and payment record."
+            : hasSubmittedItems
+              ? "This order contains items already submitted to the kitchen, which the cancellation action cannot withdraw."
+              : "This order is no longer active and cannot be cancelled."}
+          onReasonChange={(value) => {
+            setCancelReason(value);
+            setCancelValidationError(null);
+          }}
+          onConfirmedChange={(value) => {
+            setCancelConfirmed(value);
+            setCancelValidationError(null);
+          }}
+          onClose={closeCancelDialog}
+          onSubmit={(event) => { void submitCancellation(event); }}
+        />
       )}
     </div>
   );

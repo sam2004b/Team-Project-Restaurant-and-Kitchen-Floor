@@ -4136,68 +4136,6 @@ select:focus-visible {
   min-height: 40px;
 }
 
-.waiter-cancel-dialog {
-  width: min(100%, 540px);
-}
-
-.waiter-cancel-dialog textarea {
-  width: 100%;
-  min-height: 108px;
-  padding: 10px 12px;
-  border: 1px solid #dcded8;
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text);
-  font: inherit;
-  line-height: 1.45;
-  resize: vertical;
-}
-
-.waiter-cancel-dialog textarea:focus {
-  border-color: var(--green);
-  outline: 2px solid var(--green-soft);
-}
-
-.waiter-cancel-dialog textarea[aria-invalid="true"] {
-  border-color: #b84b3d;
-}
-
-.waiter-cancel-confirmation {
-  display: grid !important;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: start;
-  gap: 10px !important;
-  color: var(--text) !important;
-  line-height: 1.45;
-}
-
-.configuration-dialog-form > .waiter-cancel-confirmation > input[type="checkbox"] {
-  width: 17px;
-  height: 17px;
-  min-height: 17px;
-  margin: 2px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: transparent;
-  accent-color: var(--green);
-}
-
-.order-cancel-confirm-button {
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid #934638;
-  border-radius: 8px;
-  background: #934638;
-  color: #fff;
-  font-weight: 700;
-}
-
-.order-cancel-confirm-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
 .configuration-edit-fields .staff-text-button,
 .configuration-assignment-control .staff-text-button {
   padding: 8px 10px;
