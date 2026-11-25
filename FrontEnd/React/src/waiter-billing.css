@@ -1,0 +1,493 @@
+/* Billing styles intentionally use the existing waiter workspace palette and controls. */
+.waiter-billing-card {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.waiter-billing-heading {
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+
+.waiter-billing-heading h2 {
+  margin-bottom: 4px;
+}
+
+.waiter-billing-heading .staff-help {
+  margin: 5px 0 0;
+}
+
+.waiter-billing-heading > button {
+  flex-shrink: 0;
+}
+
+.waiter-billing-state,
+.waiter-billing-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.waiter-billing-state {
+  justify-content: flex-start;
+  color: var(--text-soft);
+}
+
+.waiter-billing-state.error {
+  align-items: flex-start;
+  flex-direction: column;
+  border-color: #dfb6aa;
+  background: #fbf0eb;
+  color: #874537;
+}
+
+.waiter-billing-state p,
+.waiter-billing-empty p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.waiter-billing-empty > div {
+  min-width: 0;
+}
+
+.waiter-billing-empty strong {
+  color: var(--green);
+  font-size: 0.9rem;
+}
+
+.waiter-bill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border: 1px solid #ebe7de;
+  border-radius: 10px;
+  background: #f8f6f1;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+}
+
+.waiter-bill-meta > span:not(.waiter-bill-status) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+}
+
+.waiter-bill-meta > span:nth-last-child(2) {
+  border-right: 0;
+}
+
+.waiter-bill-meta strong {
+  color: var(--text);
+  font-weight: 750;
+}
+
+.waiter-bill-status {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.waiter-bill-status.status-unpaid {
+  background: #f2e8d8;
+  color: #815b35;
+}
+
+.waiter-bill-status.status-partiallypaid {
+  background: #e5ecdf;
+  color: #45664d;
+}
+
+.waiter-bill-status.status-paid {
+  background: #dcecdf;
+  color: #286344;
+}
+
+.waiter-bill-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(250px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.waiter-bill-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e8e4db;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.waiter-bill-table {
+  width: 100%;
+  min-width: 540px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+}
+
+.waiter-bill-table th,
+.waiter-bill-table td {
+  padding: 12px 13px;
+  border-bottom: 1px solid #eeeae2;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.76rem;
+}
+
+.waiter-bill-table th {
+  background: #f3f0e9;
+  color: #66746a;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.waiter-bill-table th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.waiter-bill-table th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.waiter-bill-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.waiter-bill-table tbody tr:hover td {
+  background: #fbfaf7;
+}
+
+.waiter-bill-table td:not(:first-child),
+.waiter-bill-table th:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.waiter-bill-table td:first-child {
+  min-width: 170px;
+}
+
+.waiter-bill-table td:first-child strong,
+.waiter-bill-table td:first-child small {
+  display: block;
+}
+
+.waiter-bill-table td:first-child strong {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.waiter-bill-table td:first-child small {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  white-space: normal;
+}
+
+.waiter-bill-no-items {
+  padding: 24px !important;
+  color: var(--text-muted);
+  text-align: center !important;
+}
+
+.waiter-bill-summary-panel {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e6e1d7;
+  border-radius: 11px;
+  background: #f6f4ef;
+}
+
+.waiter-bill-summary-panel > .eyebrow {
+  margin-bottom: 13px;
+  color: #9a7759;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+}
+
+.waiter-bill-summary dl {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+}
+
+.waiter-bill-summary dl > div,
+.waiter-payment-review dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+}
+
+.waiter-bill-summary dt,
+.waiter-payment-review dt {
+  font-weight: 550;
+}
+
+.waiter-bill-summary dd,
+.waiter-payment-review dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 750;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.waiter-bill-summary .grand-total {
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid #d9d4c9;
+  color: var(--green);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.waiter-bill-summary .grand-total dd {
+  color: var(--green);
+  font-size: 1rem;
+}
+
+.waiter-bill-summary .balance-due {
+  margin-top: 2px;
+  padding: 12px;
+  border: 1px solid #d5e0d2;
+  border-radius: 9px;
+  background: #eaf0e7;
+  color: var(--green);
+  font-weight: 800;
+}
+
+.waiter-bill-summary .balance-due dd {
+  color: var(--green);
+  font-size: 0.96rem;
+}
+
+.waiter-payment-history {
+  display: grid;
+  gap: 10px;
+}
+
+.waiter-payment-history h3,
+.waiter-payment-entry h3,
+.waiter-payment-review h3 {
+  margin: 0;
+  color: var(--green);
+  font-size: 0.95rem;
+}
+
+.payment-history-table {
+  min-width: 620px;
+}
+
+.waiter-payment-entry,
+.waiter-payment-review {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e6e1d7;
+  border-radius: 11px;
+  background: #f6f4ef;
+}
+
+.waiter-payment-entry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.waiter-payment-entry-heading .eyebrow,
+.waiter-payment-review .eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+}
+
+.waiter-payment-entry-heading > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e9e4d9;
+  color: #74634f;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.waiter-payment-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr);
+  gap: 13px;
+}
+
+.waiter-payment-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.waiter-payment-fields input,
+.waiter-payment-fields select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.waiter-payment-fields input:focus,
+.waiter-payment-fields select:focus {
+  border-color: var(--green);
+  outline: 2px solid var(--green-soft);
+  outline-offset: 1px;
+}
+
+.waiter-payment-disclaimer,
+.waiter-payment-reference {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.waiter-payment-review dl {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+  margin: 0;
+}
+
+.waiter-payment-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.waiter-payment-entry > .primary-button {
+  justify-self: start;
+  min-width: 170px;
+}
+
+.waiter-payment-complete {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #cdddc9;
+  border-radius: 10px;
+  background: #eaf2e7;
+  color: #285f43;
+}
+
+.waiter-payment-complete::before {
+  content: "✓";
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d1e5d0;
+  color: #245c3d;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.waiter-payment-complete strong,
+.waiter-payment-complete span {
+  display: block;
+}
+
+.waiter-payment-complete strong {
+  font-size: 0.84rem;
+}
+
+.waiter-payment-complete span {
+  margin-top: 3px;
+  font-size: 0.74rem;
+}
+
+@media (max-width: 900px) {
+  .waiter-bill-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .waiter-bill-summary-panel {
+    width: 100%;
+  }
+
+  .waiter-bill-summary dl {
+    width: min(100%, 460px);
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .waiter-billing-heading,
+  .waiter-billing-empty,
+  .waiter-payment-entry-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiter-billing-heading > button,
+  .waiter-billing-empty .primary-button,
+  .waiter-payment-entry > .primary-button {
+    width: 100%;
+  }
+
+  .waiter-bill-meta {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .waiter-bill-meta > span:not(.waiter-bill-status) {
+    border-right: 0;
+  }
+
+  .waiter-payment-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .waiter-payment-actions {
+    flex-direction: column-reverse;
+  }
+
+  .waiter-payment-actions button {
+    width: 100%;
+  }
+}

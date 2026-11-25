@@ -5,19 +5,24 @@ import {
   ApiError,
   addOrderItem,
   cancelWaiterOrder,
+  createWaiterBill,
   getCurrentAccount,
   getMenuDishes,
   getOrderDetails,
   getWaiterOrderHistory,
+  getWaiterBill,
   getWaiterNotifications,
   markWaiterItemServed,
   getWaiterTables,
   openOrCreateOrder,
+  recordWaiterPayment,
   removeOrderItem,
   sendOrder,
   updateOrderItem,
 } from "./services/api";
 import type {
+  BillDetailsResponse,
+  BillPaymentMethod,
   MenuDishResponse,
   OrderDetailsResponse,
   OrderItemDetailsResponse,
@@ -29,8 +34,7 @@ import { formatPrice } from "./services/currency";
 import { useKitchenUpdates } from "./services/useKitchenUpdates";
 import { useMenuUpdates } from "./services/useMenuUpdates";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
-import WaiterCancelDialog from "./WaiterCancelDialog";
-import "./waiter-order-table-actions.css";
+import "./waiter-billing.css";
 
 type ItemDraft = {
   quantity: string;
@@ -51,6 +55,32 @@ const preparationStatusRank = {
   Preparing: 1,
   Ready: 2,
 } as const;
+
+function formatBillAmount(amount: number, currencyCode: string): string {
+  try {
+    return new Intl.NumberFormat("ru-RU", {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currencyCode}`;
+  }
+}
+
+function createExternalPaymentReference(billId: number): string {
+  const uniquePart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `waiter-${billId}-${uniquePart}`;
+}
+
+type PaymentReview = {
+  amount: number;
+  method: BillPaymentMethod;
+  externalReference: string;
+};
 
 function WaiterOrderPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -88,17 +118,29 @@ function WaiterOrderPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelConfirmed, setCancelConfirmed] = useState(false);
   const [cancelValidationError, setCancelValidationError] = useState<string | null>(null);
+  const [bill, setBill] = useState<BillDetailsResponse | null>(null);
+  const [billLoading, setBillLoading] = useState(false);
+  const [billCreating, setBillCreating] = useState(false);
+  const [billError, setBillError] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod>("Cash");
+  const [paymentReview, setPaymentReview] = useState<PaymentReview | null>(null);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
+  const [paymentValidationError, setPaymentValidationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [statusRefreshError, setStatusRefreshError] = useState<string | null>(null);
   const operationLock = useRef(false);
   const statusRefreshInFlight = useRef(false);
   const addDishFormRef = useRef<HTMLFormElement>(null);
+  const cancelReasonRef = useRef<HTMLTextAreaElement>(null);
   const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
   const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
   const hasSubmittedItems = order?.items.some((item) =>
     item.kitchenSubmissionId !== null || item.preparationStatus !== "New") ?? false;
-  const canCancelOrder = order?.status === "Open" && order.sentAtUtc === null && !hasSubmittedItems;
+  const canCancelOrder = orderIsActive && !hasSubmittedItems && !bill;
   const total = useMemo(
     () => order?.items.reduce((sum, item) => {
       const draftQuantity = itemDrafts[item.id]?.quantity;
@@ -114,6 +156,9 @@ function WaiterOrderPage() {
     [dishes],
   );
 
+  useEffect(() => {
+    if (cancelDialogOpen) cancelReasonRef.current?.focus();
+  }, [cancelDialogOpen]);
 
   const refreshOrderHistory = useCallback(async (showLoading = true) => {
     if (showLoading) setHistoryLoading(true);
@@ -235,6 +280,188 @@ function WaiterOrderPage() {
     ])));
     return updatedOrder;
   }, []);
+
+  const currentOrderId = order?.id ?? null;
+  const currentOrderTableId = order?.diningTableId ?? null;
+
+  useEffect(() => {
+    let active = true;
+    if (!authorized || currentOrderId === null) {
+      setBill(null);
+      setBillError(null);
+      setBillLoading(false);
+      setPaymentAmount("");
+      setPaymentReview(null);
+      setPaymentError(null);
+      setPaymentNotice(null);
+      setPaymentValidationError(null);
+      return () => { active = false; };
+    }
+
+    setBill(null);
+    setBillError(null);
+    setBillLoading(true);
+    setPaymentAmount("");
+    setPaymentReview(null);
+    setPaymentError(null);
+    setPaymentNotice(null);
+    setPaymentValidationError(null);
+
+    void getWaiterBill(currentOrderId)
+      .then((loadedBill) => {
+        if (!active) return;
+        if (loadedBill.orderId !== currentOrderId ||
+            loadedBill.diningTableId !== currentOrderTableId) {
+          throw new Error("The bill returned by the API does not match the selected order and table.");
+        }
+        setBill(loadedBill);
+        setPaymentAmount(loadedBill.balanceDue > 0
+          ? loadedBill.balanceDue.toFixed(2)
+          : "0.00");
+      })
+      .catch((caughtError: unknown) => {
+        if (!active) return;
+        if (caughtError instanceof ApiError && caughtError.status === 404) {
+          // A 404 means this order does not have a bill yet.
+          setBill(null);
+          setBillError(null);
+        } else {
+          setBillError(getErrorMessage(caughtError, "Could not load this order's bill."));
+        }
+      })
+      .finally(() => {
+        if (active) setBillLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [authorized, currentOrderId, currentOrderTableId]);
+
+  const refreshBill = async (orderId: number, expectedTableId: number) => {
+    setBillLoading(true);
+    setBillError(null);
+    try {
+      const loadedBill = await getWaiterBill(orderId);
+      if (loadedBill.orderId !== orderId || loadedBill.diningTableId !== expectedTableId) {
+        throw new Error("The bill returned by the API does not match the selected order and table.");
+      }
+      setBill(loadedBill);
+      setPaymentAmount(loadedBill.balanceDue > 0 ? loadedBill.balanceDue.toFixed(2) : "0.00");
+      setPaymentReview(null);
+      setPaymentError(null);
+      setPaymentValidationError(null);
+      return loadedBill;
+    } catch (caughtError) {
+      setBillError(getErrorMessage(caughtError, "Could not refresh this bill."));
+      throw caughtError;
+    } finally {
+      setBillLoading(false);
+    }
+  };
+
+  const prepareBill = async () => {
+    if (!order || !orderIsActive || order.items.length === 0 || operationLock.current || billCreating) return;
+    operationLock.current = true;
+    setBillCreating(true);
+    setBillLoading(true);
+    setBillError(null);
+    setPaymentError(null);
+    setPaymentNotice(null);
+    try {
+      const createdBill = await createWaiterBill(order.id, "RUB");
+      if (createdBill.orderId !== order.id || createdBill.diningTableId !== order.diningTableId) {
+        throw new Error("The billing API returned a bill for a different order or table.");
+      }
+      setBill(createdBill);
+      setPaymentAmount(createdBill.balanceDue > 0
+        ? createdBill.balanceDue.toFixed(2)
+        : "0.00");
+      setNotice(`Bill #${createdBill.id} is ready for order #${order.id}.`);
+      // Re-read the server snapshot so the preview always reflects persisted values.
+      await refreshBill(order.id, order.diningTableId);
+    } catch (caughtError) {
+      setBillError(getErrorMessage(caughtError, "Could not prepare this bill."));
+    } finally {
+      operationLock.current = false;
+      setBillCreating(false);
+      setBillLoading(false);
+    }
+  };
+
+  const reviewPaymentEntry = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!bill || bill.balanceDue <= 0 || paymentSubmitting) return;
+    const normalizedAmount = paymentAmount.trim();
+    if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(normalizedAmount)) {
+      setPaymentValidationError("Enter an amount with no more than two decimal places.");
+      return;
+    }
+    const amount = Number(normalizedAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentValidationError("Payment amount must be greater than zero.");
+      return;
+    }
+    if (amount > bill.balanceDue + 0.000001) {
+      setPaymentValidationError(`Payment cannot exceed the remaining balance of ${formatBillAmount(bill.balanceDue, bill.currencyCode)}.`);
+      return;
+    }
+    setPaymentValidationError(null);
+    setPaymentError(null);
+    setPaymentNotice(null);
+    setPaymentReview({
+      amount: Math.round(amount * 100) / 100,
+      method: paymentMethod,
+      externalReference: createExternalPaymentReference(bill.id),
+    });
+  };
+
+  const confirmPayment = async () => {
+    if (!bill || !order || !paymentReview || paymentSubmitting || operationLock.current) return;
+    operationLock.current = true;
+    setPaymentSubmitting(true);
+    setPaymentError(null);
+    setPaymentNotice(null);
+    try {
+      const result = await recordWaiterPayment(
+        bill.id,
+        paymentReview.amount,
+        paymentReview.method,
+        paymentReview.externalReference,
+      );
+      if (!result.payment || !result.bill ||
+          result.bill.id !== bill.id ||
+          result.bill.orderId !== order.id ||
+          result.bill.diningTableId !== order.diningTableId ||
+          result.payment.amount !== paymentReview.amount ||
+          result.payment.method !== paymentReview.method ||
+          result.payment.externalReference !== paymentReview.externalReference) {
+        throw new Error("The API response did not confirm the payment details for this bill.");
+      }
+
+      setBill(result.bill);
+      setPaymentReview(null);
+      setPaymentAmount(result.bill.balanceDue > 0
+        ? result.bill.balanceDue.toFixed(2)
+        : "0.00");
+      setPaymentValidationError(null);
+      setPaymentNotice(result.alreadyRecorded
+        ? `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was already recorded. The bill has been refreshed.`
+        : `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was recorded successfully.`);
+      if (result.bill.paymentStatus === "Paid") {
+        setOrder((current) => current?.id === order.id
+          ? { ...current, status: "Closed" }
+          : current);
+        setOrderHistory((current) => current.map((entry) => entry.id === order.id
+          ? { ...entry, status: "Closed" }
+          : entry));
+        void refreshOrderHistory(false);
+      }
+    } catch (caughtError) {
+      setPaymentError(`${getErrorMessage(caughtError, "Could not record this payment.")} You can retry safely; the same payment reference will be reused.`);
+    } finally {
+      operationLock.current = false;
+      setPaymentSubmitting(false);
+    }
+  };
 
   const refreshSubmittedStatuses = useCallback(async (
     orderId: number,
@@ -454,7 +681,7 @@ function WaiterOrderPage() {
     setNotice(null);
   };
 
-  const createNewOrder = async (table: WaiterTableResponse, seatNumber: number) => {
+  const openTable = async (table: WaiterTableResponse, seatNumber: number) => {
     if (operationLock.current) return;
     if (!tables.some((assignedTable) => assignedTable.id === table.id)) return;
     operationLock.current = true;
@@ -464,52 +691,9 @@ function WaiterOrderPage() {
     setOpening(true);
     setError(null);
     setNotice(null);
-
     try {
-      // Refresh first so an already-active seat is never offered as a new order.
-      const latestHistory = await getWaiterOrderHistory();
-      const sortedHistory = latestHistory.sort(
-        (first, second) => Date.parse(second.createdAtUtc) - Date.parse(first.createdAtUtc),
-      );
-      setOrderHistory(sortedHistory);
-
-      const activeOrder = sortedHistory.find((entry) =>
-        entry.diningTableId === table.id &&
-        entry.seatNumber === seatNumber &&
-        (entry.status === "Open" || entry.status === "Sent"),
-      );
-
-      if (activeOrder) {
-        setNotice(
-          `A new order was not created. Seat ${seatNumber} already has active order #${activeOrder.id}. ` +
-          "Cancel the unsent order or choose another available seat.",
-        );
-        return;
-      }
-
-      // The current backend route is GetOrCreateOpen. Refuse its reuse result
-      // rather than ever opening an existing order from the New order action.
-      const created = await openOrCreateOrder(table.id, seatNumber);
-      if (created.reused) {
-        const refreshedHistory = await getWaiterOrderHistory().catch(() => latestHistory);
-        setOrderHistory(refreshedHistory.sort(
-          (first, second) => Date.parse(second.createdAtUtc) - Date.parse(first.createdAtUtc),
-        ));
-        setNotice(
-          `A new order was not created because an active order (#${created.orderId}) now exists ` +
-          `for Table ${table.tableNumber}, Seat ${seatNumber}. No existing order was opened.`,
-        );
-        return;
-      }
-
-      const createdOrder = await refreshOrder(created.orderId, table.id);
-      if (createdOrder.id !== created.orderId || createdOrder.seatNumber !== seatNumber) {
-        throw new Error("The server response did not match the newly created table seat order.");
-      }
-
-      setNotice(
-        `New order #${created.orderId} created for Table ${table.tableNumber}, Seat ${seatNumber}.`,
-      );
+      const opened = await openOrCreateOrder(table.id, seatNumber);
+      await refreshOrder(opened.orderId, table.id);
       void refreshOrderHistory(false);
     } catch (caughtError) {
       if (caughtError instanceof ApiError &&
@@ -520,8 +704,7 @@ function WaiterOrderPage() {
         setOrder(null);
         setItemDrafts({});
       }
-      setError(getErrorMessage(caughtError, "Could not create a new order for this table seat."));
-      void refreshOrderHistory(false);
+      setError(getErrorMessage(caughtError, "Could not open this table's order."));
     } finally {
       operationLock.current = false;
       setOpening(false);
@@ -571,7 +754,7 @@ function WaiterOrderPage() {
 
   const addItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!order || !orderIsActive || operationLock.current) return;
+    if (!order || !orderIsActive || bill || billLoading || operationLock.current) return;
     const dishId = Number(selectedDishId);
     const parsedQuantity = Number(quantity);
     if (!Number.isSafeInteger(dishId) || dishId <= 0 ||
@@ -621,7 +804,7 @@ function WaiterOrderPage() {
     draft: ItemDraft,
   ) => {
     if (!order || operationLock.current) return;
-    if (!orderIsActive || item.kitchenSubmissionId !== null) {
+    if (!orderIsActive || bill || billLoading || item.kitchenSubmissionId !== null) {
       setError("Submitted dishes cannot be edited. Use Add more to request an additional quantity.");
       return;
     }
@@ -676,8 +859,10 @@ function WaiterOrderPage() {
   const deleteItem = async (itemId: number) => {
     if (!order || operationLock.current) return;
     const item = order.items.find((current) => current.id === itemId);
-    if (!orderIsActive || !item || item.kitchenSubmissionId !== null) {
-      setError("Submitted dishes cannot be removed from a kitchen ticket.");
+    if (!orderIsActive || bill || billLoading || !item || item.kitchenSubmissionId !== null) {
+      setError(bill
+        ? "This order already has a bill. Order changes are locked to keep the bill totals consistent."
+        : "Submitted dishes cannot be removed from a kitchen ticket.");
       return;
     }
     operationLock.current = true;
@@ -708,7 +893,7 @@ function WaiterOrderPage() {
   };
 
   const openCancelDialog = () => {
-    if (!order || !canCancelOrder || operationLock.current) return;
+    if (!order || operationLock.current) return;
     setCancelReason("");
     setCancelConfirmed(false);
     setCancelValidationError(null);
@@ -725,9 +910,11 @@ function WaiterOrderPage() {
     event.preventDefault();
     if (!order || !canCancelOrder || operationLock.current) {
       setCancelValidationError(
-        hasSubmittedItems
-          ? "This order already contains kitchen-submitted items and cannot be cancelled from the waiter screen."
-          : "This order is no longer active and cannot be cancelled.",
+        bill
+          ? "A bill has already been prepared for this order. Cancellation is disabled to protect the bill and payment record."
+          : hasSubmittedItems
+            ? "This order already contains kitchen-submitted items and cannot be cancelled from the waiter screen."
+            : "This order is no longer active and cannot be cancelled.",
       );
       return;
     }
@@ -761,10 +948,10 @@ function WaiterOrderPage() {
       }
 
       setOrder((current) => current?.id === orderId
-        ? { ...current, status: "Cancelled" }
+        ? { ...current, status: "Closed" }
         : current);
       setOrderHistory((current) => current.map((entry) => entry.id === orderId
-        ? { ...entry, status: "Cancelled" }
+        ? { ...entry, status: "Closed" }
         : entry));
       setCancelDialogOpen(false);
       setCancelReason("");
@@ -774,7 +961,7 @@ function WaiterOrderPage() {
 
       try {
         const refreshed = await refreshOrder(orderId, tableId);
-        if (refreshed.status !== "Cancelled") {
+        if (refreshed.status !== "Closed") {
           throw new Error("The refreshed order did not show the cancelled status.");
         }
       } catch {
@@ -788,9 +975,9 @@ function WaiterOrderPage() {
       // cancellation failed when the server actually completed it.
       try {
         const latest = await refreshOrder(orderId, tableId);
-        if (latest.status === "Cancelled") {
+        if (latest.status === "Closed") {
           setOrderHistory((current) => current.map((entry) => entry.id === orderId
-            ? { ...entry, status: "Cancelled" }
+            ? { ...entry, status: "Closed" }
             : entry));
           setCancelDialogOpen(false);
           setCancelReason("");
@@ -809,7 +996,7 @@ function WaiterOrderPage() {
   };
 
   const submitOrder = async () => {
-    if (!order || !orderIsActive || operationLock.current || pendingItems.length === 0) return;
+    if (!order || !orderIsActive || bill || billLoading || operationLock.current || pendingItems.length === 0) return;
     const pendingIds = new Set(pendingItems.map((item) => item.id));
     const changedItems: Array<{ item: OrderItemDetailsResponse; draft: ItemDraft }> = [];
     for (const item of pendingItems) {
@@ -1012,35 +1199,23 @@ function WaiterOrderPage() {
               ) : (
                 <div className="order-table-list">
                   {tables.map((table) => (
-                    <article
+                    <button
+                      type="button"
                       key={table.id}
-                      className={`order-table-card${selectedTableId === table.id ? " selected" : ""}`}
+                      className={`order-table-button${selectedTableId === table.id ? " selected" : ""}`}
+                      disabled={opening || refreshingTables}
+                      onClick={() => selectTable(table)}
                     >
-                      <div className="order-table-card-details">
-                        <strong>Table {table.tableNumber}</strong>
-                        <span>{table.seatCount} seats</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="order-table-new-order-button"
-                        disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null}
-                        aria-label={`Start a new order at Table ${table.tableNumber}`}
-                        onClick={() => selectTable(table)}
-                      >
-                        <span aria-hidden="true">+</span>
-                        New order
-                      </button>
-                    </article>
+                      <strong>Table {table.tableNumber}</strong>
+                      <span>{table.seatCount} seats</span>
+                    </button>
                   ))}
                 </div>
               )}
               {selectedTableId !== null && activeTable && (
                 <div className="order-seat-selector">
-                  <h3>Create a new order at Table {activeTable.tableNumber}</h3>
-                  <p className="staff-help">
-                    Select an available seat. This action creates a brand-new order with a new ID; seats with an active order cannot be reopened here.
-                    After an unsent order is cancelled, its seat becomes available for another new order.
-                  </p>
+                  <h3>Select a seat at Table {activeTable.tableNumber}</h3>
+                  <p className="staff-help">Each seat has its own active order. Select a seat to create or reopen its existing order.</p>
                   <div className="order-seat-list">
                     {Array.from({ length: activeTable.seatCount }, (_, index) => index + 1).map((seat) => {
                       const existing = orderHistory.find((entry) =>
@@ -1051,19 +1226,13 @@ function WaiterOrderPage() {
                         <button
                           type="button"
                           key={seat}
-                          className={`order-seat-button${order?.seatNumber === seat ? " selected" : ""}${existing ? " occupied" : " available"}`}
+                          className={`order-seat-button${order?.seatNumber === seat ? " selected" : ""}`}
                           aria-pressed={order?.seatNumber === seat}
-                          aria-label={existing
-                            ? `Seat ${seat} unavailable because order ${existing.id} is ${existing.status}`
-                            : `Create a new order for seat ${seat}`}
-                          disabled={Boolean(existing) || opening || refreshingTables || savingItem || sending || busyItemId !== null}
-                          onClick={() => void createNewOrder(activeTable, seat)}
+                          disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null}
+                          onClick={() => void openTable(activeTable, seat)}
                         >
                           <strong>Seat {seat}</strong>
-                          <span>{existing ? `Active order #${existing.id} · ${existing.status}` : "Available"}</span>
-                          <span className="order-seat-button-action">
-                            {existing ? "Seat unavailable" : "Create new order"}
-                          </span>
+                          <span>{existing ? `Order #${existing.id} · ${existing.status}` : "Open or create order"}</span>
                         </button>
                       );
                     })}
@@ -1137,7 +1306,7 @@ function WaiterOrderPage() {
                     <p className="eyebrow">
                       TABLE {activeTable.tableNumber}{order.seatNumber ? ` / SEAT ${order.seatNumber}` : ""} / ORDER #{order.id}
                     </p>
-                    <h2 id="order-heading">{order.status === "Sent" ? "Sent to kitchen · Still active" : order.status === "Closed" ? "Order closed" : order.status === "Cancelled" ? "Order cancelled" : "Order draft"}</h2>
+                    <h2 id="order-heading">{order.status === "Sent" ? "Sent to kitchen · Still active" : order.status === "Closed" ? "Order closed" : "Order draft"}</h2>
                   </div>
                   <div className="order-header-actions">
                     <button
@@ -1148,25 +1317,29 @@ function WaiterOrderPage() {
                     >
                       Reload order
                     </button>
-                    {orderIsActive && (
+                    {orderIsActive && !bill && (
                       <button
                         type="button"
                         className="secondary-button"
-                        disabled={savingItem || sending || busyItemId !== null || availableDishes.length === 0}
+                        disabled={billLoading || savingItem || sending || busyItemId !== null || availableDishes.length === 0}
                         onClick={() => focusAddDish()}
                       >
                         Add more dishes
                       </button>
                     )}
-                    {canCancelOrder && (
+                    {orderIsActive && (
                       <button
                         type="button"
                         className="order-cancel-button"
-                        disabled={opening || savingItem || sending || cancelling || busyItemId !== null}
-                        aria-describedby={hasSubmittedItems ? "waiter-cancel-unavailable" : undefined}
-                        title={hasSubmittedItems
-                          ? "View why this order cannot be cancelled"
-                          : "Cancel this unpaid order"}
+                        disabled={opening || billLoading || Boolean(bill) || savingItem || sending || cancelling || busyItemId !== null}
+                        aria-describedby={bill
+                          ? "waiter-bill-locked"
+                          : hasSubmittedItems ? "waiter-cancel-unavailable" : undefined}
+                        title={bill
+                          ? "A bill has been prepared; cancellation is disabled"
+                          : hasSubmittedItems
+                            ? "View why this order cannot be cancelled"
+                            : "Cancel this unpaid order"}
                         onClick={openCancelDialog}
                       >
                         Cancel order
@@ -1179,6 +1352,16 @@ function WaiterOrderPage() {
                   <p className="staff-notice warning" id="waiter-cancel-unavailable" role="status">
                     This order contains items already sent to the kitchen. The current waiter cancellation endpoint
                     cannot withdraw submitted kitchen items, so cancellation is unavailable.
+                  </p>
+                )}
+                {orderIsActive && billLoading && (
+                  <p className="staff-notice warning" role="status">
+                    Checking whether this order already has a bill. Order changes and cancellation are temporarily locked.
+                  </p>
+                )}
+                {orderIsActive && bill && (
+                  <p className="staff-notice warning" id="waiter-bill-locked" role="status">
+                    A bill has been prepared for this order. Item changes, additional dishes and cancellation are locked so the bill totals remain consistent.
                   </p>
                 )}
 
@@ -1207,9 +1390,6 @@ function WaiterOrderPage() {
                 {order.status === "Closed" && (
                   <p className="staff-help">This order is closed and cannot be changed.</p>
                 )}
-                {order.status === "Cancelled" && (
-                  <p className="staff-help">This order was cancelled and cannot be changed.</p>
-                )}
 
                 {order.items.length === 0 ? (
                   <p className="staff-help">No dishes added yet. Add at least one dish before sending.</p>
@@ -1220,7 +1400,7 @@ function WaiterOrderPage() {
                         quantity: String(item.quantity),
                         specialRequest: item.specialRequest ?? "",
                       };
-                      const editable = orderIsActive && item.kitchenSubmissionId === null;
+                      const editable = orderIsActive && !bill && !billLoading && item.kitchenSubmissionId === null;
                       return (
                         <form
                           className="order-item"
@@ -1300,7 +1480,7 @@ function WaiterOrderPage() {
                                 : item.quantity
                             ))}
                           </span>
-                          {orderIsActive && !editable && (
+                          {orderIsActive && !editable && !bill && !billLoading && (
                             <div className="order-item-actions">
                               <button
                                 type="button"
@@ -1338,7 +1518,7 @@ function WaiterOrderPage() {
                   </div>
                 )}
 
-                {orderIsActive && (
+                {orderIsActive && !bill && !billLoading && (
                   <>
                     <form ref={addDishFormRef} className="order-add-form" onSubmit={(event) => void addItem(event)}>
                       <h3>Add a dish</h3>
@@ -1414,8 +1594,225 @@ function WaiterOrderPage() {
                 )}
                 {order.status === "Sent" && pendingItems.length === 0 && (
                   <p className="staff-help" role="status">
-                    All current items have been sent. This order stays active until payment; use Add more dishes for new requests.
+                    {bill
+                      ? "All current items were sent and a bill has been prepared. Complete payment in the bill panel; new dishes are locked for this bill."
+                      : "All current items have been sent. This order stays active until payment; use Add more dishes for new requests."}
                   </p>
+                )}
+              </section>
+            )}
+            {order && activeTable && !refreshingTables && (
+              <section className="staff-card waiter-billing-card" aria-labelledby="waiter-billing-heading">
+                <div className="staff-card-heading waiter-billing-heading">
+                  <div>
+                    <p className="eyebrow">CHECKOUT / PAYMENT</p>
+                    <h2 id="waiter-billing-heading">Bill preview & payment</h2>
+                    <p className="staff-help">Order #{order.id} · Table {activeTable.tableNumber}{order.seatNumber ? ` · Seat ${order.seatNumber}` : ""}</p>
+                  </div>
+                  {bill && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={billLoading || paymentSubmitting || billCreating}
+                      onClick={() => void refreshBill(order.id, order.diningTableId).catch(() => undefined)}
+                    >
+                      {billLoading ? "Refreshing..." : "Refresh bill"}
+                    </button>
+                  )}
+                </div>
+
+                {billLoading && !bill ? (
+                  <div className="waiter-billing-state" role="status" aria-busy="true">
+                    <span className="admin-spinner" /> Checking bill details...
+                  </div>
+                ) : billError && !bill ? (
+                  <div className="waiter-billing-state error" role="alert">
+                    <p>{billError}</p>
+                    <button type="button" className="secondary-button" onClick={() => void refreshBill(order.id, order.diningTableId).catch(() => undefined)}>
+                      Try again
+                    </button>
+                  </div>
+                ) : !bill ? (
+                  <div className="waiter-billing-empty" role="status">
+                    <div>
+                      <strong>{order.items.length === 0 ? "This order has no items yet" : "No bill has been prepared"}</strong>
+                      <p>{order.items.length === 0
+                        ? "Add at least one dish before preparing the itemised bill."
+                        : orderIsActive
+                          ? "Prepare a bill to capture the current item prices and review the amount due."
+                          : "This closed order does not have a bill available."}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={!orderIsActive || order.items.length === 0 || billCreating || billLoading}
+                      onClick={() => void prepareBill()}
+                    >
+                      {billCreating ? "Preparing bill..." : "Prepare bill"}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {billError && (
+                      <p className="staff-notice error" role="alert">
+                        {billError}
+                        <button type="button" className="staff-text-button" onClick={() => void refreshBill(order.id, order.diningTableId).catch(() => undefined)}>
+                          Try again
+                        </button>
+                      </p>
+                    )}
+                    <div className="waiter-bill-meta">
+                      <span>Bill <strong>#{bill.id}</strong></span>
+                      <span>Order <strong>#{bill.orderId}</strong></span>
+                      <span>Currency <strong>{bill.currencyCode}</strong></span>
+                      <span>Created <strong>{new Date(bill.createdAtUtc).toLocaleString()}</strong></span>
+                      <span className={`waiter-bill-status status-${bill.paymentStatus.toLowerCase()}`}>
+                        {bill.paymentStatus === "PartiallyPaid" ? "Partially paid" : bill.paymentStatus}
+                      </span>
+                    </div>
+
+                    <div className="waiter-bill-details">
+                      <div className="waiter-bill-table-wrap">
+                        <table className="waiter-bill-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Item</th>
+                              <th scope="col">Qty</th>
+                              <th scope="col">Unit price</th>
+                              <th scope="col">Line total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bill.items.length === 0 ? (
+                              <tr><td colSpan={4} className="waiter-bill-no-items">The API returned an empty bill.</td></tr>
+                            ) : bill.items.map((line) => (
+                              <tr key={line.orderItemId}>
+                                <td>
+                                  <strong>{line.dishName}</strong>
+                                  {line.specialRequest && <small>{line.specialRequest}</small>}
+                                </td>
+                                <td>{line.quantity}</td>
+                                <td>{formatBillAmount(line.unitPrice, bill.currencyCode)}</td>
+                                <td>{formatBillAmount(line.lineTotal, bill.currencyCode)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <aside className="waiter-bill-summary-panel" aria-label="Bill totals">
+                        <p className="eyebrow">BILL SUMMARY</p>
+                        <div className="waiter-bill-summary">
+                          <dl>
+                            <div><dt>Subtotal</dt><dd>{formatBillAmount(bill.subtotalAmount, bill.currencyCode)}</dd></div>
+                            <div><dt>Tax</dt><dd>{formatBillAmount(bill.taxAmount, bill.currencyCode)}</dd></div>
+                            <div><dt>Discount</dt><dd>{bill.discountAmount > 0 ? `−${formatBillAmount(bill.discountAmount, bill.currencyCode)}` : formatBillAmount(0, bill.currencyCode)}</dd></div>
+                            <div className="grand-total"><dt>Total</dt><dd>{formatBillAmount(bill.totalAmount, bill.currencyCode)}</dd></div>
+                            <div><dt>Amount paid</dt><dd>{formatBillAmount(bill.amountPaid, bill.currencyCode)}</dd></div>
+                            <div className="balance-due"><dt>Balance due</dt><dd>{formatBillAmount(bill.balanceDue, bill.currencyCode)}</dd></div>
+                          </dl>
+                        </div>
+                      </aside>
+                    </div>
+
+                    {bill.payments.length > 0 && (
+                      <div className="waiter-payment-history">
+                        <h3>Payment history</h3>
+                        <div className="waiter-bill-table-wrap">
+                          <table className="waiter-bill-table payment-history-table">
+                            <thead><tr><th scope="col">Recorded</th><th scope="col">Method</th><th scope="col">Reference</th><th scope="col">Amount</th></tr></thead>
+                            <tbody>
+                              {bill.payments.map((payment) => (
+                                <tr key={payment.id}>
+                                  <td>{new Date(payment.recordedAtUtc).toLocaleString()}</td>
+                                  <td>{payment.method}</td>
+                                  <td>{payment.externalReference ?? "—"}</td>
+                                  <td>{formatBillAmount(payment.amount, bill.currencyCode)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentNotice && <p className="staff-notice success" role="status">{paymentNotice}</p>}
+                    {paymentError && <p className="staff-notice error" role="alert">{paymentError}</p>}
+
+                    {bill.paymentStatus === "Paid" || bill.balanceDue <= 0 ? (
+                      <div className="waiter-payment-complete" role="status">
+                        <strong>Payment complete</strong>
+                        <span>This bill is fully paid. Order #{bill.orderId} is closed.</span>
+                      </div>
+                    ) : order.status === "Closed" ? (
+                      <div className="waiter-billing-state error" role="status">
+                        <strong>Payment cannot be recorded for this closed order.</strong>
+                        <span>The backend only accepts payments while the order remains active. Contact a manager to resolve the outstanding balance.</span>
+                      </div>
+                    ) : paymentReview ? (
+                      <div className="waiter-payment-review" aria-labelledby="waiter-payment-review-heading">
+                        <div>
+                          <p className="eyebrow">CONFIRM PAYMENT</p>
+                          <h3 id="waiter-payment-review-heading">Review before recording</h3>
+                        </div>
+                        <dl>
+                          <div><dt>Payment amount</dt><dd>{formatBillAmount(paymentReview.amount, bill.currencyCode)}</dd></div>
+                          <div><dt>Method</dt><dd>{paymentReview.method}</dd></div>
+                          <div><dt>Remaining after payment</dt><dd>{formatBillAmount(Math.max(0, bill.balanceDue - paymentReview.amount), bill.currencyCode)}</dd></div>
+                        </dl>
+                        <p className="waiter-payment-reference">Reference: {paymentReview.externalReference}</p>
+                        <p className="waiter-payment-disclaimer">This records the payment in the restaurant system. It does not initiate a card transaction through a payment gateway.</p>
+                        <div className="waiter-payment-actions">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={paymentSubmitting}
+                            onClick={() => { setPaymentReview(null); setPaymentError(null); }}
+                          >
+                            Back to edit
+                          </button>
+                          <button type="button" className="primary-button" disabled={paymentSubmitting} onClick={() => void confirmPayment()}>
+                            {paymentSubmitting ? "Recording payment..." : "Confirm payment"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <form className="waiter-payment-entry" onSubmit={reviewPaymentEntry}>
+                        <div className="waiter-payment-entry-heading">
+                          <div><p className="eyebrow">PAYMENT ENTRY</p><h3>Record a payment</h3></div>
+                          <span>{bill.paymentStatus === "PartiallyPaid" ? "Outstanding balance" : "Awaiting payment"}</span>
+                        </div>
+                        <div className="waiter-payment-fields">
+                          <label>
+                            Amount ({bill.currencyCode})
+                            <input
+                              type="number"
+                              min="0.01"
+                              max={bill.balanceDue}
+                              step="0.01"
+                              inputMode="decimal"
+                              required
+                              value={paymentAmount}
+                              onChange={(event) => { setPaymentAmount(event.target.value); setPaymentValidationError(null); }}
+                            />
+                          </label>
+                          <label>
+                            Payment method
+                            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as BillPaymentMethod)}>
+                              <option value="Cash">Cash</option>
+                              <option value="Card">Card</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </label>
+                        </div>
+                        {paymentValidationError && <p className="staff-notice error" role="alert">{paymentValidationError}</p>}
+                        <p className="waiter-payment-disclaimer">Partial payments are supported. The order closes when the full balance is recorded. Card selection records the method only; it does not process a card transaction.</p>
+                        <button type="submit" className="primary-button" disabled={paymentSubmitting || bill.balanceDue <= 0}>
+                          Review payment
+                        </button>
+                      </form>
+                    )}
+                  </>
                 )}
               </section>
             )}
@@ -1423,30 +1820,111 @@ function WaiterOrderPage() {
         )}
       </main>
       {cancelDialogOpen && order && (
-        <WaiterCancelDialog
-          orderId={order.id}
-          tableNumber={activeTable?.tableNumber}
-          seatNumber={order.seatNumber}
-          itemCount={order.items.length}
-          reason={cancelReason}
-          confirmed={cancelConfirmed}
-          validationError={cancelValidationError}
-          cancelling={cancelling}
-          canCancel={canCancelOrder}
-          restrictionMessage={hasSubmittedItems
-            ? "This order already contains items sent to the kitchen. Kitchen-submitted work cannot be withdrawn from the waiter screen."
-            : "Only an active order that has not been sent to the kitchen can be cancelled."}
-          onReasonChange={(value: string) => {
-            setCancelReason(value);
-            setCancelValidationError(null);
-          }}
-          onConfirmedChange={(value: boolean) => {
-            setCancelConfirmed(value);
-            setCancelValidationError(null);
-          }}
-          onClose={closeCancelDialog}
-          onSubmit={(event: FormEvent<HTMLFormElement>) => void submitCancellation(event)}
-        />
+        <div className="configuration-dialog-backdrop">
+          <section
+            className="configuration-dialog waiter-cancel-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="waiter-cancel-title"
+            aria-describedby="waiter-cancel-description"
+          >
+            <header>
+              <div>
+                <h3 id="waiter-cancel-title">Cancel order #{order.id}?</h3>
+                <p id="waiter-cancel-description">
+                  {canCancelOrder
+                    ? "This closes the unpaid order. The action cannot be undone from this screen."
+                    : bill
+                      ? "A bill has already been prepared. Cancellation is disabled to protect its totals and payment history."
+                      : "Check the cancellation restriction for this order."}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close cancellation dialog"
+                disabled={cancelling}
+                onClick={closeCancelDialog}
+              >
+                ×
+              </button>
+            </header>
+            {!canCancelOrder ? (
+              <div className="configuration-dialog-form">
+                <p className="staff-notice warning" role="status">
+                  {bill
+                    ? "A bill has already been prepared for this order. Cancellation is disabled to protect the bill and payment record."
+                    : hasSubmittedItems
+                      ? "This order already contains one or more items submitted to the kitchen. The current backend does not allow the waiter cancellation endpoint to withdraw kitchen work, so this order cannot be cancelled here. You can still manage eligible unsent items or contact a manager."
+                      : "This order is no longer active and cannot be cancelled."}
+                </p>
+                <div className="configuration-dialog-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={closeCancelDialog}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className="configuration-dialog-form" onSubmit={(event) => void submitCancellation(event)}>
+                <label>
+                  Reason for cancellation
+                  <textarea
+                    ref={cancelReasonRef}
+                    rows={4}
+                    maxLength={500}
+                    value={cancelReason}
+                    aria-invalid={Boolean(cancelValidationError && !cancelReason.trim())}
+                    aria-describedby="waiter-cancel-reason-help"
+                    disabled={cancelling}
+                    placeholder="For example: customer changed their mind"
+                    onChange={(event) => {
+                      setCancelReason(event.target.value);
+                      setCancelValidationError(null);
+                    }}
+                  />
+                  <small id="waiter-cancel-reason-help">
+                    Required · 1–500 characters · {cancelReason.length}/500
+                  </small>
+                </label>
+                <label className="waiter-cancel-confirmation">
+                  <input
+                    type="checkbox"
+                    checked={cancelConfirmed}
+                    disabled={cancelling}
+                    onChange={(event) => {
+                      setCancelConfirmed(event.target.checked);
+                      setCancelValidationError(null);
+                    }}
+                  />
+                  <span>I confirm that order #{order.id} should be cancelled.</span>
+                </label>
+                {cancelValidationError && (
+                  <p className="staff-notice error" role="alert">{cancelValidationError}</p>
+                )}
+                <div className="configuration-dialog-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={cancelling}
+                    onClick={closeCancelDialog}
+                  >
+                    Keep order
+                  </button>
+                  <button
+                    type="submit"
+                    className="order-cancel-confirm-button"
+                    disabled={cancelling}
+                  >
+                    {cancelling ? "Cancelling..." : "Confirm cancellation"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );
