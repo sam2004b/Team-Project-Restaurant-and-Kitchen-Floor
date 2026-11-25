@@ -1,0 +1,158 @@
+{
+  "orderId": 5,
+  "ticket": 5,
+  "before": {
+    "http": 200,
+    "data": [
+      {
+        "id": 5,
+        "orderId": 5,
+        "diningTableId": 1,
+        "sentAtUtc": "2026-11-23T19:46:05.971593Z",
+        "items": [
+          {
+            "id": 9,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 preparing preservation",
+            "kitchenSubmissionId": 5,
+            "preparationStatus": "Preparing",
+            "preparationStartedAtUtc": "2026-11-23T19:46:06.039453Z",
+            "readyAtUtc": null
+          }
+        ],
+        "seatNumber": 4
+      }
+    ]
+  },
+  "browserBefore": "Beef Steak, quantity 2, status Preparing",
+  "add": {
+    "http": 201,
+    "saved": {
+      "http": 200,
+      "data": {
+        "id": 5,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Sent",
+        "createdAtUtc": "2026-11-23T19:46:05.827174Z",
+        "sentAtUtc": "2026-11-23T19:46:05.971593Z",
+        "items": [
+          {
+            "id": 9,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 preparing preservation",
+            "kitchenSubmissionId": 5,
+            "preparationStatus": "Preparing",
+            "preparationStartedAtUtc": "2026-11-23T19:46:06.039453Z",
+            "readyAtUtc": null
+          },
+          {
+            "id": 10,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 kitchen preparation check",
+            "kitchenSubmissionId": null,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "paidAtUtc": null,
+        "seatNumber": 4
+      }
+    }
+  },
+  "beforeSend": {
+    "kitchen": {
+      "http": 200,
+      "data": [
+        {
+          "id": 5,
+          "orderId": 5,
+          "diningTableId": 1,
+          "sentAtUtc": "2026-11-23T19:46:05.971593Z",
+          "items": [
+            {
+              "id": 9,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 preparing preservation",
+              "kitchenSubmissionId": 5,
+              "preparationStatus": "Preparing",
+              "preparationStartedAtUtc": "2026-11-23T19:46:06.039453Z",
+              "readyAtUtc": null
+            }
+          ],
+          "seatNumber": 4
+        }
+      ]
+    },
+    "browserOriginal": "Beef Steak, quantity 2, status Preparing",
+    "newDishVisible": 0
+  },
+  "afterSend": {
+    "http": 200,
+    "elapsedMs": 62,
+    "kitchen": {
+      "http": 200,
+      "data": [
+        {
+          "id": 5,
+          "orderId": 5,
+          "diningTableId": 1,
+          "sentAtUtc": "2026-11-23T19:46:05.971593Z",
+          "items": [
+            {
+              "id": 9,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 2,
+              "specialRequest": "US14 preparing preservation",
+              "kitchenSubmissionId": 5,
+              "preparationStatus": "Preparing",
+              "preparationStartedAtUtc": "2026-11-23T19:46:06.039453Z",
+              "readyAtUtc": null
+            }
+          ],
+          "seatNumber": 4
+        },
+        {
+          "id": 6,
+          "orderId": 5,
+          "diningTableId": 1,
+          "sentAtUtc": "2026-11-23T19:46:11.863108Z",
+          "items": [
+            {
+              "id": 10,
+              "dishId": 3,
+              "dishName": "Caesar Salad",
+              "unitPrice": 8,
+              "quantity": 1,
+              "specialRequest": "US14 kitchen preparation check",
+              "kitchenSubmissionId": 6,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "seatNumber": 4
+        }
+      ]
+    },
+    "browserOriginal": "Beef Steak, quantity 2, status Preparing",
+    "browserNew": "Caesar Salad, quantity 1, status New",
+    "manualRefresh": false
+  }
+}

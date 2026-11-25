@@ -1,0 +1,304 @@
+{
+  "orderId": 4,
+  "before": {
+    "http": 200,
+    "data": {
+      "id": 4,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Sent",
+      "createdAtUtc": "2026-11-23T19:45:05.881949Z",
+      "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+      "items": [
+        {
+          "id": 5,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 duplicate test original",
+          "kitchenSubmissionId": 3,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": null,
+      "seatNumber": 1
+    }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "request": {
+        "dishId": 3,
+        "quantity": 1,
+        "specialRequest": "US14 retry same add",
+        "reason": "Added from the waiter order screen."
+      },
+      "upstreamHttp": 201,
+      "upstreamBody": {
+        "orderId": 4,
+        "itemId": 6
+      },
+      "uiDelivery": "lost response injected after server accepted"
+    },
+    {
+      "attempt": 2,
+      "request": {
+        "dishId": 3,
+        "quantity": 1,
+        "specialRequest": "US14 retry same add",
+        "reason": "Added from the waiter order screen."
+      },
+      "upstreamHttp": 201,
+      "upstreamBody": {
+        "orderId": 4,
+        "itemId": 7
+      },
+      "uiDelivery": "normal response"
+    }
+  ],
+  "afterFirst": {
+    "http": 200,
+    "data": {
+      "id": 4,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Sent",
+      "createdAtUtc": "2026-11-23T19:45:05.881949Z",
+      "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+      "items": [
+        {
+          "id": 5,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 duplicate test original",
+          "kitchenSubmissionId": 3,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        },
+        {
+          "id": 6,
+          "dishId": 3,
+          "dishName": "Caesar Salad",
+          "unitPrice": 8,
+          "quantity": 1,
+          "specialRequest": "US14 retry same add",
+          "kitchenSubmissionId": null,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": null,
+      "seatNumber": 1
+    }
+  },
+  "firstUiFeedback": [
+    "Failed to fetch"
+  ],
+  "afterRetry": {
+    "http": 200,
+    "data": {
+      "id": 4,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Sent",
+      "createdAtUtc": "2026-11-23T19:45:05.881949Z",
+      "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+      "items": [
+        {
+          "id": 5,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 duplicate test original",
+          "kitchenSubmissionId": 3,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        },
+        {
+          "id": 6,
+          "dishId": 3,
+          "dishName": "Caesar Salad",
+          "unitPrice": 8,
+          "quantity": 1,
+          "specialRequest": "US14 retry same add",
+          "kitchenSubmissionId": null,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        },
+        {
+          "id": 7,
+          "dishId": 3,
+          "dishName": "Caesar Salad",
+          "unitPrice": 8,
+          "quantity": 1,
+          "specialRequest": "US14 retry same add",
+          "kitchenSubmissionId": null,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": null,
+      "seatNumber": 1
+    }
+  },
+  "kitchenBeforeExplicitSend": {
+    "http": 200,
+    "data": [
+      {
+        "id": 3,
+        "orderId": 4,
+        "diningTableId": 1,
+        "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+        "items": [
+          {
+            "id": 5,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 duplicate test original",
+            "kitchenSubmissionId": 3,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "seatNumber": 1
+      }
+    ]
+  },
+  "send": {
+    "http": 200,
+    "data": {
+      "orderId": 4,
+      "status": "Sent",
+      "alreadySent": false,
+      "submissionId": 4,
+      "kitchenOrder": {
+        "id": 4,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Sent",
+        "createdAtUtc": "2026-11-23T19:45:05.881949Z",
+        "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+        "items": [
+          {
+            "id": 5,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 duplicate test original",
+            "kitchenSubmissionId": 3,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          },
+          {
+            "id": 6,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 retry same add",
+            "kitchenSubmissionId": 4,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          },
+          {
+            "id": 7,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 retry same add",
+            "kitchenSubmissionId": 4,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "paidAtUtc": null,
+        "seatNumber": 1
+      }
+    }
+  },
+  "kitchenAfterSend": {
+    "data": [
+      {
+        "id": 3,
+        "orderId": 4,
+        "diningTableId": 1,
+        "sentAtUtc": "2026-11-23T19:45:05.900982Z",
+        "items": [
+          {
+            "id": 5,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 duplicate test original",
+            "kitchenSubmissionId": 3,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "seatNumber": 1
+      },
+      {
+        "id": 4,
+        "orderId": 4,
+        "diningTableId": 1,
+        "sentAtUtc": "2026-11-23T19:45:06.474167Z",
+        "items": [
+          {
+            "id": 6,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 retry same add",
+            "kitchenSubmissionId": 4,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          },
+          {
+            "id": 7,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 retry same add",
+            "kitchenSubmissionId": 4,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "seatNumber": 1
+      }
+    ],
+    "browserRows": [
+      "Caesar Salad, quantity 1, status New",
+      "Caesar Salad, quantity 1, status New"
+    ]
+  }
+}

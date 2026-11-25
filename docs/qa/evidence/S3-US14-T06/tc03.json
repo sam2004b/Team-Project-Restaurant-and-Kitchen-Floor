@@ -1,0 +1,312 @@
+{
+  "orderId": 1,
+  "before": {
+    "http": 200,
+    "data": {
+      "id": 1,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Sent",
+      "createdAtUtc": "2026-11-23T19:44:29.940768Z",
+      "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+      "items": [
+        {
+          "id": 1,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 original dish",
+          "kitchenSubmissionId": 1,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": null,
+      "seatNumber": 1
+    }
+  },
+  "sentOrderUi": {
+    "cancelButtons": 0,
+    "warning": "This order contains items already sent to the kitchen. The current waiter cancellation endpoint cannot withdraw submitted kitchen items, so cancellation is unavailable."
+  },
+  "draft": {
+    "orderId": 2,
+    "before": {
+      "http": 200,
+      "data": {
+        "id": 2,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Open",
+        "createdAtUtc": "2026-11-23T19:44:47.720406Z",
+        "sentAtUtc": null,
+        "items": [
+          {
+            "id": 3,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 1,
+            "specialRequest": "US14 draft cancellation control",
+            "kitchenSubmissionId": null,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          },
+          {
+            "id": 8,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 1,
+            "specialRequest": "US14 draft cancellation control",
+            "kitchenSubmissionId": null,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "paidAtUtc": null,
+        "seatNumber": 2
+      }
+    },
+    "dismissed": {
+      "dialogCount": 0,
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 2,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Open",
+          "createdAtUtc": "2026-11-23T19:44:47.720406Z",
+          "sentAtUtc": null,
+          "items": [
+            {
+              "id": 3,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 1,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            },
+            {
+              "id": 8,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 1,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": null,
+          "seatNumber": 2
+        }
+      },
+      "writes": []
+    },
+    "confirmed": {
+      "http": 500,
+      "response": [
+        "Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.",
+        " ---> Npgsql.PostgresException (0x80004005): 23514: new row for relation \"orders\" violates check constraint \"CK_orders_sent_consistency\""
+      ],
+      "saved": {
+        "http": 200,
+        "data": {
+          "id": 2,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "createdByStaffMembershipId": 2,
+          "status": "Open",
+          "createdAtUtc": "2026-11-23T19:44:47.720406Z",
+          "sentAtUtc": null,
+          "items": [
+            {
+              "id": 3,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 1,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            },
+            {
+              "id": 8,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "unitPrice": 24,
+              "quantity": 1,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "New",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null
+            }
+          ],
+          "paidAtUtc": null,
+          "seatNumber": 2
+        }
+      },
+      "reopenedHistory": "Order #2\nTable 1 · Seat 2\n24/11/2026, 02:44:47\nOpen · Viewing",
+      "history": {
+        "http": 200,
+        "data": {
+          "id": 2,
+          "restaurantId": 1,
+          "diningTableId": 1,
+          "tableNumber": 1,
+          "seatNumber": 2,
+          "status": "Open",
+          "createdByStaffMembershipId": 2,
+          "createdAtUtc": "2026-11-23T19:44:47.720406Z",
+          "sentAtUtc": null,
+          "paidAtUtc": null,
+          "items": [
+            {
+              "id": 3,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "quantity": 1,
+              "unitPriceSnapshot": 24,
+              "lineTotal": 24,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "Pending",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null,
+              "serviceStatus": "Unserved",
+              "servedAtUtc": null
+            },
+            {
+              "id": 8,
+              "dishId": 7,
+              "dishName": "Beef Steak",
+              "quantity": 1,
+              "unitPriceSnapshot": 24,
+              "lineTotal": 24,
+              "specialRequest": "US14 draft cancellation control",
+              "kitchenSubmissionId": null,
+              "preparationStatus": "Pending",
+              "preparationStartedAtUtc": null,
+              "readyAtUtc": null,
+              "serviceStatus": "Unserved",
+              "servedAtUtc": null
+            }
+          ],
+          "bill": null,
+          "timeline": [
+            {
+              "id": 3,
+              "eventType": "OrderCreated",
+              "occurredAtUtc": "2026-11-23T19:44:47.720406Z",
+              "actorStaffMembershipId": 2,
+              "orderItemId": null,
+              "beforeValueJson": null,
+              "afterValueJson": "{\"Status\": \"Open\", \"SeatNumber\": 2, \"DiningTableId\": 1}",
+              "reason": null,
+              "source": "OrderHistoryEvent"
+            },
+            {
+              "id": 6,
+              "eventType": "Amended",
+              "occurredAtUtc": "2026-11-23T19:44:47.731238Z",
+              "actorStaffMembershipId": 2,
+              "orderItemId": 3,
+              "beforeValueJson": "{\"Id\": 2, \"Items\": [], \"Status\": \"Open\", \"PaidAtUtc\": null, \"SentAtUtc\": null, \"SeatNumber\": 2, \"CreatedAtUtc\": \"2026-11-23T19:44:47.720406Z\", \"RestaurantId\": 1, \"DiningTableId\": 1, \"CreatedByStaffMembershipId\": 2}",
+              "afterValueJson": "{\"Id\": 2, \"Items\": [{\"Id\": 3, \"DishId\": 7, \"Quantity\": 1, \"ReadyAtUtc\": null, \"ServedAtUtc\": null, \"CreatedAtUtc\": \"2026-11-23T19:44:47.729852Z\", \"ServiceStatus\": \"Unserved\", \"SequenceNumber\": 1, \"SpecialRequest\": \"US14 draft cancellation control\", \"DishNameSnapshot\": \"Beef Steak\", \"PreparationStatus\": \"Pending\", \"UnitPriceSnapshot\": 24.00, \"KitchenSubmissionId\": null, \"PreparationStartedAtUtc\": null}], \"Status\": \"Open\", \"PaidAtUtc\": null, \"SentAtUtc\": null, \"SeatNumber\": 2, \"CreatedAtUtc\": \"2026-11-23T19:44:47.720406Z\", \"RestaurantId\": 1, \"DiningTableId\": 1, \"CreatedByStaffMembershipId\": 2}",
+              "reason": "US14 isolated QA",
+              "source": "OrderChangeAudit"
+            },
+            {
+              "id": 13,
+              "eventType": "Amended",
+              "occurredAtUtc": "2026-11-23T19:46:05.559419Z",
+              "actorStaffMembershipId": 2,
+              "orderItemId": 8,
+              "beforeValueJson": "{\"Id\": 2, \"Items\": [{\"Id\": 3, \"DishId\": 7, \"Quantity\": 1, \"ReadyAtUtc\": null, \"ServedAtUtc\": null, \"CreatedAtUtc\": \"2026-11-23T19:44:47.729852Z\", \"ServiceStatus\": \"Unserved\", \"SequenceNumber\": 1, \"SpecialRequest\": \"US14 draft cancellation control\", \"DishNameSnapshot\": \"Beef Steak\", \"PreparationStatus\": \"Pending\", \"UnitPriceSnapshot\": 24.00, \"KitchenSubmissionId\": null, \"PreparationStartedAtUtc\": null}], \"Status\": \"Open\", \"PaidAtUtc\": null, \"SentAtUtc\": null, \"SeatNumber\": 2, \"CreatedAtUtc\": \"2026-11-23T19:44:47.720406Z\", \"RestaurantId\": 1, \"DiningTableId\": 1, \"CreatedByStaffMembershipId\": 2}",
+              "afterValueJson": "{\"Id\": 2, \"Items\": [{\"Id\": 3, \"DishId\": 7, \"Quantity\": 1, \"ReadyAtUtc\": null, \"ServedAtUtc\": null, \"CreatedAtUtc\": \"2026-11-23T19:44:47.729852Z\", \"ServiceStatus\": \"Unserved\", \"SequenceNumber\": 1, \"SpecialRequest\": \"US14 draft cancellation control\", \"DishNameSnapshot\": \"Beef Steak\", \"PreparationStatus\": \"Pending\", \"UnitPriceSnapshot\": 24.00, \"KitchenSubmissionId\": null, \"PreparationStartedAtUtc\": null}, {\"Id\": 8, \"DishId\": 7, \"Quantity\": 1, \"ReadyAtUtc\": null, \"ServedAtUtc\": null, \"CreatedAtUtc\": \"2026-11-23T19:46:05.554546Z\", \"ServiceStatus\": \"Unserved\", \"SequenceNumber\": 2, \"SpecialRequest\": \"US14 draft cancellation control\", \"DishNameSnapshot\": \"Beef Steak\", \"PreparationStatus\": \"Pending\", \"UnitPriceSnapshot\": 24.00, \"KitchenSubmissionId\": null, \"PreparationStartedAtUtc\": null}], \"Status\": \"Open\", \"PaidAtUtc\": null, \"SentAtUtc\": null, \"SeatNumber\": 2, \"CreatedAtUtc\": \"2026-11-23T19:44:47.720406Z\", \"RestaurantId\": 1, \"DiningTableId\": 1, \"CreatedByStaffMembershipId\": 2}",
+              "reason": "Added from the waiter order screen.",
+              "source": "OrderChangeAudit"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "sentApi": {
+    "unconfirmed": {
+      "http": 400,
+      "data": {
+        "error": "Cancellation must be explicitly confirmed."
+      }
+    },
+    "afterUnconfirmed": {
+      "http": 200,
+      "data": {
+        "id": 1,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Sent",
+        "createdAtUtc": "2026-11-23T19:44:29.940768Z",
+        "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+        "items": [
+          {
+            "id": 1,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 original dish",
+            "kitchenSubmissionId": 1,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "paidAtUtc": null,
+        "seatNumber": 1
+      }
+    },
+    "confirmed": {
+      "http": 200,
+      "data": {
+        "orderId": 1,
+        "status": "Cancelled"
+      }
+    },
+    "saved": {
+      "http": 200,
+      "data": {
+        "id": 1,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Cancelled",
+        "createdAtUtc": "2026-11-23T19:44:29.940768Z",
+        "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+        "items": [],
+        "paidAtUtc": null,
+        "seatNumber": 1
+      }
+    },
+    "reopenedHistory": "Order #1\nTable 1 · Seat 1\n24/11/2026, 02:44:29\nCancelled · Viewing"
+  }
+}

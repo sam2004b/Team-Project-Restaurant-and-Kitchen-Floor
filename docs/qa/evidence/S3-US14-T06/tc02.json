@@ -1,0 +1,92 @@
+{
+  "orderId": 1,
+  "itemId": 2,
+  "minimum": {
+    "http": 200,
+    "saved": {
+      "http": 200,
+      "data": {
+        "id": 1,
+        "restaurantId": 1,
+        "diningTableId": 1,
+        "createdByStaffMembershipId": 2,
+        "status": "Sent",
+        "createdAtUtc": "2026-11-23T19:44:29.940768Z",
+        "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+        "items": [
+          {
+            "id": 1,
+            "dishId": 7,
+            "dishName": "Beef Steak",
+            "unitPrice": 24,
+            "quantity": 2,
+            "specialRequest": "US14 original dish",
+            "kitchenSubmissionId": 1,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          },
+          {
+            "id": 2,
+            "dishId": 3,
+            "dishName": "Caesar Salad",
+            "unitPrice": 8,
+            "quantity": 1,
+            "specialRequest": "US14 pending dish",
+            "kitchenSubmissionId": null,
+            "preparationStatus": "New",
+            "preparationStartedAtUtc": null,
+            "readyAtUtc": null
+          }
+        ],
+        "paidAtUtc": null,
+        "seatNumber": 1
+      }
+    }
+  },
+  "zero": {
+    "message": "Enter a whole number of at least 1.",
+    "writes": []
+  },
+  "reopened": {
+    "http": 200,
+    "data": {
+      "id": 1,
+      "restaurantId": 1,
+      "diningTableId": 1,
+      "createdByStaffMembershipId": 2,
+      "status": "Sent",
+      "createdAtUtc": "2026-11-23T19:44:29.940768Z",
+      "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+      "items": [
+        {
+          "id": 1,
+          "dishId": 7,
+          "dishName": "Beef Steak",
+          "unitPrice": 24,
+          "quantity": 2,
+          "specialRequest": "US14 original dish",
+          "kitchenSubmissionId": 1,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        },
+        {
+          "id": 2,
+          "dishId": 3,
+          "dishName": "Caesar Salad",
+          "unitPrice": 8,
+          "quantity": 1,
+          "specialRequest": "US14 pending dish",
+          "kitchenSubmissionId": null,
+          "preparationStatus": "New",
+          "preparationStartedAtUtc": null,
+          "readyAtUtc": null
+        }
+      ],
+      "paidAtUtc": null,
+      "seatNumber": 1
+    }
+  },
+  "reopenedUiQuantity": "1"
+}

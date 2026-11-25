@@ -1,0 +1,297 @@
+{
+  "orderId": 1,
+  "ticket": 1,
+  "kitchenSteps": [
+    {
+      "step": "baseline",
+      "time": "2026-11-23T19:44:30.795Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 3,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "add pending dish",
+      "time": "2026-11-23T19:44:36.204Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "update pending dish to 3",
+      "time": "2026-11-23T19:44:41.628Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "remove pending dish",
+      "time": "2026-11-23T19:44:47.517Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "draft dialog dismissed while sent ticket stays open",
+      "time": "2026-11-23T19:44:53.218Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "sent cancellation without confirmation (API)",
+      "time": "2026-11-23T19:44:59.069Z",
+      "visibility": "visible",
+      "card": [
+        "Beef Steak, quantity 2, status New"
+      ],
+      "tickets": {
+        "http": 200,
+        "data": [
+          {
+            "id": 1,
+            "orderId": 1,
+            "diningTableId": 1,
+            "sentAtUtc": "2026-11-23T19:44:30.351144Z",
+            "items": [
+              {
+                "id": 1,
+                "dishId": 7,
+                "dishName": "Beef Steak",
+                "unitPrice": 24,
+                "quantity": 2,
+                "specialRequest": "US14 original dish",
+                "kitchenSubmissionId": 1,
+                "preparationStatus": "New",
+                "preparationStartedAtUtc": null,
+                "readyAtUtc": null
+              }
+            ],
+            "seatNumber": 1
+          }
+        ]
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "confirmed cancellation",
+      "time": "2026-11-23T19:44:59.118Z",
+      "visibility": "visible",
+      "card": [],
+      "tickets": {
+        "http": 200,
+        "data": []
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    },
+    {
+      "step": "repeated cancellation",
+      "time": "2026-11-23T19:45:04.524Z",
+      "visibility": "visible",
+      "card": [],
+      "tickets": {
+        "http": 200,
+        "data": []
+      },
+      "browserFetchesSinceStep": 1,
+      "signalREventsSinceStep": 0,
+      "manualRefresh": false
+    }
+  ],
+  "browserFetches": [
+    {
+      "time": "2026-11-23T19:44:29.919Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:29.920Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:30.379Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:34.801Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:39.811Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:44.799Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:49.808Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:54.796Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:59.117Z",
+      "http": 200
+    },
+    {
+      "time": "2026-11-23T19:44:59.806Z",
+      "http": 200
+    }
+  ],
+  "signalREvents": []
+}
