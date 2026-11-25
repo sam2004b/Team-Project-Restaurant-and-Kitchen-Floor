@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   ApiError,
   addOrderItem,
@@ -10,6 +10,7 @@ import {
   getMenuDishes,
   getOrderDetails,
   getWaiterOrderHistory,
+  getWaiterOrderSubmissions,
   getWaiterBill,
   getWaiterNotifications,
   markWaiterItemServed,
@@ -23,6 +24,7 @@ import {
 import type {
   BillDetailsResponse,
   BillPaymentMethod,
+  KitchenSubmissionResponse,
   MenuDishResponse,
   OrderDetailsResponse,
   OrderItemDetailsResponse,
@@ -35,6 +37,7 @@ import { useKitchenUpdates } from "./services/useKitchenUpdates";
 import { useMenuUpdates } from "./services/useMenuUpdates";
 import WorkspaceSessionActions from "./WorkspaceSessionActions";
 import "./waiter-billing.css";
+import "./waiter-order-history.css";
 
 type ItemDraft = {
   quantity: string;
@@ -69,6 +72,10 @@ function formatBillAmount(amount: number, currencyCode: string): string {
   }
 }
 
+function formatTimelineDate(value: string | null): string {
+  return value ? new Date(value).toLocaleString() : "Time not provided by the current API";
+}
+
 function createExternalPaymentReference(billId: number): string {
   const uniquePart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -80,58 +87,17 @@ type PaymentReview = {
   amount: number;
   method: BillPaymentMethod;
   externalReference: string;
-  attempted: boolean;
 };
 
-const pendingPaymentStoragePrefix = "restaurant.waiter.pending-payment.";
-
-function pendingPaymentStorageKey(billId: number): string {
-  return `${pendingPaymentStoragePrefix}${billId}`;
-}
-
-function readPendingPayment(billId: number): PaymentReview | null {
-  const storedPayment = window.localStorage.getItem(pendingPaymentStorageKey(billId));
-  if (!storedPayment) return null;
-
-  let parsedPayment: unknown;
-  try {
-    parsedPayment = JSON.parse(storedPayment);
-  } catch {
-    throw new Error("Saved payment retry details are unreadable. Check the bill's payment history before recording another payment.");
-  }
-
-  if (typeof parsedPayment !== "object" || parsedPayment === null) {
-    throw new Error("Saved payment retry details are invalid. Check the bill's payment history before recording another payment.");
-  }
-
-  const payment = parsedPayment as Record<string, unknown>;
-  if (typeof payment.amount !== "number" ||
-      !Number.isFinite(payment.amount) ||
-      payment.amount <= 0 ||
-      (payment.method !== "Cash" && payment.method !== "Card" && payment.method !== "Other") ||
-      typeof payment.externalReference !== "string" ||
-      payment.externalReference.length === 0 ||
-      typeof payment.attempted !== "boolean") {
-    throw new Error("Saved payment retry details are invalid. Check the bill's payment history before recording another payment.");
-  }
-
-  return {
-    amount: payment.amount,
-    method: payment.method,
-    externalReference: payment.externalReference,
-    attempted: payment.attempted,
-  };
-}
-
-function savePendingPayment(billId: number, payment: PaymentReview): void {
-  window.localStorage.setItem(pendingPaymentStorageKey(billId), JSON.stringify(payment));
-}
-
-function clearPendingPayment(billId: number): void {
-  window.localStorage.removeItem(pendingPaymentStorageKey(billId));
-}
-
 function WaiterOrderPage() {
+  const location = useLocation();
+  const waiterPage = location.hash === "#waiter-active-orders"
+    ? "active"
+    : location.hash === "#waiter-order-history"
+      ? "history"
+      : location.hash === "#waiter-billing"
+        ? "payments"
+        : "new";
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [tables, setTables] = useState<WaiterTableResponse[]>([]);
   const [dishes, setDishes] = useState<MenuDishResponse[]>([]);
@@ -148,6 +114,14 @@ function WaiterOrderPage() {
   const servingItemLock = useRef(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<"All" | "Closed" | "Legacy">("All");
+  const [historyTableFilter, setHistoryTableFilter] = useState("all");
+  const [historyDateFilter, setHistoryDateFilter] = useState("");
+  const [orderSubmissions, setOrderSubmissions] = useState<KitchenSubmissionResponse[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const timelineRequestVersion = useRef(0);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [selectedDishId, setSelectedDishId] = useState("");
@@ -174,8 +148,6 @@ function WaiterOrderPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod>("Cash");
   const [paymentReview, setPaymentReview] = useState<PaymentReview | null>(null);
-  const [paymentOutcomeUnknown, setPaymentOutcomeUnknown] = useState(false);
-  const [paymentRecoveryBlocked, setPaymentRecoveryBlocked] = useState(false);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
@@ -206,10 +178,149 @@ function WaiterOrderPage() {
     () => dishes.filter((dish) => dish.isAvailable),
     [dishes],
   );
+  const activeOrderEntries = useMemo(
+    () => orderHistory.filter((entry) => entry.status === "Open" || entry.status === "Sent"),
+    [orderHistory],
+  );
+  const historicalOrderEntries = useMemo(
+    () => orderHistory.filter((entry) => entry.status === "Closed" || entry.status === "Legacy"),
+    [orderHistory],
+  );
+  const filteredHistoricalOrders = useMemo(() => {
+    const query = historySearch.trim().toLocaleLowerCase();
+    return historicalOrderEntries.filter((entry) => {
+      if (historyStatusFilter !== "All" && entry.status !== historyStatusFilter) return false;
+      if (historyTableFilter !== "all" && entry.diningTableId !== Number(historyTableFilter)) return false;
+      if (historyDateFilter) {
+        const created = new Date(entry.createdAtUtc);
+        const localDate = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}-${String(created.getDate()).padStart(2, "0")}`;
+        if (localDate !== historyDateFilter) return false;
+      }
+      if (!query) return true;
+      const table = tables.find((candidate) => candidate.id === entry.diningTableId);
+      const searchable = [
+        String(entry.id),
+        `#${entry.id}`,
+        entry.status,
+        table ? `table ${table.tableNumber}` : "",
+        table ? String(table.tableNumber) : "",
+        entry.seatNumber != null ? `seat ${entry.seatNumber}` : "",
+        entry.seatNumber != null ? String(entry.seatNumber) : "",
+      ].join(" ").toLocaleLowerCase();
+      return searchable.includes(query);
+    });
+  }, [historyDateFilter, historySearch, historyStatusFilter, historyTableFilter, historicalOrderEntries, tables]);
+  const orderTimelineEvents = useMemo(() => {
+    if (!order) return [];
+    const events: Array<{
+      id: string;
+      title: string;
+      description: string;
+      timestamp: string | null;
+      kind: "created" | "kitchen" | "bill" | "payment" | "closed";
+    }> = [{
+      id: `order-created-${order.id}`,
+      title: "Order created",
+      description: `Order #${order.id} was opened${order.seatNumber != null ? ` for seat ${order.seatNumber}` : ""}.`,
+      timestamp: order.createdAtUtc,
+      kind: "created",
+    }];
+
+    if (orderSubmissions.length > 0) {
+      orderSubmissions
+        .filter((submission) => submission.orderId === order.id && submission.diningTableId === order.diningTableId)
+        .forEach((submission) => {
+          const itemSummary = submission.items
+            .map((item) => `${item.quantity} × ${item.dishName}`)
+            .join(", ");
+          events.push({
+            id: `kitchen-submission-${submission.id}`,
+            title: `Sent to kitchen · Batch #${submission.id}`,
+            description: itemSummary || "Kitchen submission recorded.",
+            timestamp: submission.sentAtUtc,
+            kind: "kitchen",
+          });
+        });
+    } else if (order.sentAtUtc) {
+      events.push({
+        id: `order-sent-${order.id}`,
+        title: "Sent to kitchen",
+        description: "The order was submitted to the kitchen.",
+        timestamp: order.sentAtUtc,
+        kind: "kitchen",
+      });
+    }
+
+    if (bill && bill.orderId === order.id && bill.diningTableId === order.diningTableId) {
+      events.push({
+        id: `bill-created-${bill.id}`,
+        title: `Bill prepared · #${bill.id}`,
+        description: `Total ${formatBillAmount(bill.totalAmount, bill.currencyCode)}.`,
+        timestamp: bill.createdAtUtc,
+        kind: "bill",
+      });
+      bill.payments.forEach((payment) => {
+        events.push({
+          id: `payment-${payment.id}`,
+          title: `Payment recorded · ${payment.method}`,
+          description: `${formatBillAmount(payment.amount, bill.currencyCode)} · Reference ${payment.externalReference || "not supplied"}.`,
+          timestamp: payment.recordedAtUtc,
+          kind: "payment",
+        });
+      });
+      if (bill.paymentStatus === "Paid" || order.paidAtUtc) {
+        const lastPayment = bill.payments[bill.payments.length - 1];
+        events.push({
+          id: `order-paid-${order.id}`,
+          title: "Payment completed · Order closed",
+          description: "The full bill balance has been recorded.",
+          timestamp: order.paidAtUtc ?? lastPayment?.recordedAtUtc ?? null,
+          kind: "closed",
+        });
+      }
+    } else if (order.paidAtUtc) {
+      events.push({
+        id: `order-paid-${order.id}`,
+        title: "Payment completed · Order closed",
+        description: "The order was marked as paid by the backend.",
+        timestamp: order.paidAtUtc,
+        kind: "closed",
+      });
+    } else if (order.status === "Closed") {
+      events.push({
+        id: `order-closed-${order.id}`,
+        title: "Order closed",
+        description: "The order is closed. The current API does not return a close timestamp or cancellation reason for this order.",
+        timestamp: null,
+        kind: "closed",
+      });
+    }
+
+    return events.sort((first, second) => {
+      if (!first.timestamp && !second.timestamp) return 0;
+      if (!first.timestamp) return 1;
+      if (!second.timestamp) return -1;
+      return Date.parse(first.timestamp) - Date.parse(second.timestamp);
+    });
+  }, [bill, order, orderSubmissions]);
 
   useEffect(() => {
     if (cancelDialogOpen) cancelReasonRef.current?.focus();
   }, [cancelDialogOpen]);
+
+  useEffect(() => {
+    const targetId = location.hash.replace(/^#/, "");
+    if (!targetId || loading || authorized !== true) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, loading, authorized, order?.id, bill?.id, refreshingTables]);
 
   const refreshOrderHistory = useCallback(async (showLoading = true) => {
     if (showLoading) setHistoryLoading(true);
@@ -225,6 +336,41 @@ function WaiterOrderPage() {
       if (showLoading) setHistoryLoading(false);
     }
   }, []);
+
+  const refreshOrderSubmissions = useCallback(async (orderId: number, expectedTableId: number) => {
+    const requestVersion = ++timelineRequestVersion.current;
+    setTimelineLoading(true);
+    setTimelineError(null);
+    try {
+      const submissions = await getWaiterOrderSubmissions(orderId);
+      if (requestVersion !== timelineRequestVersion.current) return;
+      if (submissions.some((submission) =>
+        submission.orderId !== orderId || submission.diningTableId !== expectedTableId)) {
+        throw new Error("The timeline API returned a submission for a different order or table.");
+      }
+      setOrderSubmissions(submissions.sort(
+        (first, second) => Date.parse(first.sentAtUtc) - Date.parse(second.sentAtUtc),
+      ));
+    } catch (caughtError) {
+      if (requestVersion === timelineRequestVersion.current) {
+        setOrderSubmissions([]);
+        setTimelineError(getErrorMessage(caughtError, "Could not load this order's kitchen timeline."));
+      }
+    } finally {
+      if (requestVersion === timelineRequestVersion.current) setTimelineLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authorized || !order) {
+      timelineRequestVersion.current += 1;
+      setOrderSubmissions([]);
+      setTimelineError(null);
+      setTimelineLoading(false);
+      return;
+    }
+    void refreshOrderSubmissions(order.id, order.diningTableId);
+  }, [authorized, order?.id, order?.diningTableId, refreshOrderSubmissions]);
 
   const refreshDishes = useCallback(async () => {
     try {
@@ -335,94 +481,14 @@ function WaiterOrderPage() {
   const currentOrderId = order?.id ?? null;
   const currentOrderTableId = order?.diningTableId ?? null;
 
-  const applyBillSnapshot = useCallback((
-    loadedBill: BillDetailsResponse,
-    expectedOrderId: number,
-    expectedTableId: number,
-  ) => {
-    if (loadedBill.orderId !== expectedOrderId ||
-        loadedBill.diningTableId !== expectedTableId) {
-      throw new Error("The bill returned by the API does not match the selected order and table.");
-    }
-
-    setBill(loadedBill);
-    setPaymentAmount(loadedBill.balanceDue > 0
-      ? loadedBill.balanceDue.toFixed(2)
-      : "0.00");
-
-    let pendingPayment: PaymentReview | null;
-    try {
-      pendingPayment = readPendingPayment(loadedBill.id);
-    } catch (caughtError) {
-      setPaymentReview(null);
-      setPaymentOutcomeUnknown(false);
-      setPaymentRecoveryBlocked(true);
-      setPaymentError(getErrorMessage(caughtError, "Could not read saved payment retry details."));
-      return;
-    }
-
-    setPaymentRecoveryBlocked(false);
-    if (!pendingPayment) {
-      setPaymentReview(null);
-      setPaymentOutcomeUnknown(false);
-      setPaymentError(null);
-      return;
-    }
-
-    const recordedPayment = loadedBill.payments.find(
-      (payment) => payment.externalReference === pendingPayment.externalReference,
-    );
-    if (recordedPayment) {
-      if (recordedPayment.amount !== pendingPayment.amount ||
-          recordedPayment.method !== pendingPayment.method) {
-        setPaymentReview(pendingPayment);
-        setPaymentOutcomeUnknown(true);
-        setPaymentRecoveryBlocked(true);
-        setPaymentError("The saved payment reference exists on this bill with different details. Do not retry; contact a manager to review the payment history.");
-        return;
-      }
-
-      setPaymentReview(null);
-      setPaymentOutcomeUnknown(false);
-      setPaymentError(null);
-      setPaymentNotice(
-        `Payment of ${formatBillAmount(recordedPayment.amount, loadedBill.currencyCode)} was confirmed from the server payment history.`,
-      );
-      try {
-        clearPendingPayment(loadedBill.id);
-      } catch (caughtError) {
-        setPaymentError(`Payment is confirmed, but saved retry details could not be cleared: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
-      }
-
-      if (loadedBill.paymentStatus === "Paid") {
-        setOrder((current) => current?.id === expectedOrderId
-          ? { ...current, status: "Closed" }
-          : current);
-        setOrderHistory((current) => current.map((entry) => entry.id === expectedOrderId
-          ? { ...entry, status: "Closed" }
-          : entry));
-        void refreshOrderHistory(false);
-      }
-      return;
-    }
-
-    setPaymentReview(pendingPayment);
-    setPaymentOutcomeUnknown(pendingPayment.attempted);
-    setPaymentError(pendingPayment.attempted
-      ? "A previous payment request has no confirmation yet. Check the payment history or retry below; the same reference will be reused."
-      : null);
-  }, [refreshOrderHistory]);
-
   useEffect(() => {
     let active = true;
-    if (!authorized || currentOrderId === null || currentOrderTableId === null) {
+    if (!authorized || currentOrderId === null) {
       setBill(null);
       setBillError(null);
       setBillLoading(false);
       setPaymentAmount("");
       setPaymentReview(null);
-      setPaymentOutcomeUnknown(false);
-      setPaymentRecoveryBlocked(false);
       setPaymentError(null);
       setPaymentNotice(null);
       setPaymentValidationError(null);
@@ -434,8 +500,6 @@ function WaiterOrderPage() {
     setBillLoading(true);
     setPaymentAmount("");
     setPaymentReview(null);
-    setPaymentOutcomeUnknown(false);
-    setPaymentRecoveryBlocked(false);
     setPaymentError(null);
     setPaymentNotice(null);
     setPaymentValidationError(null);
@@ -443,7 +507,14 @@ function WaiterOrderPage() {
     void getWaiterBill(currentOrderId)
       .then((loadedBill) => {
         if (!active) return;
-        applyBillSnapshot(loadedBill, currentOrderId, currentOrderTableId);
+        if (loadedBill.orderId !== currentOrderId ||
+            loadedBill.diningTableId !== currentOrderTableId) {
+          throw new Error("The bill returned by the API does not match the selected order and table.");
+        }
+        setBill(loadedBill);
+        setPaymentAmount(loadedBill.balanceDue > 0
+          ? loadedBill.balanceDue.toFixed(2)
+          : "0.00");
       })
       .catch((caughtError: unknown) => {
         if (!active) return;
@@ -460,15 +531,21 @@ function WaiterOrderPage() {
       });
 
     return () => { active = false; };
-  }, [applyBillSnapshot, authorized, currentOrderId, currentOrderTableId]);
+  }, [authorized, currentOrderId, currentOrderTableId]);
 
   const refreshBill = async (orderId: number, expectedTableId: number) => {
     setBillLoading(true);
     setBillError(null);
     try {
       const loadedBill = await getWaiterBill(orderId);
+      if (loadedBill.orderId !== orderId || loadedBill.diningTableId !== expectedTableId) {
+        throw new Error("The bill returned by the API does not match the selected order and table.");
+      }
+      setBill(loadedBill);
+      setPaymentAmount(loadedBill.balanceDue > 0 ? loadedBill.balanceDue.toFixed(2) : "0.00");
+      setPaymentReview(null);
+      setPaymentError(null);
       setPaymentValidationError(null);
-      applyBillSnapshot(loadedBill, orderId, expectedTableId);
       return loadedBill;
     } catch (caughtError) {
       setBillError(getErrorMessage(caughtError, "Could not refresh this bill."));
@@ -509,7 +586,7 @@ function WaiterOrderPage() {
 
   const reviewPaymentEntry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!bill || bill.balanceDue <= 0 || paymentSubmitting || paymentRecoveryBlocked) return;
+    if (!bill || bill.balanceDue <= 0 || paymentSubmitting) return;
     const normalizedAmount = paymentAmount.trim();
     if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(normalizedAmount)) {
       setPaymentValidationError("Enter an amount with no more than two decimal places.");
@@ -527,74 +604,38 @@ function WaiterOrderPage() {
     setPaymentValidationError(null);
     setPaymentError(null);
     setPaymentNotice(null);
-    const review: PaymentReview = {
+    setPaymentReview({
       amount: Math.round(amount * 100) / 100,
       method: paymentMethod,
       externalReference: createExternalPaymentReference(bill.id),
-      attempted: false,
-    };
-    try {
-      savePendingPayment(bill.id, review);
-    } catch (caughtError) {
-      setPaymentRecoveryBlocked(true);
-      setPaymentError(`Could not save a retry-safe payment reference: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
-      return;
-    }
-    setPaymentRecoveryBlocked(false);
-    setPaymentReview(review);
-    setPaymentOutcomeUnknown(false);
+    });
   };
 
   const confirmPayment = async () => {
-    if (!bill || !order || !paymentReview || paymentSubmitting ||
-        paymentRecoveryBlocked || operationLock.current) return;
-    const attemptedReview = { ...paymentReview, attempted: true };
-    try {
-      savePendingPayment(bill.id, attemptedReview);
-    } catch (caughtError) {
-      setPaymentRecoveryBlocked(true);
-      setPaymentError(`Could not preserve the payment reference before sending: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
-      return;
-    }
+    if (!bill || !order || !paymentReview || paymentSubmitting || operationLock.current) return;
     operationLock.current = true;
     setPaymentSubmitting(true);
     setPaymentError(null);
     setPaymentNotice(null);
-    setPaymentReview(attemptedReview);
-    setPaymentOutcomeUnknown(true);
     try {
       const result = await recordWaiterPayment(
         bill.id,
-        attemptedReview.amount,
-        attemptedReview.method,
-        attemptedReview.externalReference,
+        paymentReview.amount,
+        paymentReview.method,
+        paymentReview.externalReference,
       );
-      const paymentInBill = result.bill?.payments.find((payment) =>
-        payment.externalReference === attemptedReview.externalReference &&
-        payment.amount === attemptedReview.amount &&
-        payment.method === attemptedReview.method);
       if (!result.payment || !result.bill ||
           result.bill.id !== bill.id ||
           result.bill.orderId !== order.id ||
           result.bill.diningTableId !== order.diningTableId ||
-          result.payment.amount !== attemptedReview.amount ||
-          result.payment.method !== attemptedReview.method ||
-          result.payment.externalReference !== attemptedReview.externalReference ||
-          !paymentInBill ||
-          paymentInBill.id !== result.payment.id) {
+          result.payment.amount !== paymentReview.amount ||
+          result.payment.method !== paymentReview.method ||
+          result.payment.externalReference !== paymentReview.externalReference) {
         throw new Error("The API response did not confirm the payment details for this bill.");
       }
 
-      let cleanupError: string | null = null;
-      try {
-        clearPendingPayment(bill.id);
-      } catch (storageError) {
-        cleanupError = `Payment was confirmed, but saved retry details could not be cleared: ${getErrorMessage(storageError, "browser storage is unavailable.")}`;
-      }
       setBill(result.bill);
       setPaymentReview(null);
-      setPaymentOutcomeUnknown(false);
-      setPaymentRecoveryBlocked(cleanupError !== null);
       setPaymentAmount(result.bill.balanceDue > 0
         ? result.bill.balanceDue.toFixed(2)
         : "0.00");
@@ -602,7 +643,6 @@ function WaiterOrderPage() {
       setPaymentNotice(result.alreadyRecorded
         ? `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was already recorded. The bill has been refreshed.`
         : `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was recorded successfully.`);
-      setPaymentError(cleanupError);
       if (result.bill.paymentStatus === "Paid") {
         setOrder((current) => current?.id === order.id
           ? { ...current, status: "Closed" }
@@ -610,27 +650,12 @@ function WaiterOrderPage() {
         setOrderHistory((current) => current.map((entry) => entry.id === order.id
           ? { ...entry, status: "Closed" }
           : entry));
+        const availableSeatLabel = order.seatNumber != null ? `Seat ${order.seatNumber}` : "The seat";
+        setNotice(`Order #${order.id} is fully paid and closed. It has moved to Order history, and ${availableSeatLabel} is available for a new order.`);
         void refreshOrderHistory(false);
       }
     } catch (caughtError) {
-      const requestWasRejected = caughtError instanceof ApiError &&
-        caughtError.status >= 400 && caughtError.status < 500;
-      if (requestWasRejected) {
-        const rejectedReview = { ...attemptedReview, attempted: false };
-        try {
-          savePendingPayment(bill.id, rejectedReview);
-          setPaymentReview(rejectedReview);
-          setPaymentOutcomeUnknown(false);
-          setPaymentRecoveryBlocked(false);
-        } catch (storageError) {
-          setPaymentRecoveryBlocked(true);
-          setPaymentError(`${getErrorMessage(caughtError, "Could not record this payment.")} The rejected request's retry state could not be saved: ${getErrorMessage(storageError, "browser storage is unavailable.")}`);
-          return;
-        }
-      }
-      setPaymentError(`${getErrorMessage(caughtError, "Could not confirm this payment.")} ${requestWasRejected
-        ? "Review the details before trying again."
-        : "The result may be uncertain; refresh the bill or retry using the same payment reference."}`);
+      setPaymentError(`${getErrorMessage(caughtError, "Could not record this payment.")} You can retry safely; the same payment reference will be reused.`);
     } finally {
       operationLock.current = false;
       setPaymentSubmitting(false);
@@ -867,6 +892,10 @@ function WaiterOrderPage() {
     setNotice(null);
     try {
       const opened = await openOrCreateOrder(table.id, seatNumber);
+      if (opened.reused) {
+        void refreshOrderHistory(false);
+        throw new Error(`Seat ${seatNumber} already has active order #${opened.orderId}. Open it from the Active orders list; New order only creates an order on an empty seat.`);
+      }
       await refreshOrder(opened.orderId, table.id);
       void refreshOrderHistory(false);
     } catch (caughtError) {
@@ -1277,18 +1306,18 @@ function WaiterOrderPage() {
       </aside>
 
       <main className="page admin-page staff-page order-workspace">
-        <header className="admin-header">
+        <header className="admin-header waiter-page-header">
           <div>
             <p className="eyebrow">FLOOR / WAITER</p>
-            <h1>Table orders</h1>
-            <p className="subtitle">Create and update a table order. Its subtotal changes as quantities change.</p>
+            <h1>{waiterPage === "new" ? "New order" : waiterPage === "active" ? "Active orders" : waiterPage === "history" ? "Order history" : "Bills & payments"}</h1>
+            <p className="subtitle">{waiterPage === "new" ? "Select an assigned table and an empty seat to start a new order." : waiterPage === "active" ? "Review and manage orders currently in service." : waiterPage === "history" ? "Search completed orders and review their activity." : "Prepare bills, record payments and confirm balances."}</p>
           </div>
           <WorkspaceSessionActions />
         </header>
 
         {error && <div className="admin-error" role="alert">{error}</div>}
         {notice && <div className="admin-success" role="status">{notice}</div>}
-        {authorized && (
+        {authorized && waiterPage === "active" && (
           <section className="waiter-ready-inbox staff-card" aria-labelledby="waiter-ready-title">
             <div className="staff-card-heading">
               <div><p className="eyebrow">KITCHEN UPDATES</p><h2 id="waiter-ready-title">Ready dishes</h2></div>
@@ -1350,7 +1379,8 @@ function WaiterOrderPage() {
           </section>
         ) : (
           <>
-            <section className="staff-card">
+            {waiterPage === "new" && (
+            <section id="waiter-new-order" className="staff-card waiter-sidebar-target waiter-navigation-page">
               <div className="staff-card-heading">
                 <div><p className="eyebrow">ASSIGNED TABLES</p><h2>Choose a table</h2></div>
                 <button
@@ -1388,25 +1418,33 @@ function WaiterOrderPage() {
               )}
               {selectedTableId !== null && activeTable && (
                 <div className="order-seat-selector">
-                  <h3>Select a seat at Table {activeTable.tableNumber}</h3>
-                  <p className="staff-help">Each seat has its own active order. Select a seat to create or reopen its existing order.</p>
+                  <h3>Seats at Table {activeTable.tableNumber}</h3>
+                  <p className="staff-help">Choose New order only for an empty seat. Existing active orders are opened separately below.</p>
+                  {historyError && <p className="staff-notice error" role="alert">Seat availability cannot be verified until order history loads successfully. Refresh history before creating an order.</p>}
                   <div className="order-seat-list">
                     {Array.from({ length: activeTable.seatCount }, (_, index) => index + 1).map((seat) => {
-                      const existing = orderHistory.find((entry) =>
-                        entry.diningTableId === activeTable.id &&
-                        entry.seatNumber === seat &&
-                        (entry.status === "Open" || entry.status === "Sent"));
-                      return (
+                      const existing = activeOrderEntries.find((entry) =>
+                        entry.diningTableId === activeTable.id && entry.seatNumber === seat);
+                      return existing ? (
+                        <div
+                          key={seat}
+                          className="order-seat-button occupied"
+                          aria-label={`Seat ${seat} is occupied by active order ${existing.id}`}
+                        >
+                          <strong>Seat {seat}</strong>
+                          <span>Occupied · Order #{existing.id} · {existing.status}</span>
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           key={seat}
-                          className={`order-seat-button${order?.seatNumber === seat ? " selected" : ""}`}
-                          aria-pressed={order?.seatNumber === seat}
-                          disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null}
+                          className="order-seat-button new-order"
+                          aria-label={`Create a new order for table ${activeTable.tableNumber}, seat ${seat}`}
+                          disabled={opening || refreshingTables || savingItem || sending || busyItemId !== null || Boolean(historyError) || (historyLoading && orderHistory.length === 0)}
                           onClick={() => void openTable(activeTable, seat)}
                         >
                           <strong>Seat {seat}</strong>
-                          <span>{existing ? `Order #${existing.id} · ${existing.status}` : "Open or create order"}</span>
+                          <span>＋ New order</span>
                         </button>
                       );
                     })}
@@ -1414,37 +1452,27 @@ function WaiterOrderPage() {
                 </div>
               )}
             </section>
+            )}
 
-            <section className="staff-card" aria-labelledby="waiter-order-history-title">
+            {waiterPage === "active" && (
+            <section id="waiter-active-orders" className="staff-card waiter-sidebar-target" aria-labelledby="waiter-active-orders-title">
               <div className="staff-card-heading">
                 <div>
-                  <p className="eyebrow">ORDER HISTORY</p>
-                  <h2 id="waiter-order-history-title">Orders on assigned tables</h2>
+                  <p className="eyebrow">CURRENT WORK</p>
+                  <h2 id="waiter-active-orders-title">Active orders</h2>
+                  <p className="staff-help">Open an existing order here. The New order buttons above never reopen an active order.</p>
                 </div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={historyLoading || opening}
-                  onClick={() => void refreshOrderHistory()}
-                >
-                  {historyLoading ? "Refreshing..." : "Refresh history"}
-                </button>
+                <span className="waiter-history-count">{activeOrderEntries.length} active</span>
               </div>
-              {historyError && (
-                <p className="staff-notice error" role="alert">
-                  {historyError}
-                  <button type="button" className="staff-text-button" onClick={() => void refreshOrderHistory()}>
-                    Try again
-                  </button>
-                </p>
-              )}
-              {historyLoading ? (
-                <p className="staff-empty" role="status">Loading order history...</p>
-              ) : orderHistory.length === 0 ? (
-                <p className="staff-empty" role="status">No order history is available for your currently assigned tables.</p>
+              {historyLoading && orderHistory.length === 0 ? (
+                <p className="staff-empty" role="status" aria-busy="true">Loading active orders...</p>
+              ) : historyError && orderHistory.length === 0 ? (
+                <p className="staff-empty" role="status">Active orders cannot be verified until order history loads successfully.</p>
+              ) : activeOrderEntries.length === 0 ? (
+                <p className="staff-empty" role="status">No active orders. Empty seats are available for new orders.</p>
               ) : (
                 <div className="waiter-order-history">
-                  {orderHistory.map((entry) => {
+                  {activeOrderEntries.map((entry) => {
                     const table = tables.find((candidate) => candidate.id === entry.diningTableId);
                     return (
                       <button
@@ -1456,24 +1484,126 @@ function WaiterOrderPage() {
                         onClick={() => void openHistoryOrder(entry)}
                       >
                         <strong>Order #{entry.id}</strong>
-                        <span>
-                          {table ? `Table ${table.tableNumber}` : "Assigned table"}
-                          {entry.seatNumber != null ? ` · Seat ${entry.seatNumber}` : " · No seat assigned"}
-                        </span>
-                        <time dateTime={entry.createdAtUtc}>
-                          {new Date(entry.createdAtUtc).toLocaleString()}
-                        </time>
-                        <span className="waiter-order-history-action">
-                          {entry.status} · {order?.id === entry.id ? "Viewing" : "View order"}
-                        </span>
+                        <span>{table ? `Table ${table.tableNumber}` : "Assigned table"}{entry.seatNumber != null ? ` · Seat ${entry.seatNumber}` : ""}</span>
+                        <time dateTime={entry.createdAtUtc}>{new Date(entry.createdAtUtc).toLocaleString()}</time>
+                        <span className="waiter-order-history-action">{entry.status} · {order?.id === entry.id ? "Viewing" : "Open order"}</span>
                       </button>
                     );
                   })}
                 </div>
               )}
             </section>
+            )}
 
-            {order && activeTable && !refreshingTables && (
+            {waiterPage === "history" && (
+            <section id="waiter-order-history" className="staff-card waiter-history-card waiter-sidebar-target" aria-labelledby="waiter-order-history-title">
+              <div className="staff-card-heading">
+                <div>
+                  <p className="eyebrow">ORDER HISTORY</p>
+                  <h2 id="waiter-order-history-title">Closed orders</h2>
+                  <p className="staff-help">Orders that are closed by completed payment or cancellation move here automatically.</p>
+                </div>
+                <div className="waiter-history-heading-actions">
+                  <span className="waiter-history-count">{historicalOrderEntries.length} records</span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={historyLoading || opening}
+                    onClick={() => void refreshOrderHistory()}
+                  >
+                    {historyLoading ? "Refreshing..." : "Refresh history"}
+                  </button>
+                </div>
+              </div>
+              <div className="waiter-history-filters">
+                <label className="waiter-history-search">
+                  Search orders
+                  <input
+                    type="search"
+                    value={historySearch}
+                    onChange={(event) => setHistorySearch(event.target.value)}
+                    placeholder="Order ID, table number or seat"
+                  />
+                </label>
+                <label>
+                  Status
+                  <select value={historyStatusFilter} onChange={(event) => setHistoryStatusFilter(event.target.value as "All" | "Closed" | "Legacy")}>
+                    <option value="All">All history</option>
+                    <option value="Closed">Closed</option>
+                    <option value="Legacy">Legacy</option>
+                  </select>
+                </label>
+                <label>
+                  Table
+                  <select value={historyTableFilter} onChange={(event) => setHistoryTableFilter(event.target.value)}>
+                    <option value="all">All assigned tables</option>
+                    {tables.map((table) => <option key={table.id} value={table.id}>Table {table.tableNumber}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Created on
+                  <input type="date" value={historyDateFilter} onChange={(event) => setHistoryDateFilter(event.target.value)} />
+                </label>
+                <button
+                  type="button"
+                  className="staff-text-button waiter-history-clear"
+                  onClick={() => { setHistorySearch(""); setHistoryStatusFilter("All"); setHistoryTableFilter("all"); setHistoryDateFilter(""); }}
+                  disabled={!historySearch && historyStatusFilter === "All" && historyTableFilter === "all" && !historyDateFilter}
+                >
+                  Clear filters
+                </button>
+              </div>
+              {historyError && (
+                <p className="staff-notice error" role="alert">
+                  {historyError}
+                  <button type="button" className="staff-text-button" onClick={() => void refreshOrderHistory()}>
+                    Try again
+                  </button>
+                </p>
+              )}
+              {historyLoading && orderHistory.length === 0 ? (
+                <div className="waiter-history-loading" role="status" aria-busy="true"><span className="admin-spinner" /> Loading historical orders...</div>
+              ) : historyError && orderHistory.length === 0 ? (
+                <div className="waiter-history-empty" role="status">
+                  <strong>History could not be loaded</strong>
+                  <span>Retry the order history request before treating this list as empty.</span>
+                </div>
+              ) : historicalOrderEntries.length === 0 ? (
+                <div className="waiter-history-empty" role="status">
+                  <strong>No closed orders yet</strong>
+                  <span>When an order is closed by completed payment or cancellation, it will appear here automatically.</span>
+                </div>
+              ) : filteredHistoricalOrders.length === 0 ? (
+                <div className="waiter-history-empty" role="status">
+                  <strong>No matching orders</strong>
+                  <span>Try changing the search text or filters.</span>
+                </div>
+              ) : (
+                <div className="waiter-order-history">
+                  {filteredHistoricalOrders.map((entry) => {
+                    const table = tables.find((candidate) => candidate.id === entry.diningTableId);
+                    return (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        className={`waiter-order-history-entry${order?.id === entry.id ? " selected" : ""}`}
+                        aria-pressed={order?.id === entry.id}
+                        disabled={opening || refreshingTables}
+                        onClick={() => void openHistoryOrder(entry)}
+                      >
+                        <strong>Order #{entry.id}</strong>
+                        <span>{table ? `Table ${table.tableNumber}` : "Assigned table"}{entry.seatNumber != null ? ` · Seat ${entry.seatNumber}` : " · No seat assigned"}</span>
+                        <time dateTime={entry.createdAtUtc}>{new Date(entry.createdAtUtc).toLocaleString()}</time>
+                        <span className="waiter-order-history-action">{entry.status} · {order?.id === entry.id ? "Viewing" : "View details"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+            )}
+
+            {((waiterPage === "new" && order) || (waiterPage === "active" && orderIsActive) || (waiterPage === "history" && order && !orderIsActive)) && order && activeTable && !refreshingTables && (
               <section className="staff-card order-composer" aria-labelledby="order-heading">
                 <div className="staff-card-heading">
                   <div>
@@ -1521,6 +1651,42 @@ function WaiterOrderPage() {
                     )}
                   </div>
                 </div>
+
+                <section className="waiter-order-timeline" aria-labelledby="waiter-order-timeline-title">
+                  <div className="waiter-order-timeline-heading">
+                    <div>
+                      <p className="eyebrow">ORDER ACTIVITY</p>
+                      <h3 id="waiter-order-timeline-title">Order change timeline</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={timelineLoading}
+                      onClick={() => void refreshOrderSubmissions(order.id, order.diningTableId)}
+                    >
+                      {timelineLoading ? "Refreshing..." : "Refresh timeline"}
+                    </button>
+                  </div>
+                  {timelineLoading && <p className="staff-help" role="status" aria-busy="true">Loading kitchen activity...</p>}
+                  {timelineError && <p className="staff-notice error" role="alert">{timelineError}</p>}
+                  <ol className="waiter-order-timeline-list">
+                    {orderTimelineEvents.map((event) => (
+                      <li key={event.id} className={`waiter-order-timeline-event ${event.kind}`}>
+                        <span className="waiter-order-timeline-marker" aria-hidden="true" />
+                        <div className="waiter-order-timeline-content">
+                          <div className="waiter-order-timeline-event-heading">
+                            <strong>{event.title}</strong>
+                            <time>{formatTimelineDate(event.timestamp)}</time>
+                          </div>
+                          <p>{event.description}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="waiter-order-timeline-note">
+                    This timeline combines order creation, kitchen submissions, bill creation and payment events returned by the current API. Item additions, edits, removals and cancellation reasons are stored by the backend, but the current waiter API does not expose those audit records for reading.
+                  </p>
+                </section>
 
                 {orderIsActive && hasSubmittedItems && (
                   <p className="staff-notice warning" id="waiter-cancel-unavailable" role="status">
@@ -1775,8 +1941,10 @@ function WaiterOrderPage() {
                 )}
               </section>
             )}
-            {order && activeTable && !refreshingTables && (
-              <section className="staff-card waiter-billing-card" aria-labelledby="waiter-billing-heading">
+            {waiterPage === "payments" && (
+            <div id="waiter-billing" className="waiter-billing-navigation-target waiter-sidebar-target waiter-navigation-page">
+              {order && activeTable && !refreshingTables ? (
+                <section className="staff-card waiter-billing-card" aria-labelledby="waiter-billing-heading">
                 <div className="staff-card-heading waiter-billing-heading">
                   <div>
                     <p className="eyebrow">CHECKOUT / PAYMENT</p>
@@ -1935,34 +2103,18 @@ function WaiterOrderPage() {
                           <div><dt>Remaining after payment</dt><dd>{formatBillAmount(Math.max(0, bill.balanceDue - paymentReview.amount), bill.currencyCode)}</dd></div>
                         </dl>
                         <p className="waiter-payment-reference">Reference: {paymentReview.externalReference}</p>
-                        {paymentOutcomeUnknown && (
-                          <p className="staff-notice warning" role="status">
-                            The previous attempt may have reached the server. Retry with this same reference or refresh the bill to reconcile it first.
-                          </p>
-                        )}
                         <p className="waiter-payment-disclaimer">This records the payment in the restaurant system. It does not initiate a card transaction through a payment gateway.</p>
                         <div className="waiter-payment-actions">
                           <button
                             type="button"
                             className="secondary-button"
-                            disabled={paymentSubmitting || paymentOutcomeUnknown || paymentRecoveryBlocked}
-                            onClick={() => {
-                              try {
-                                clearPendingPayment(bill.id);
-                                setPaymentReview(null);
-                                setPaymentOutcomeUnknown(false);
-                                setPaymentError(null);
-                                setPaymentNotice(null);
-                              } catch (caughtError) {
-                                setPaymentRecoveryBlocked(true);
-                                setPaymentError(`Could not clear the saved payment review: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
-                              }
-                            }}
+                            disabled={paymentSubmitting}
+                            onClick={() => { setPaymentReview(null); setPaymentError(null); }}
                           >
                             Back to edit
                           </button>
-                          <button type="button" className="primary-button" disabled={paymentSubmitting || paymentRecoveryBlocked} onClick={() => void confirmPayment()}>
-                            {paymentSubmitting ? "Recording payment..." : paymentOutcomeUnknown ? "Retry same payment" : "Confirm payment"}
+                          <button type="button" className="primary-button" disabled={paymentSubmitting} onClick={() => void confirmPayment()}>
+                            {paymentSubmitting ? "Recording payment..." : "Confirm payment"}
                           </button>
                         </div>
                       </div>
@@ -1997,14 +2149,27 @@ function WaiterOrderPage() {
                         </div>
                         {paymentValidationError && <p className="staff-notice error" role="alert">{paymentValidationError}</p>}
                         <p className="waiter-payment-disclaimer">Partial payments are supported. The order closes when the full balance is recorded. Card selection records the method only; it does not process a card transaction.</p>
-                        <button type="submit" className="primary-button" disabled={paymentSubmitting || paymentRecoveryBlocked || bill.balanceDue <= 0}>
+                        <button type="submit" className="primary-button" disabled={paymentSubmitting || bill.balanceDue <= 0}>
                           Review payment
                         </button>
                       </form>
                     )}
                   </>
                 )}
-              </section>
+                </section>
+              ) : (
+                <section className="staff-card waiter-billing-empty" aria-labelledby="waiter-billing-empty-heading">
+                  <div>
+                    <p className="eyebrow">CHECKOUT / PAYMENT</p>
+                    <h2 id="waiter-billing-empty-heading">Bills &amp; payments</h2>
+                    <p className="staff-help">
+                      Select an active order from the Active orders section to prepare its itemised bill,
+                      review totals and record a payment.
+                    </p>
+                  </div>
+                </section>
+              )}
+            </div>
             )}
           </>
         )}

@@ -207,6 +207,7 @@ export interface OrderDetailsResponse {
     status: "Open" | "Sent" | "Closed" | "Legacy";
     createdAtUtc: string;
     sentAtUtc: string | null;
+    paidAtUtc?: string | null;
     items: OrderItemDetailsResponse[];
     seatNumber: number | null;
 }
