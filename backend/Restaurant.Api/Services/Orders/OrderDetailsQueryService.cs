@@ -110,7 +110,8 @@ public sealed class OrderDetailsQueryService
             i.Quantity, i.SpecialRequest, i.KitchenSubmissionId,
             i.PreparationStatus == DishPreparationStates.Pending
                 ? "New" : i.PreparationStatus,
-            i.PreparationStartedAtUtc, i.ReadyAtUtc);
+            i.PreparationStartedAtUtc, i.ReadyAtUtc,
+            i.ServiceStatus, i.ServedAtUtc);
 
     private static OrderDetailsDto Project(RestaurantOrder order,
         bool submittedOnly = false) =>
