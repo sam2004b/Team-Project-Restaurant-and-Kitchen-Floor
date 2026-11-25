@@ -55,6 +55,10 @@ public sealed class WaiterBillingService
         if (items.Count == 0)
             return new(BillingOperationStatus.EmptyOrder,
                 Error: "An empty order cannot be billed.");
+        if (items.Any(i => !IsServedKitchenLine(i)))
+            return new(BillingOperationStatus.OrderNotPayable,
+                Error: "The bill can only be created after every dish has been served. " +
+                       "Make sure all dishes were sent to the kitchen and marked Served.");
 
         // UnitPriceSnapshot is the agreed price at order time; never read
         // current Dish.Price when calculating an existing order.
@@ -159,6 +163,15 @@ public sealed class WaiterBillingService
             return new(BillingOperationStatus.OrderNotPayable,
                 Error: "A cancelled order cannot be paid.");
 
+        // Also protect bills created before this rule was introduced. A direct
+        // API payment must not bypass the served-before-billing requirement.
+        var orderItems = await _db.OrderItems.AsNoTracking()
+            .Where(i => i.OrderId == order.Id)
+            .ToListAsync(ct);
+        if (orderItems.Count == 0 || orderItems.Any(i => !IsServedKitchenLine(i)))
+            return new(BillingOperationStatus.OrderNotPayable,
+                Error: "Payment is blocked until every dish in this order is served.");
+
         var paid = await _db.PaymentRecords.AsNoTracking()
             .Where(p => p.RestaurantId == restaurantId &&
                         p.BillId == billId &&
@@ -199,6 +212,7 @@ public sealed class WaiterBillingService
 
         if (amount == balance)
         {
+            var previousStatus = order.Status;
             order.Status = RestaurantOrderStates.Closed;
             order.PaidAtUtc = payment.RecordedAtUtc;
             _db.OrderHistoryEvents.Add(new OrderHistoryEvent
@@ -209,7 +223,7 @@ public sealed class WaiterBillingService
                 ActorStaffMembershipId = waiterMembershipId,
                 EventType = OrderHistoryEventTypes.OrderClosed,
                 OccurredAtUtc = payment.RecordedAtUtc,
-                BeforeValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = RestaurantOrderStates.Sent }),
+                BeforeValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = previousStatus }),
                 AfterValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = RestaurantOrderStates.Closed, paidAtUtc = order.PaidAtUtc })
             });
         }
@@ -220,6 +234,12 @@ public sealed class WaiterBillingService
         await CommitAsync(tx, ct);
         return new(BillingOperationStatus.Success, billDto, ToPaymentDto(payment));
     }
+
+    private static bool IsServedKitchenLine(RestaurantOrderItem item) =>
+        item.KitchenSubmissionId is not null &&
+        item.PreparationStatus == DishPreparationStates.Ready &&
+        item.ServiceStatus == DishServiceStates.Served &&
+        item.ServedAtUtc is not null;
 
     private async Task<RestaurantOrder?> GetAssignedOrderAsync(
         int restaurantId, int membershipId, int orderId,
