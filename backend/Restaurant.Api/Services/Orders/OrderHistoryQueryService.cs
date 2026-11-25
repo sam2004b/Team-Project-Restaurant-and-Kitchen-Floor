@@ -25,6 +25,7 @@ public sealed class OrderHistoryQueryService
         DateTime? fromUtc = null,
         DateTime? toUtc = null,
         string? search = null,
+        int? createdByStaffMembershipId = null,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -48,6 +49,13 @@ public sealed class OrderHistoryQueryService
                     a.StaffMembership.Status == MembershipStatus.Active &&
                     a.StaffMembership.Role == StaffRoleNames.Waiter &&
                     a.DiningTable.IsActive));
+        }
+
+        if (createdByStaffMembershipId.HasValue && isAdministrator)
+        {
+            query = query.Where(o =>
+                o.CreatedByStaffMembershipId == createdByStaffMembershipId.Value &&
+                o.CreatedByStaffMembership.RestaurantId == restaurantId);
         }
 
         if (tableNumber.HasValue)
@@ -97,6 +105,7 @@ public sealed class OrderHistoryQueryService
                 o.SeatNumber,
                 o.Status,
                 o.CreatedByStaffMembershipId,
+                createdByStaffName = o.CreatedByStaffMembership.User.UserName,
                 o.CreatedAtUtc,
                 o.SentAtUtc,
                 o.PaidAtUtc
@@ -136,6 +145,7 @@ public sealed class OrderHistoryQueryService
                 o.SeatNumber,
                 o.Status,
                 o.CreatedByStaffMembershipId,
+                o.createdByStaffName,
                 o.CreatedAtUtc,
                 o.SentAtUtc,
                 o.PaidAtUtc,
@@ -194,6 +204,7 @@ public sealed class OrderHistoryQueryService
                 o.SeatNumber,
                 o.Status,
                 o.CreatedByStaffMembershipId,
+                createdByStaffName = o.CreatedByStaffMembership.User.UserName,
                 o.CreatedAtUtc,
                 o.SentAtUtc,
                 o.PaidAtUtc

@@ -223,6 +223,8 @@ export interface KitchenSubmissionResponse {
     id: number;
     orderId: number;
     diningTableId: number;
+    // Public table number configured by Admin; differs from diningTableId.
+    tableNumber?: number | null;
     sentAtUtc: string;
     items: OrderItemDetailsResponse[];
     seatNumber: number | null;
@@ -799,6 +801,102 @@ export interface ApiHealth {
 
 export function getApiHealth(): Promise<ApiHealth> {
     return apiGet<ApiHealth>("/health");
+}
+
+// Restaurant-scoped history endpoints. The backend permits Administrator
+// access to all orders and waiter access only to their own/assigned orders.
+export interface OrderHistorySummaryEntry {
+    id: number;
+    diningTableId: number;
+    tableNumber: number;
+    seatNumber: number | null;
+    status: string;
+    createdByStaffMembershipId: number;
+    createdByStaffName?: string | null;
+    createdAtUtc: string;
+    sentAtUtc: string | null;
+    paidAtUtc: string | null;
+    itemCount: number;
+    totalQuantity: number;
+    totalAmount: number | null;
+    currencyCode: string | null;
+    paymentStatus: string;
+}
+
+export interface OrderHistorySummaryResponse {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    items: OrderHistorySummaryEntry[];
+}
+
+export interface OrderHistoryItemResponse {
+    id: number;
+    dishId: number;
+    dishName: string;
+    quantity: number;
+    unitPriceSnapshot: number;
+    lineTotal: number;
+    specialRequest: string | null;
+    kitchenSubmissionId: number | null;
+    preparationStatus: string;
+    serviceStatus: "Unserved" | "Served";
+    servedAtUtc: string | null;
+}
+
+export interface OrderHistoryEventResponse {
+    id: number;
+    eventType: string;
+    occurredAtUtc: string;
+    actorStaffMembershipId: number | null;
+    orderItemId: number | null;
+    beforeValueJson: string | null;
+    afterValueJson: string | null;
+    reason: string | null;
+    source: string;
+}
+
+export interface OrderHistoryDetailsResponse {
+    id: number;
+    restaurantId: number;
+    diningTableId: number;
+    tableNumber: number;
+    seatNumber: number | null;
+    status: string;
+    createdByStaffMembershipId: number;
+    createdByStaffName?: string | null;
+    createdAtUtc: string;
+    sentAtUtc: string | null;
+    paidAtUtc: string | null;
+    items: OrderHistoryItemResponse[];
+    bill: {
+        id: number;
+        currencyCode: string;
+        totalAmount: number;
+        paidAmount: number;
+        balance: number;
+        paymentStatus: string;
+    } | null;
+    timeline: OrderHistoryEventResponse[];
+}
+
+export function getOrderHistoryPage(filters: {
+    page?: number; pageSize?: number; tableNumber?: number; status?: string; search?: string;
+    createdByStaffMembershipId?: number;
+} = {}): Promise<OrderHistorySummaryResponse> {
+    const query = new URLSearchParams();
+    if (filters.page) query.set("page", String(filters.page));
+    if (filters.pageSize) query.set("pageSize", String(filters.pageSize));
+    if (filters.tableNumber) query.set("tableNumber", String(filters.tableNumber));
+    if (filters.status) query.set("status", filters.status);
+    if (filters.search) query.set("search", filters.search);
+    if (filters.createdByStaffMembershipId) query.set("createdByStaffMembershipId", String(filters.createdByStaffMembershipId));
+    return apiRequest<OrderHistorySummaryResponse>(`/order-history?${query.toString()}`, { cache: "no-store" });
+}
+
+export function getOrderHistoryDetails(orderId: number): Promise<OrderHistoryDetailsResponse> {
+    return apiRequest<OrderHistoryDetailsResponse>(`/order-history/${orderId}`, { cache: "no-store" });
 }
 
 // Waiter billing and payment API contracts. These DTOs mirror

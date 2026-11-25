@@ -43,6 +43,8 @@ export function getStaffRouteForRole(role?: string | null): string {
       return "/chef/orders";
 
     case "administrator":
+      return "/admin/order-history";
+
     case "reception manager":
       return "/admin/staff";
 
@@ -653,6 +655,7 @@ function StaffManagementPage() {
       const destination = returnTo ?? (
         currentAccount.role === "Waiter" ? "/waiter/orders" :
           currentAccount.role === "Chef" ? "/chef/orders" :
+            currentAccount.role === "Administrator" ? "/admin/order-history" :
             "/admin/staff"
       );
       if (destination !== "/admin/staff") {

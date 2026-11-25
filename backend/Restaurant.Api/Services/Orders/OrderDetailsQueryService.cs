@@ -75,6 +75,7 @@ public sealed class OrderDetailsQueryService
                         s.Items.Any() &&
                         (!orderId.HasValue || s.OrderId == orderId.Value))
             .Include(s => s.Order)
+                .ThenInclude(o => o.DiningTable)
             .Include(s => s.Items);
 
         // Per-order batches use their persisted sequence; the restaurant-wide
@@ -89,7 +90,8 @@ public sealed class OrderDetailsQueryService
             s.Id, s.OrderId, s.Order.DiningTableId, s.SentAtUtc,
             s.Items.OrderBy(i => i.SequenceNumber).ThenBy(i => i.Id)
                 .Select(ProjectItem).ToList(),
-            s.Order.SeatNumber
+            s.Order.SeatNumber,
+            s.Order.DiningTable.TableNumber
         )).ToList();
     }
 
