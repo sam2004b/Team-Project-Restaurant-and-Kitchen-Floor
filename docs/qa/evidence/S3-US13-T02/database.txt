@@ -1,0 +1,14 @@
+ Id | OrderId | DishNameSnapshot | PreparationStatus | ServiceStatus |          ServedAtUtc
+----+---------+------------------+-------------------+---------------+-------------------------------
+  1 |       1 | Beef Steak       | Ready             | Served        | 2026-11-22 13:17:49.608888+00
+  2 |       1 | Caesar Salad     | Pending           | Unserved      |
+  3 |       2 | Beef Steak       | Ready             | Served        | 2026-11-22 13:17:50.472487+00
+  4 |       3 | Beef Steak       | Ready             | Unserved      |
+(4 rows)
+
+ Id | OrderId | DiningTableId | WaiterStaffMembershipId | OrderItemId
+----+---------+---------------+-------------------------+-------------
+  1 |       1 |             1 |                       2 |           1
+  2 |       3 |             2 |                       6 |           4
+  3 |       2 |             1 |                       2 |           3
+(3 rows)
