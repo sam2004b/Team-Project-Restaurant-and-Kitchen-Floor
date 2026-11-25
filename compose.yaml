@@ -47,8 +47,9 @@ services:
       
       Menu__RestaurantId: "${MENU_RESTAURANT_ID:?Set MENU_RESTAURANT_ID in .env}"
 
-      # Sprint 2 - Staff invitation testing
-      Invitations__ExposeDevelopmentToken: "${INVITATION_DEV_TOKEN_RESPONSE:-false}"
+      # LOCAL DEVELOPMENT ONLY: return invite tokens to authorized admins instead
+      # of sending SMTP email. Disable via .env outside isolated local testing.
+      Invitations__ExposeDevelopmentToken: "${INVITATION_DEV_TOKEN_RESPONSE:-true}"
 
     depends_on:
       db:

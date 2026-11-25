@@ -2924,6 +2924,34 @@ select:focus-visible {
   font-size: 0.74rem;
 }
 
+.staff-local-invitation {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 8px;
+  min-width: 0;
+}
+
+.staff-local-invitation p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.staff-local-invitation input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #dcded8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.staff-local-invitation button {
+  justify-self: start;
+}
+
 .staff-invitation-result a,
 .staff-text-button,
 .staff-page-back a,
