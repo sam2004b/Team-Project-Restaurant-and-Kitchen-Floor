@@ -35,6 +35,7 @@ public sealed class OrderHistoryController : ControllerBase
         [FromQuery] DateTime? fromUtc = null,
         [FromQuery] DateTime? toUtc = null,
         [FromQuery] string? search = null,
+        [FromQuery] int? createdByStaffMembershipId = null,
         CancellationToken ct = default)
     {
         if (page < 1 || pageSize < 1 || pageSize > 100)
@@ -42,6 +43,9 @@ public sealed class OrderHistoryController : ControllerBase
             {
                 error = "Page must be positive and pageSize must be between 1 and 100."
             });
+
+        if (createdByStaffMembershipId.HasValue && createdByStaffMembershipId.Value <= 0)
+            return BadRequest(new { error = "Waiter membership ID must be positive." });
 
         if (tableNumber.HasValue && tableNumber.Value <= 0)
             return BadRequest(new { error = "Table number must be positive." });
@@ -58,6 +62,11 @@ public sealed class OrderHistoryController : ControllerBase
         if (context.Error is not null)
             return context.Error;
 
+        // A waiter may view authorized orders, but must not use the admin-only
+        // filter to inspect another waiter's order creation history.
+        if (createdByStaffMembershipId.HasValue && !context.IsAdministrator)
+            return Forbid();
+
         var result = await _history.SearchAsync(
             context.RestaurantId,
             context.MembershipId,
@@ -69,6 +78,7 @@ public sealed class OrderHistoryController : ControllerBase
             fromUtc,
             toUtc,
             search,
+            createdByStaffMembershipId,
             ct);
 
         return Ok(result);
