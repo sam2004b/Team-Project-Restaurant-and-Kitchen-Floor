@@ -7,6 +7,7 @@ import {
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import AdminDishesPage from "./AdminDishesPage";
+import AdminOrderHistoryPage from "./AdminOrderHistoryPage";
 import { AcceptInvitationPage, StaffLoginPage, StaffManagementPage } from "./StaffAccessPage";
 import { WaiterTablesPage } from "./RestaurantConfigurationPanel";
 import RestaurantSettingsPage from "./RestaurantSettingsPage";
@@ -93,6 +94,7 @@ type StaffRole =
 function defaultWorkspace(role: string | undefined): string {
   if (role === "PlatformAdmin") return "/admin/staff";
   if (role === "Waiter") return "/waiter/orders";
+  if (role === "Administrator") return "/admin/order-history";
   if (role === "Chef") return "/chef/orders";
 
   return "/admin/staff";
@@ -385,6 +387,10 @@ function StaffWorkspaceLayout() {
       ]
       : [
         { label: "Menu management", path: "/admin/dishes" },
+        ...(role === "Administrator" ? [
+          { label: "Order history", path: "/admin/order-history" },
+          { label: "History by waiter", path: "/admin/waiter-order-history" },
+        ] : []),
         { label: "Staff and access", path: "/admin/staff" },
         { label: "Settings", path: "/admin/settings" },
       ];
@@ -496,6 +502,9 @@ function App() {
       <Route path="/menu" element={<MenuPage />} />
       <Route element={<StaffWorkspaceLayout />}>
         <Route path="/admin/dishes" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <AdminDishesPage />)} />
+        <Route path="/admin/order-history" element={protect(["Administrator"], <AdminOrderHistoryPage />)} />
+        <Route path="/admin/waiter-order-history" element={protect(["Administrator"], <AdminOrderHistoryPage />)} />
+        <Route path="/admin" element={<Navigate to="/admin/order-history" replace />} />
         <Route path="/admin/staff" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <StaffManagementPage />)} />
         <Route path="/admin/settings" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
         <Route path="/chef/availability" element={protect(["Chef"], <ChefAvailabilityPage />)} />
