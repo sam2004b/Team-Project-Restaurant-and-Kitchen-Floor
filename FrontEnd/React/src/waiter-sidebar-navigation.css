@@ -1,0 +1,90 @@
+.waiter-sidebar-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.waiter-sidebar-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.waiter-sidebar-section-label {
+  margin: 16px 10px 7px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.waiter-sidebar-group:first-child .waiter-sidebar-section-label {
+  margin-top: 2px;
+}
+
+.waiter-sidebar-navigation .admin-sidebar-link {
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.waiter-sidebar-navigation .admin-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.waiter-sidebar-navigation .admin-sidebar-link.active {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 3px 0 0 #9dc4a7;
+  color: #fff;
+}
+
+.waiter-sidebar-target,
+.waiter-billing-navigation-target {
+  scroll-margin-top: 24px;
+}
+
+.waiter-billing-empty {
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+}
+
+.waiter-billing-empty h2 {
+  margin: 0 0 6px;
+}
+
+.waiter-billing-empty .staff-help {
+  max-width: 650px;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .waiter-sidebar-navigation {
+    display: contents;
+  }
+
+  .waiter-sidebar-group {
+    display: contents;
+  }
+}
+
+/* Separate waiter navigation views to prevent the workspace from becoming one long page. */
+.waiter-navigation-page {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  animation: waiter-page-enter 150ms ease-out;
+}
+
+
+.waiter-page-header {
+  margin-bottom: 18px;
+}
+
+.waiter-page-header h1 {
+  margin-bottom: 6px;
+}
+
+@keyframes waiter-page-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}

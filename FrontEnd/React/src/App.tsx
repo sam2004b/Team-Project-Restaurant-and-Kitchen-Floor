@@ -15,6 +15,7 @@ import { formatPrice } from "./services/currency";
 import WaiterOrderPage from "./WaiterOrderPage";
 import KitchenOrdersPage from "./KitchenOrdersPage";
 import { useAuth } from "./services/AuthContext";
+import "./waiter-sidebar-navigation.css";
 
 
 type MenuDish = {
@@ -368,6 +369,7 @@ function normalizeRole(role?: string | null): StaffRole | "Unknown" {
 
 function StaffWorkspaceLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { account, signOut: signOutFromContext } = useAuth();
 
   const role = normalizeRole(account?.role);
@@ -398,16 +400,75 @@ function StaffWorkspaceLayout() {
           <strong>PLATE</strong>
           <span>RESTAURANT OPERATIONS</span>
         </Link>
-        <div className="admin-sidebar-label">{role === "Unknown" ? "WORKSPACE" : `${role.toUpperCase()} WORKSPACE`}</div>
-        {navigation.map((item) => (
-          <NavLink
-            key={item.path}
-            className={({ isActive }) => `admin-sidebar-link${isActive ? " active" : ""}`}
-            to={item.path}
-          >
-            {item.label}
-          </NavLink>
-        ))}
+        {role === "Waiter" ? (
+          <nav className="waiter-sidebar-navigation" aria-label="Waiter workspace navigation">
+            <div className="waiter-sidebar-group">
+              <div className="admin-sidebar-label waiter-sidebar-section-label">TABLES</div>
+              <NavLink
+                end
+                className={({ isActive }) => `admin-sidebar-link${isActive ? " active" : ""}`}
+                to="/waiter/tables"
+              >
+                My tables
+              </NavLink>
+            </div>
+
+            <div className="waiter-sidebar-group">
+              <div className="admin-sidebar-label waiter-sidebar-section-label">ORDER MANAGEMENT</div>
+              {[
+                { label: "New order", path: "/waiter/orders#waiter-new-order", hash: "#waiter-new-order" },
+                { label: "Active orders", path: "/waiter/orders#waiter-active-orders", hash: "#waiter-active-orders" },
+              ].map((item) => {
+                const isActive = location.pathname === "/waiter/orders" && (location.hash === item.hash || (!location.hash && item.hash === "#waiter-new-order"));
+                return (
+                  <Link
+                    key={item.path}
+                    className={`admin-sidebar-link${isActive ? " active" : ""}`}
+                    to={item.path}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="waiter-sidebar-group">
+              <div className="admin-sidebar-label waiter-sidebar-section-label">HISTORY</div>
+              <Link
+                className={`admin-sidebar-link${location.pathname === "/waiter/orders" && location.hash === "#waiter-order-history" ? " active" : ""}`}
+                to="/waiter/orders#waiter-order-history"
+                aria-current={location.pathname === "/waiter/orders" && location.hash === "#waiter-order-history" ? "page" : undefined}
+              >
+                Order history
+              </Link>
+            </div>
+
+            <div className="waiter-sidebar-group">
+              <div className="admin-sidebar-label waiter-sidebar-section-label">PAYMENTS</div>
+              <Link
+                className={`admin-sidebar-link${location.pathname === "/waiter/orders" && location.hash === "#waiter-billing" ? " active" : ""}`}
+                to="/waiter/orders#waiter-billing"
+                aria-current={location.pathname === "/waiter/orders" && location.hash === "#waiter-billing" ? "page" : undefined}
+              >
+                Bills &amp; payments
+              </Link>
+            </div>
+          </nav>
+        ) : (
+          <>
+            <div className="admin-sidebar-label">{role === "Unknown" ? "WORKSPACE" : `${role.toUpperCase()} WORKSPACE`}</div>
+            {navigation.map((item) => (
+              <NavLink
+                key={item.path}
+                className={({ isActive }) => `admin-sidebar-link${isActive ? " active" : ""}`}
+                to={item.path}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </>
+        )}
         <Link className="admin-sidebar-link" to="/">Customer menu</Link>
         <div className="admin-profile">
           <span className="admin-avatar" aria-hidden="true">
