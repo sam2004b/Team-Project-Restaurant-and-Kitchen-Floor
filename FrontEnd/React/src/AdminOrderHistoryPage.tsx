@@ -4,6 +4,7 @@ import {
   getOrderHistoryDetails,
   getOrderHistoryPage,
   getRestaurantStaff,
+  getSelectedRestaurantId,
 } from "./services/api";
 import type {
   OrderHistoryDetailsResponse,
@@ -45,7 +46,11 @@ export default function AdminOrderHistoryPage() {
   const { account } = useAuth();
   const { pathname } = useLocation();
   const waiterView = pathname === "/admin/waiter-order-history";
-  const restaurantId = Number(account?.restaurantId);
+  const accountRestaurantId = Number(account?.restaurantId);
+  const restaurantId = account?.role === "PlatformAdmin"
+    ? getSelectedRestaurantId() ?? accountRestaurantId
+    : accountRestaurantId;
+  const hasRestaurant = Number.isSafeInteger(restaurantId) && restaurantId > 0;
   const [page, setPage] = useState(1);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -77,6 +82,11 @@ export default function AdminOrderHistoryPage() {
     const version = ++searchVersion.current;
     setLoading(true);
     setError(null);
+    if (!hasRestaurant) {
+      setResult(null);
+      setLoading(false);
+      return;
+    }
     try {
       const response = await getOrderHistoryPage({
         page, pageSize, search: search || undefined, tableNumber: table,
@@ -89,7 +99,7 @@ export default function AdminOrderHistoryPage() {
     } finally {
       if (version === searchVersion.current) setLoading(false);
     }
-  }, [page, search, status, table, selectedWaiterId, waiterView]);
+  }, [hasRestaurant, restaurantId, page, search, status, table, selectedWaiterId, waiterView]);
 
   useEffect(() => { void loadPage(); }, [loadPage]);
 
@@ -101,17 +111,16 @@ export default function AdminOrderHistoryPage() {
 
   useEffect(() => {
     let current = true;
-    if (!Number.isInteger(restaurantId) || restaurantId < 1) {
-      setStaffError(true);
-      return;
-    }
+    setStaff([]);
+    setStaffError(false);
+    if (!hasRestaurant) return;
     void getRestaurantStaff(restaurantId).then((data) => {
       if (current) setStaff(data);
     }).catch(() => {
       if (current) setStaffError(true);
     });
     return () => { current = false; };
-  }, [restaurantId]);
+  }, [hasRestaurant, restaurantId]);
 
   const selectOrder = useCallback(async (orderId: number) => {
     const version = ++detailsVersion.current;
@@ -155,11 +164,19 @@ export default function AdminOrderHistoryPage() {
         </button>
       </header>
 
-      <nav className="admin-history-tabs" aria-label="Order history navigation">
+      {!hasRestaurant && (
+        <section className="staff-card" role="status">
+          <p>Select a restaurant in Staff &amp; Access to view its order history and filter by waiter.</p>
+          <Link className="secondary-button" to="/admin/staff">Choose a restaurant</Link>
+        </section>
+      )}
+
+      {hasRestaurant && <nav className="admin-history-tabs" aria-label="Order history navigation">
         <Link to="/admin/order-history" className={!waiterView ? "active" : ""} aria-current={!waiterView ? "page" : undefined}>All orders</Link>
         <Link to="/admin/waiter-order-history" className={waiterView ? "active" : ""} aria-current={waiterView ? "page" : undefined}>Orders by waiter</Link>
-      </nav>
+      </nav>}
 
+      {hasRestaurant && <>
       <section className="admin-history-overview" aria-label="History summary">
         <div><span>Total matching orders</span><strong>{result?.totalCount ?? "—"}</strong></div>
         <div><span>Current page</span><strong>{result?.page ?? page} / {Math.max(1, result?.totalPages ?? 1)}</strong></div>
@@ -271,6 +288,7 @@ export default function AdminOrderHistoryPage() {
           )}
         </section>
       </div>
+      </>}
     </main>
   );
 }

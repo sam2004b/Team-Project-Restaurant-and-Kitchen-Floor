@@ -6,6 +6,7 @@ import {
   getDiningTables,
   getRestaurantProfile,
   getRestaurantSettings,
+  getSelectedRestaurantId,
   getRestaurantStaff,
   removeTableAssignment,
   saveDiningTable,
@@ -105,7 +106,10 @@ function RestaurantSettingsPage() {
   const [tableNotice, setTableNotice] = useState<Notice | null>(null);
   const [savingTable, setSavingTable] = useState(false);
 
-  const restaurantId = Number(account?.restaurantId);
+  const accountRestaurantId = Number(account?.restaurantId);
+  const restaurantId = account?.role === "PlatformAdmin"
+    ? getSelectedRestaurantId() ?? accountRestaurantId
+    : accountRestaurantId;
   const validRestaurantId = Number.isSafeInteger(restaurantId) && restaurantId > 0;
 
   useEffect(() => {
@@ -413,7 +417,12 @@ function RestaurantSettingsPage() {
           </section>
         ) : !validRestaurantId ? (
           <section className="staff-card">
-            <p className="staff-notice error" role="alert">This signed-in account has no valid restaurant ID. Sign in with an administrator membership.</p>
+            <p className="staff-notice warning" role="status">
+              {account.role === "PlatformAdmin"
+                ? "Select a restaurant in Staff & Access first. This global account has no restaurant selected yet."
+                : "This account has no active restaurant context. Sign in with a restaurant administrator membership."}
+            </p>
+            <Link className="secondary-button" to="/admin/staff">Choose a restaurant</Link>
           </section>
         ) : (
           <>

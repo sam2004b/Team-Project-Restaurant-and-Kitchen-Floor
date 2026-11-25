@@ -7,6 +7,7 @@ import {
   createRestaurant,
   getRestaurantProfile,
   getRestaurantStaff,
+  getSelectedRestaurantId,
   inviteStaff,
   revokeStaffInvitation,
   setStaffMembershipStatus,
@@ -633,15 +634,18 @@ function StaffManagementPage() {
   }, [location.key, location.state, sessionMessage]);
 
   useEffect(() => {
+    const currentRestaurant = account?.role === "PlatformAdmin"
+      ? getSelectedRestaurantId()
+      : Number(account?.restaurantId) || null;
     setMembers([]);
-    setRestaurantId(null);
+    setRestaurantId(currentRestaurant);
     setRestaurantProfile(null);
     setRoleDrafts({});
-    setRestaurantIdInput("");
+    setRestaurantIdInput(currentRestaurant ? String(currentRestaurant) : "");
     setLastInvitation(null);
     setStaffNotice(null);
     setInviteNotice(null);
-  }, [account?.id, account?.restaurantId, account?.role]);
+  }, [account?.id, account?.role]);
 
   const onLogin = async (username: string, password: string) => {
     setAuthNotice(null);
@@ -735,9 +739,12 @@ function StaffManagementPage() {
     try {
       if (account?.role === "PlatformAdmin") {
         await selectRestaurantContext(id);
+        // /auth/me retains PlatformAdmin as the global role, but now carries
+        // the selected restaurant ID for settings and order-history views.
+        await refreshAccount();
       }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
-      setStaffNotice({ type: "success", message: `Memberships refreshed from the server for restaurant #${id}.` });
+      setStaffNotice({ type: "success", message: `Restaurant #${id} selected. Settings and order history are now available.` });
     } catch {
       // Each panel reports its own API error.
     }
@@ -748,6 +755,7 @@ function StaffManagementPage() {
     try {
       if (account?.role === "PlatformAdmin") {
         await selectRestaurantContext(id);
+        await refreshAccount();
       }
       await Promise.all([refreshStaff(id), refreshProfile(id)]);
     } catch {

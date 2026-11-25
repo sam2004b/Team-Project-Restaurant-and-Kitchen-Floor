@@ -387,7 +387,7 @@ function StaffWorkspaceLayout() {
       ]
       : [
         { label: "Menu management", path: "/admin/dishes" },
-        ...(role === "Administrator" ? [
+        ...(["Administrator", "PlatformAdmin"].includes(role) ? [
           { label: "Order history", path: "/admin/order-history" },
           { label: "History by waiter", path: "/admin/waiter-order-history" },
         ] : []),
@@ -502,8 +502,8 @@ function App() {
       <Route path="/menu" element={<MenuPage />} />
       <Route element={<StaffWorkspaceLayout />}>
         <Route path="/admin/dishes" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <AdminDishesPage />)} />
-        <Route path="/admin/order-history" element={protect(["Administrator"], <AdminOrderHistoryPage />)} />
-        <Route path="/admin/waiter-order-history" element={protect(["Administrator"], <AdminOrderHistoryPage />)} />
+        <Route path="/admin/order-history" element={protect(["Administrator", "PlatformAdmin"], <AdminOrderHistoryPage />)} />
+        <Route path="/admin/waiter-order-history" element={protect(["Administrator", "PlatformAdmin"], <AdminOrderHistoryPage />)} />
         <Route path="/admin" element={<Navigate to="/admin/order-history" replace />} />
         <Route path="/admin/staff" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <StaffManagementPage />)} />
         <Route path="/admin/settings" element={protect(["PlatformAdmin", "Administrator", "Reception Manager"], <RestaurantSettingsPage />)} />
