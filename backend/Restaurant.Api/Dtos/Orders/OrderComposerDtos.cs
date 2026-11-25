@@ -76,4 +76,6 @@ public sealed record KitchenSubmissionDto(
     DateTime SentAtUtc,
     IReadOnlyList<OrderItemDetailsDto> Items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? SeatNumber = null);
+    int? SeatNumber = null,
+    // Public number configured by the restaurant administrator (not the PK).
+    int? TableNumber = null);
