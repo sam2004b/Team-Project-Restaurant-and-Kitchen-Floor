@@ -54,7 +54,9 @@ public sealed record OrderItemDetailsDto(
     int? KitchenSubmissionId = null,
     string PreparationStatus = "New",
     DateTime? PreparationStartedAtUtc = null,
-    DateTime? ReadyAtUtc = null);
+    DateTime? ReadyAtUtc = null,
+    string ServiceStatus = "Unserved",
+    DateTime? ServedAtUtc = null);
 
 public sealed record OrderDetailsDto(
     int Id,

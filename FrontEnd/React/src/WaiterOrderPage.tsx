@@ -160,6 +160,13 @@ function WaiterOrderPage() {
   const statusRefreshInFlight = useRef(false);
   const addDishFormRef = useRef<HTMLFormElement>(null);
   const orderIsActive = order !== null && (order.status === "Open" || order.status === "Sent");
+  const servedItemCount = order?.items.filter((item) =>
+    item.kitchenSubmissionId !== null &&
+    item.preparationStatus === "Ready" &&
+    item.serviceStatus === "Served" &&
+    item.servedAtUtc !== null).length ?? 0;
+  const allItemsServed = !!order && order.items.length > 0 &&
+    servedItemCount === order.items.length;
   const pendingItems = order?.items.filter((item) => item.kitchenSubmissionId === null) ?? [];
   const hasSubmittedItems = order?.items.some((item) =>
     item.kitchenSubmissionId !== null || item.preparationStatus !== "New") ?? false;
@@ -477,6 +484,16 @@ function WaiterOrderPage() {
   const currentOrderId = order?.id ?? null;
   const currentOrderTableId = order?.diningTableId ?? null;
 
+  // Recheck actual served states on entry to billing, even when the waiter
+  // has been on a different tab while kitchen/service events were processed.
+  useEffect(() => {
+    if (!authorized || waiterPage !== "payments" ||
+        currentOrderId === null || currentOrderTableId === null) return;
+    void refreshOrder(currentOrderId, currentOrderTableId)
+      .catch((caughtError: unknown) => setBillError(
+        getErrorMessage(caughtError, "Could not verify which dishes were served.")));
+  }, [authorized, waiterPage, currentOrderId, currentOrderTableId, refreshOrder]);
+
   useEffect(() => {
     let active = true;
     if (!authorized || currentOrderId === null) {
@@ -552,7 +569,7 @@ function WaiterOrderPage() {
   };
 
   const prepareBill = async () => {
-    if (!order || !orderIsActive || order.items.length === 0 || operationLock.current || billCreating) return;
+    if (!order || !orderIsActive || !allItemsServed || operationLock.current || billCreating) return;
     operationLock.current = true;
     setBillCreating(true);
     setBillLoading(true);
@@ -560,6 +577,20 @@ function WaiterOrderPage() {
     setPaymentError(null);
     setPaymentNotice(null);
     try {
+      // Do not rely on a possibly stale React snapshot when creating a bill.
+      const latest = await getOrderDetails(order.id);
+      if (latest.id !== order.id || latest.diningTableId !== order.diningTableId) {
+        throw new Error("The selected order changed. Select it again before billing.");
+      }
+      setOrder(latest);
+      if (!(["Open", "Sent"].includes(latest.status) &&
+          latest.items.length > 0 && latest.items.every((item) =>
+            item.kitchenSubmissionId !== null &&
+            item.preparationStatus === "Ready" &&
+            item.serviceStatus === "Served" &&
+            item.servedAtUtc !== null))) {
+        throw new Error("All dishes must be marked Served before a bill can be created.");
+      }
       const createdBill = await createWaiterBill(order.id, "RUB");
       if (createdBill.orderId !== order.id || createdBill.diningTableId !== order.diningTableId) {
         throw new Error("The billing API returned a bill for a different order or table.");
@@ -583,6 +614,10 @@ function WaiterOrderPage() {
   const reviewPaymentEntry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!bill || bill.balanceDue <= 0 || paymentSubmitting) return;
+    if (!allItemsServed) {
+      setPaymentValidationError("All dishes must be served before payment can be recorded.");
+      return;
+    }
     const normalizedAmount = paymentAmount.trim();
     if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(normalizedAmount)) {
       setPaymentValidationError("Enter an amount with no more than two decimal places.");
@@ -609,6 +644,10 @@ function WaiterOrderPage() {
 
   const confirmPayment = async () => {
     if (!bill || !order || !paymentReview || paymentSubmitting || operationLock.current) return;
+    if (!allItemsServed) {
+      setPaymentError("All dishes must be served before a payment is recorded.");
+      return;
+    }
     operationLock.current = true;
     setPaymentSubmitting(true);
     setPaymentError(null);
@@ -699,6 +738,8 @@ function WaiterOrderPage() {
               readyAtUtc: latestStatusIsCurrentOrNewer
                 ? latestItem.readyAtUtc ?? item.readyAtUtc
                 : item.readyAtUtc,
+              serviceStatus: latestItem.serviceStatus,
+              servedAtUtc: latestItem.servedAtUtc,
             };
           }),
         };
@@ -766,6 +807,13 @@ function WaiterOrderPage() {
       setReadyToast((current) => current?.orderItemId === notification.orderItemId ? null : current);
       setNotice(`${notification.dishName} marked as served.`);
       await refreshNotifications();
+      if (order?.id === notification.orderId) {
+        // Serving is already committed; a refresh failure must not report
+        // a false failure of the action itself.
+        void refreshOrder(order.id, order.diningTableId).catch(
+          (caughtError: unknown) => setStatusRefreshError(
+            getErrorMessage(caughtError, "Dish was served, but order refresh failed.")));
+      }
     } catch (caughtError) {
       setNotificationError(getErrorMessage(caughtError, "Could not mark the dish as served."));
     } finally {
@@ -1973,21 +2021,44 @@ function WaiterOrderPage() {
                 ) : !bill ? (
                   <div className="waiter-billing-empty" role="status">
                     <div>
-                      <strong>{order.items.length === 0 ? "This order has no items yet" : "No bill has been prepared"}</strong>
+                      <strong>{order.items.length === 0
+                        ? "This order has no items yet"
+                        : allItemsServed ? "All dishes served — ready to bill"
+                        : "Complete table service before billing"}</strong>
                       <p>{order.items.length === 0
-                        ? "Add at least one dish before preparing the itemised bill."
-                        : orderIsActive
-                          ? "Prepare a bill to capture the current item prices and review the amount due."
-                          : "This closed order does not have a bill available."}</p>
+                        ? "Add and serve at least one dish before preparing the bill."
+                        : !allItemsServed
+                          ? `${servedItemCount} of ${order.items.length} dish lines served. The bill becomes available once every dish has been marked Served.`
+                          : "All dishes are served. Prepare the bill to review the total and collect payment."}</p>
+                      {!allItemsServed && order.items.length > 0 && (
+                        <ul className="waiter-unserved-dishes">
+                          {order.items.filter((item) =>
+                            item.serviceStatus !== "Served" || item.servedAtUtc === null ||
+                            item.kitchenSubmissionId === null).map((item) => (
+                              <li key={item.id}>{item.dishName} · Qty {item.quantity} — {item.kitchenSubmissionId === null
+                                ? "Not sent to kitchen"
+                                : item.preparationStatus !== "Ready" ? "Kitchen preparation pending" : "Not served"}</li>
+                            ))}
+                        </ul>
+                      )}
                     </div>
-                    <button
+                    <div className="waiter-billing-gate-actions">
+                      {!allItemsServed && (
+                        <button type="button" className="secondary-button" disabled={billCreating}
+                          onClick={() => void refreshOrder(order.id, order.diningTableId).catch((caughtError: unknown) =>
+                            setBillError(getErrorMessage(caughtError, "Could not refresh served statuses.")))}>
+                          Refresh served status
+                        </button>
+                      )}
+                      <button
                       type="button"
                       className="primary-button"
-                      disabled={!orderIsActive || order.items.length === 0 || billCreating || billLoading}
+                      disabled={!orderIsActive || !allItemsServed || billCreating || billLoading}
                       onClick={() => void prepareBill()}
                     >
                       {billCreating ? "Preparing bill..." : "Prepare bill"}
-                    </button>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -2086,6 +2157,16 @@ function WaiterOrderPage() {
                       <div className="waiter-billing-state error" role="status">
                         <strong>Payment cannot be recorded for this closed order.</strong>
                         <span>The backend only accepts payments while the order remains active. Contact a manager to resolve the outstanding balance.</span>
+                      </div>
+                    ) : !allItemsServed ? (
+                      <div className="waiter-billing-state error" role="status">
+                        <strong>Payment blocked until every dish is served.</strong>
+                        <span>{servedItemCount} of {order.items.length} dish lines served. Refresh the order after serving the remaining dishes.</span>
+                        <button type="button" className="secondary-button"
+                          onClick={() => void refreshOrder(order.id, order.diningTableId).catch((caughtError: unknown) =>
+                            setPaymentError(getErrorMessage(caughtError, "Could not refresh served statuses.")))}>
+                          Refresh status
+                        </button>
                       </div>
                     ) : paymentReview ? (
                       <div className="waiter-payment-review" aria-labelledby="waiter-payment-review-heading">

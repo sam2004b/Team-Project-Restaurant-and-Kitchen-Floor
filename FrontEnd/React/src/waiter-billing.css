@@ -491,3 +491,25 @@
     width: 100%;
   }
 }
+
+/* Keep the serve-first requirement visible next to the disabled bill action. */
+.waiter-billing-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.waiter-unserved-dishes {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: #815b35;
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+@media (max-width: 720px) {
+  .waiter-billing-gate-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

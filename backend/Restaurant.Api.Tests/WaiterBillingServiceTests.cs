@@ -74,15 +74,30 @@ public sealed class WaiterBillingServiceTests
         db.Orders.Add(order);
         await db.SaveChangesAsync();
 
+        var submission = new KitchenSubmission
+        {
+            RestaurantId = restaurant.Id,
+            OrderId = order.Id,
+            SequenceNumber = 1,
+            SentAtUtc = order.SentAtUtc!.Value
+        };
+        db.KitchenSubmissions.Add(submission);
+        await db.SaveChangesAsync();
+
         var item = new RestaurantOrderItem
         {
+            KitchenSubmissionId = submission.Id,
             OrderId = order.Id,
             DishId = dish.Id,
             SequenceNumber = 1,
             Quantity = 2,
             DishNameSnapshot = "Pasta",
             UnitPriceSnapshot = 10m,
-            PreparationStatus = DishPreparationStates.Ready
+            PreparationStatus = DishPreparationStates.Ready,
+            PreparationStartedAtUtc = DateTime.UtcNow.AddMinutes(-3),
+            ReadyAtUtc = DateTime.UtcNow.AddMinutes(-2),
+            ServiceStatus = DishServiceStates.Served,
+            ServedAtUtc = DateTime.UtcNow.AddMinutes(-1)
         };
         db.OrderItems.Add(item);
         await db.SaveChangesAsync();
@@ -123,6 +138,12 @@ public sealed class WaiterBillingServiceTests
         var first = await service.RecordPaymentAsync(
             f.RestaurantId, f.WaiterId, bill.Bill!.Id,
             10m, PaymentRecordMethods.Cash, "receipt-001");
+
+        // A partial payment must leave the order open.
+        Assert.Equal(BillingOperationStatus.Success, first.Status);
+        Assert.Equal(RestaurantOrderStates.Sent,
+            (await db.Orders.SingleAsync(o => o.Id == f.OrderId)).Status);
+
         var retry = await service.RecordPaymentAsync(
             f.RestaurantId, f.WaiterId, bill.Bill.Id,
             10m, PaymentRecordMethods.Cash, "receipt-001");
@@ -130,7 +151,6 @@ public sealed class WaiterBillingServiceTests
             f.RestaurantId, f.WaiterId, bill.Bill.Id,
             10m, PaymentRecordMethods.Card, "receipt-002");
 
-        Assert.Equal(BillingOperationStatus.Success, first.Status);
         Assert.Equal(BillingOperationStatus.AlreadyExists, retry.Status);
         Assert.Equal(first.Payment!.Id, retry.Payment!.Id);
         Assert.Equal(BillingOperationStatus.Success, final.Status);
@@ -176,5 +196,98 @@ public sealed class WaiterBillingServiceTests
 
         Assert.Equal(BillingOperationStatus.OrderNotPayable, result.Status);
         Assert.Empty(await db.PaymentRecords.ToListAsync());
+    }
+
+    [Fact]
+    public async Task BillCannotBeCreatedBeforeKitchenDishIsServed()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var item = await db.OrderItems.SingleAsync(i => i.Id == f.ItemId);
+        item.ServiceStatus = DishServiceStates.Unserved;
+        item.ServedAtUtc = null;
+        await db.SaveChangesAsync();
+
+        var result = await new WaiterBillingService(db).CreateBillAsync(
+            f.RestaurantId, f.WaiterId, f.OrderId, "USD");
+
+        Assert.Equal(BillingOperationStatus.OrderNotPayable, result.Status);
+        Assert.Contains("served", result.Error!, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await db.Bills.ToListAsync());
+    }
+
+    [Fact]
+    public async Task BillRequiresEveryDishLineToBeServed()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var firstItem = await db.OrderItems.SingleAsync(i => i.Id == f.ItemId);
+        var secondItem = new RestaurantOrderItem
+        {
+            OrderId = f.OrderId,
+            KitchenSubmissionId = firstItem.KitchenSubmissionId,
+            DishId = firstItem.DishId,
+            SequenceNumber = 2,
+            Quantity = 1,
+            DishNameSnapshot = "Pasta",
+            UnitPriceSnapshot = 10m,
+            PreparationStatus = DishPreparationStates.Ready,
+            PreparationStartedAtUtc = DateTime.UtcNow.AddMinutes(-3),
+            ReadyAtUtc = DateTime.UtcNow.AddMinutes(-2),
+            ServiceStatus = DishServiceStates.Unserved
+        };
+        db.OrderItems.Add(secondItem);
+        await db.SaveChangesAsync();
+        var billing = new WaiterBillingService(db);
+
+        var blocked = await billing.CreateBillAsync(
+            f.RestaurantId, f.WaiterId, f.OrderId, "USD");
+        Assert.Equal(BillingOperationStatus.OrderNotPayable, blocked.Status);
+
+        secondItem.ServiceStatus = DishServiceStates.Served;
+        secondItem.ServedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        var result = await billing.CreateBillAsync(
+            f.RestaurantId, f.WaiterId, f.OrderId, "USD");
+
+        Assert.Equal(BillingOperationStatus.Success, result.Status);
+        Assert.Equal(30m, result.Bill!.TotalAmount);
+    }
+
+    [Fact]
+    public async Task WaiterOrderDetailsExposeIndependentServedState()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+
+        var details = await new Restaurant.Api.Services.Orders.OrderDetailsQueryService(db)
+            .GetForWaiterAsync(f.RestaurantId, f.WaiterId, f.OrderId);
+
+        var item = Assert.Single(details!.Items);
+        Assert.Equal(DishServiceStates.Served, item.ServiceStatus);
+        Assert.NotNull(item.ServedAtUtc);
+    }
+
+    [Fact]
+    public async Task ExistingBillCannotBePaidIfDishIsNoLongerServed()
+    {
+        var f = await CreateFixtureAsync();
+        await using var db = new RestaurantDbContext(f.Options);
+        var billing = new WaiterBillingService(db);
+        var bill = await billing.CreateBillAsync(
+            f.RestaurantId, f.WaiterId, f.OrderId, "USD");
+        var item = await db.OrderItems.SingleAsync(i => i.Id == f.ItemId);
+        item.ServiceStatus = DishServiceStates.Unserved;
+        item.ServedAtUtc = null;
+        await db.SaveChangesAsync();
+
+        var payment = await billing.RecordPaymentAsync(
+            f.RestaurantId, f.WaiterId, bill.Bill!.Id,
+            20m, PaymentRecordMethods.Cash, "unserved-safeguard");
+
+        Assert.Equal(BillingOperationStatus.OrderNotPayable, payment.Status);
+        Assert.Empty(await db.PaymentRecords.ToListAsync());
+        Assert.Equal(RestaurantOrderStates.Sent,
+            (await db.Orders.SingleAsync(o => o.Id == f.OrderId)).Status);
     }
 }
