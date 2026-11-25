@@ -197,6 +197,8 @@ export interface OrderItemDetailsResponse {
     preparationStatus: "New" | "Preparing" | "Ready";
     preparationStartedAtUtc: string | null;
     readyAtUtc: string | null;
+    serviceStatus: "Unserved" | "Served";
+    servedAtUtc: string | null;
 }
 
 export interface OrderDetailsResponse {
