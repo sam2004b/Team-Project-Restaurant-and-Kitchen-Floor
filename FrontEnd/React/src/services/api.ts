@@ -204,7 +204,7 @@ export interface OrderDetailsResponse {
     restaurantId: number;
     diningTableId: number;
     createdByStaffMembershipId: number;
-    status: "Open" | "Sent" | "Closed" | "Cancelled" | "Legacy";
+    status: "Open" | "Sent" | "Closed" | "Legacy";
     createdAtUtc: string;
     sentAtUtc: string | null;
     items: OrderItemDetailsResponse[];
@@ -272,7 +272,7 @@ export interface WaiterOrderHistoryEntry {
     id: number;
     diningTableId: number;
     createdAtUtc: string;
-    status: "Open" | "Sent" | "Closed" | "Cancelled" | "Legacy";
+    status: "Open" | "Sent" | "Closed" | "Legacy";
     // Older orders can have no seat; the API omits null seat numbers.
     seatNumber?: number | null;
 }
@@ -799,3 +799,90 @@ export interface ApiHealth {
 export function getApiHealth(): Promise<ApiHealth> {
     return apiGet<ApiHealth>("/health");
 }
+
+// Waiter billing and payment API contracts. These DTOs mirror
+// backend/Restaurant.Api/Dtos/Billing/BillingDtos.cs.
+export type BillPaymentMethod = "Cash" | "Card" | "Other";
+
+export interface BillLineResponse {
+    orderItemId: number;
+    dishName: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    specialRequest: string | null;
+}
+
+export interface BillPaymentResponse {
+    id: number;
+    amount: number;
+    method: BillPaymentMethod;
+    externalReference: string | null;
+    recordedAtUtc: string;
+}
+
+export interface BillDetailsResponse {
+    id: number;
+    orderId: number;
+    diningTableId: number;
+    currencyCode: string;
+    subtotalAmount: number;
+    taxAmount: number;
+    discountAmount: number;
+    totalAmount: number;
+    amountPaid: number;
+    balanceDue: number;
+    paymentStatus: "Unpaid" | "PartiallyPaid" | "Paid";
+    createdAtUtc: string;
+    items: BillLineResponse[];
+    payments: BillPaymentResponse[];
+}
+
+export interface RecordWaiterPaymentResponse {
+    alreadyRecorded?: boolean;
+    payment: BillPaymentResponse;
+    bill: BillDetailsResponse;
+}
+
+/** Creates a bill snapshot, or returns the existing bill if one is already present. */
+export async function createWaiterBill(
+    orderId: number,
+    currencyCode: string,
+): Promise<BillDetailsResponse> {
+    const response = await apiSend<BillDetailsResponse | {
+        alreadyExists?: boolean;
+        bill?: BillDetailsResponse;
+    }>(`/waiter/orders/${orderId}/bill`, "POST", { currencyCode });
+
+    const bill = "bill" in response && response.bill
+        ? response.bill
+        : response as BillDetailsResponse;
+
+    if (!bill || typeof bill.id !== "number" || bill.orderId !== orderId) {
+        throw new Error("The billing API returned an invalid bill response.");
+    }
+
+    return bill;
+}
+
+/** Retrieves the persisted bill snapshot and payment history for an order. */
+export function getWaiterBill(orderId: number): Promise<BillDetailsResponse> {
+    return apiRequest<BillDetailsResponse>(`/waiter/orders/${orderId}/bill`, {
+        cache: "no-store",
+    });
+}
+
+/** Records a payment using the backend-required idempotency reference. */
+export function recordWaiterPayment(
+    billId: number,
+    amount: number,
+    method: BillPaymentMethod,
+    externalReference: string,
+): Promise<RecordWaiterPaymentResponse> {
+    return apiSend<RecordWaiterPaymentResponse>(`/waiter/bills/${billId}/payments`, "POST", {
+        amount,
+        method,
+        externalReference,
+    });
+}
+
