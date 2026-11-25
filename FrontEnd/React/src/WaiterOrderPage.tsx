@@ -80,7 +80,56 @@ type PaymentReview = {
   amount: number;
   method: BillPaymentMethod;
   externalReference: string;
+  attempted: boolean;
 };
+
+const pendingPaymentStoragePrefix = "restaurant.waiter.pending-payment.";
+
+function pendingPaymentStorageKey(billId: number): string {
+  return `${pendingPaymentStoragePrefix}${billId}`;
+}
+
+function readPendingPayment(billId: number): PaymentReview | null {
+  const storedPayment = window.localStorage.getItem(pendingPaymentStorageKey(billId));
+  if (!storedPayment) return null;
+
+  let parsedPayment: unknown;
+  try {
+    parsedPayment = JSON.parse(storedPayment);
+  } catch {
+    throw new Error("Saved payment retry details are unreadable. Check the bill's payment history before recording another payment.");
+  }
+
+  if (typeof parsedPayment !== "object" || parsedPayment === null) {
+    throw new Error("Saved payment retry details are invalid. Check the bill's payment history before recording another payment.");
+  }
+
+  const payment = parsedPayment as Record<string, unknown>;
+  if (typeof payment.amount !== "number" ||
+      !Number.isFinite(payment.amount) ||
+      payment.amount <= 0 ||
+      (payment.method !== "Cash" && payment.method !== "Card" && payment.method !== "Other") ||
+      typeof payment.externalReference !== "string" ||
+      payment.externalReference.length === 0 ||
+      typeof payment.attempted !== "boolean") {
+    throw new Error("Saved payment retry details are invalid. Check the bill's payment history before recording another payment.");
+  }
+
+  return {
+    amount: payment.amount,
+    method: payment.method,
+    externalReference: payment.externalReference,
+    attempted: payment.attempted,
+  };
+}
+
+function savePendingPayment(billId: number, payment: PaymentReview): void {
+  window.localStorage.setItem(pendingPaymentStorageKey(billId), JSON.stringify(payment));
+}
+
+function clearPendingPayment(billId: number): void {
+  window.localStorage.removeItem(pendingPaymentStorageKey(billId));
+}
 
 function WaiterOrderPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -125,6 +174,8 @@ function WaiterOrderPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod>("Cash");
   const [paymentReview, setPaymentReview] = useState<PaymentReview | null>(null);
+  const [paymentOutcomeUnknown, setPaymentOutcomeUnknown] = useState(false);
+  const [paymentRecoveryBlocked, setPaymentRecoveryBlocked] = useState(false);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
@@ -284,14 +335,94 @@ function WaiterOrderPage() {
   const currentOrderId = order?.id ?? null;
   const currentOrderTableId = order?.diningTableId ?? null;
 
+  const applyBillSnapshot = useCallback((
+    loadedBill: BillDetailsResponse,
+    expectedOrderId: number,
+    expectedTableId: number,
+  ) => {
+    if (loadedBill.orderId !== expectedOrderId ||
+        loadedBill.diningTableId !== expectedTableId) {
+      throw new Error("The bill returned by the API does not match the selected order and table.");
+    }
+
+    setBill(loadedBill);
+    setPaymentAmount(loadedBill.balanceDue > 0
+      ? loadedBill.balanceDue.toFixed(2)
+      : "0.00");
+
+    let pendingPayment: PaymentReview | null;
+    try {
+      pendingPayment = readPendingPayment(loadedBill.id);
+    } catch (caughtError) {
+      setPaymentReview(null);
+      setPaymentOutcomeUnknown(false);
+      setPaymentRecoveryBlocked(true);
+      setPaymentError(getErrorMessage(caughtError, "Could not read saved payment retry details."));
+      return;
+    }
+
+    setPaymentRecoveryBlocked(false);
+    if (!pendingPayment) {
+      setPaymentReview(null);
+      setPaymentOutcomeUnknown(false);
+      setPaymentError(null);
+      return;
+    }
+
+    const recordedPayment = loadedBill.payments.find(
+      (payment) => payment.externalReference === pendingPayment.externalReference,
+    );
+    if (recordedPayment) {
+      if (recordedPayment.amount !== pendingPayment.amount ||
+          recordedPayment.method !== pendingPayment.method) {
+        setPaymentReview(pendingPayment);
+        setPaymentOutcomeUnknown(true);
+        setPaymentRecoveryBlocked(true);
+        setPaymentError("The saved payment reference exists on this bill with different details. Do not retry; contact a manager to review the payment history.");
+        return;
+      }
+
+      setPaymentReview(null);
+      setPaymentOutcomeUnknown(false);
+      setPaymentError(null);
+      setPaymentNotice(
+        `Payment of ${formatBillAmount(recordedPayment.amount, loadedBill.currencyCode)} was confirmed from the server payment history.`,
+      );
+      try {
+        clearPendingPayment(loadedBill.id);
+      } catch (caughtError) {
+        setPaymentError(`Payment is confirmed, but saved retry details could not be cleared: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
+      }
+
+      if (loadedBill.paymentStatus === "Paid") {
+        setOrder((current) => current?.id === expectedOrderId
+          ? { ...current, status: "Closed" }
+          : current);
+        setOrderHistory((current) => current.map((entry) => entry.id === expectedOrderId
+          ? { ...entry, status: "Closed" }
+          : entry));
+        void refreshOrderHistory(false);
+      }
+      return;
+    }
+
+    setPaymentReview(pendingPayment);
+    setPaymentOutcomeUnknown(pendingPayment.attempted);
+    setPaymentError(pendingPayment.attempted
+      ? "A previous payment request has no confirmation yet. Check the payment history or retry below; the same reference will be reused."
+      : null);
+  }, [refreshOrderHistory]);
+
   useEffect(() => {
     let active = true;
-    if (!authorized || currentOrderId === null) {
+    if (!authorized || currentOrderId === null || currentOrderTableId === null) {
       setBill(null);
       setBillError(null);
       setBillLoading(false);
       setPaymentAmount("");
       setPaymentReview(null);
+      setPaymentOutcomeUnknown(false);
+      setPaymentRecoveryBlocked(false);
       setPaymentError(null);
       setPaymentNotice(null);
       setPaymentValidationError(null);
@@ -303,6 +434,8 @@ function WaiterOrderPage() {
     setBillLoading(true);
     setPaymentAmount("");
     setPaymentReview(null);
+    setPaymentOutcomeUnknown(false);
+    setPaymentRecoveryBlocked(false);
     setPaymentError(null);
     setPaymentNotice(null);
     setPaymentValidationError(null);
@@ -310,14 +443,7 @@ function WaiterOrderPage() {
     void getWaiterBill(currentOrderId)
       .then((loadedBill) => {
         if (!active) return;
-        if (loadedBill.orderId !== currentOrderId ||
-            loadedBill.diningTableId !== currentOrderTableId) {
-          throw new Error("The bill returned by the API does not match the selected order and table.");
-        }
-        setBill(loadedBill);
-        setPaymentAmount(loadedBill.balanceDue > 0
-          ? loadedBill.balanceDue.toFixed(2)
-          : "0.00");
+        applyBillSnapshot(loadedBill, currentOrderId, currentOrderTableId);
       })
       .catch((caughtError: unknown) => {
         if (!active) return;
@@ -334,21 +460,15 @@ function WaiterOrderPage() {
       });
 
     return () => { active = false; };
-  }, [authorized, currentOrderId, currentOrderTableId]);
+  }, [applyBillSnapshot, authorized, currentOrderId, currentOrderTableId]);
 
   const refreshBill = async (orderId: number, expectedTableId: number) => {
     setBillLoading(true);
     setBillError(null);
     try {
       const loadedBill = await getWaiterBill(orderId);
-      if (loadedBill.orderId !== orderId || loadedBill.diningTableId !== expectedTableId) {
-        throw new Error("The bill returned by the API does not match the selected order and table.");
-      }
-      setBill(loadedBill);
-      setPaymentAmount(loadedBill.balanceDue > 0 ? loadedBill.balanceDue.toFixed(2) : "0.00");
-      setPaymentReview(null);
-      setPaymentError(null);
       setPaymentValidationError(null);
+      applyBillSnapshot(loadedBill, orderId, expectedTableId);
       return loadedBill;
     } catch (caughtError) {
       setBillError(getErrorMessage(caughtError, "Could not refresh this bill."));
@@ -389,7 +509,7 @@ function WaiterOrderPage() {
 
   const reviewPaymentEntry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!bill || bill.balanceDue <= 0 || paymentSubmitting) return;
+    if (!bill || bill.balanceDue <= 0 || paymentSubmitting || paymentRecoveryBlocked) return;
     const normalizedAmount = paymentAmount.trim();
     if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(normalizedAmount)) {
       setPaymentValidationError("Enter an amount with no more than two decimal places.");
@@ -407,38 +527,74 @@ function WaiterOrderPage() {
     setPaymentValidationError(null);
     setPaymentError(null);
     setPaymentNotice(null);
-    setPaymentReview({
+    const review: PaymentReview = {
       amount: Math.round(amount * 100) / 100,
       method: paymentMethod,
       externalReference: createExternalPaymentReference(bill.id),
-    });
+      attempted: false,
+    };
+    try {
+      savePendingPayment(bill.id, review);
+    } catch (caughtError) {
+      setPaymentRecoveryBlocked(true);
+      setPaymentError(`Could not save a retry-safe payment reference: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
+      return;
+    }
+    setPaymentRecoveryBlocked(false);
+    setPaymentReview(review);
+    setPaymentOutcomeUnknown(false);
   };
 
   const confirmPayment = async () => {
-    if (!bill || !order || !paymentReview || paymentSubmitting || operationLock.current) return;
+    if (!bill || !order || !paymentReview || paymentSubmitting ||
+        paymentRecoveryBlocked || operationLock.current) return;
+    const attemptedReview = { ...paymentReview, attempted: true };
+    try {
+      savePendingPayment(bill.id, attemptedReview);
+    } catch (caughtError) {
+      setPaymentRecoveryBlocked(true);
+      setPaymentError(`Could not preserve the payment reference before sending: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
+      return;
+    }
     operationLock.current = true;
     setPaymentSubmitting(true);
     setPaymentError(null);
     setPaymentNotice(null);
+    setPaymentReview(attemptedReview);
+    setPaymentOutcomeUnknown(true);
     try {
       const result = await recordWaiterPayment(
         bill.id,
-        paymentReview.amount,
-        paymentReview.method,
-        paymentReview.externalReference,
+        attemptedReview.amount,
+        attemptedReview.method,
+        attemptedReview.externalReference,
       );
+      const paymentInBill = result.bill?.payments.find((payment) =>
+        payment.externalReference === attemptedReview.externalReference &&
+        payment.amount === attemptedReview.amount &&
+        payment.method === attemptedReview.method);
       if (!result.payment || !result.bill ||
           result.bill.id !== bill.id ||
           result.bill.orderId !== order.id ||
           result.bill.diningTableId !== order.diningTableId ||
-          result.payment.amount !== paymentReview.amount ||
-          result.payment.method !== paymentReview.method ||
-          result.payment.externalReference !== paymentReview.externalReference) {
+          result.payment.amount !== attemptedReview.amount ||
+          result.payment.method !== attemptedReview.method ||
+          result.payment.externalReference !== attemptedReview.externalReference ||
+          !paymentInBill ||
+          paymentInBill.id !== result.payment.id) {
         throw new Error("The API response did not confirm the payment details for this bill.");
       }
 
+      let cleanupError: string | null = null;
+      try {
+        clearPendingPayment(bill.id);
+      } catch (storageError) {
+        cleanupError = `Payment was confirmed, but saved retry details could not be cleared: ${getErrorMessage(storageError, "browser storage is unavailable.")}`;
+      }
       setBill(result.bill);
       setPaymentReview(null);
+      setPaymentOutcomeUnknown(false);
+      setPaymentRecoveryBlocked(cleanupError !== null);
       setPaymentAmount(result.bill.balanceDue > 0
         ? result.bill.balanceDue.toFixed(2)
         : "0.00");
@@ -446,6 +602,7 @@ function WaiterOrderPage() {
       setPaymentNotice(result.alreadyRecorded
         ? `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was already recorded. The bill has been refreshed.`
         : `Payment of ${formatBillAmount(result.payment.amount, result.bill.currencyCode)} was recorded successfully.`);
+      setPaymentError(cleanupError);
       if (result.bill.paymentStatus === "Paid") {
         setOrder((current) => current?.id === order.id
           ? { ...current, status: "Closed" }
@@ -456,7 +613,24 @@ function WaiterOrderPage() {
         void refreshOrderHistory(false);
       }
     } catch (caughtError) {
-      setPaymentError(`${getErrorMessage(caughtError, "Could not record this payment.")} You can retry safely; the same payment reference will be reused.`);
+      const requestWasRejected = caughtError instanceof ApiError &&
+        caughtError.status >= 400 && caughtError.status < 500;
+      if (requestWasRejected) {
+        const rejectedReview = { ...attemptedReview, attempted: false };
+        try {
+          savePendingPayment(bill.id, rejectedReview);
+          setPaymentReview(rejectedReview);
+          setPaymentOutcomeUnknown(false);
+          setPaymentRecoveryBlocked(false);
+        } catch (storageError) {
+          setPaymentRecoveryBlocked(true);
+          setPaymentError(`${getErrorMessage(caughtError, "Could not record this payment.")} The rejected request's retry state could not be saved: ${getErrorMessage(storageError, "browser storage is unavailable.")}`);
+          return;
+        }
+      }
+      setPaymentError(`${getErrorMessage(caughtError, "Could not confirm this payment.")} ${requestWasRejected
+        ? "Review the details before trying again."
+        : "The result may be uncertain; refresh the bill or retry using the same payment reference."}`);
     } finally {
       operationLock.current = false;
       setPaymentSubmitting(false);
@@ -1761,18 +1935,34 @@ function WaiterOrderPage() {
                           <div><dt>Remaining after payment</dt><dd>{formatBillAmount(Math.max(0, bill.balanceDue - paymentReview.amount), bill.currencyCode)}</dd></div>
                         </dl>
                         <p className="waiter-payment-reference">Reference: {paymentReview.externalReference}</p>
+                        {paymentOutcomeUnknown && (
+                          <p className="staff-notice warning" role="status">
+                            The previous attempt may have reached the server. Retry with this same reference or refresh the bill to reconcile it first.
+                          </p>
+                        )}
                         <p className="waiter-payment-disclaimer">This records the payment in the restaurant system. It does not initiate a card transaction through a payment gateway.</p>
                         <div className="waiter-payment-actions">
                           <button
                             type="button"
                             className="secondary-button"
-                            disabled={paymentSubmitting}
-                            onClick={() => { setPaymentReview(null); setPaymentError(null); }}
+                            disabled={paymentSubmitting || paymentOutcomeUnknown || paymentRecoveryBlocked}
+                            onClick={() => {
+                              try {
+                                clearPendingPayment(bill.id);
+                                setPaymentReview(null);
+                                setPaymentOutcomeUnknown(false);
+                                setPaymentError(null);
+                                setPaymentNotice(null);
+                              } catch (caughtError) {
+                                setPaymentRecoveryBlocked(true);
+                                setPaymentError(`Could not clear the saved payment review: ${getErrorMessage(caughtError, "browser storage is unavailable.")}`);
+                              }
+                            }}
                           >
                             Back to edit
                           </button>
-                          <button type="button" className="primary-button" disabled={paymentSubmitting} onClick={() => void confirmPayment()}>
-                            {paymentSubmitting ? "Recording payment..." : "Confirm payment"}
+                          <button type="button" className="primary-button" disabled={paymentSubmitting || paymentRecoveryBlocked} onClick={() => void confirmPayment()}>
+                            {paymentSubmitting ? "Recording payment..." : paymentOutcomeUnknown ? "Retry same payment" : "Confirm payment"}
                           </button>
                         </div>
                       </div>
@@ -1807,7 +1997,7 @@ function WaiterOrderPage() {
                         </div>
                         {paymentValidationError && <p className="staff-notice error" role="alert">{paymentValidationError}</p>}
                         <p className="waiter-payment-disclaimer">Partial payments are supported. The order closes when the full balance is recorded. Card selection records the method only; it does not process a card transaction.</p>
-                        <button type="submit" className="primary-button" disabled={paymentSubmitting || bill.balanceDue <= 0}>
+                        <button type="submit" className="primary-button" disabled={paymentSubmitting || paymentRecoveryBlocked || bill.balanceDue <= 0}>
                           Review payment
                         </button>
                       </form>
